@@ -1,0 +1,17 @@
+import PostBoard from '@/components/PostBoard';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = { title: 'We재활생각' };
+
+export default function WeThoughtsPage() {
+  return (
+    <div className="max-w-3xl mx-auto px-8 py-14">
+      <div className="mb-12">
+        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">We 재활생각</p>
+        <h1 className="display-heading mb-3">재활을 바라보는 우리의 시선</h1>
+        <p className="text-[14px] text-[#666] leading-relaxed">치료 현장에서 발견한 이야기들을 나눕니다.</p>
+      </div>
+      <PostBoard category="thoughts" basePath="/we-thoughts" />
+    </div>
+  );
+}
