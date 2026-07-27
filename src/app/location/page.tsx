@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { getLocation, saveLocation, LocationData } from '@/lib/store';
+import { LOCATION } from '@/lib/content';
 
 export default function LocationPage() {
   const { isAdmin } = useAdmin();
@@ -46,13 +47,11 @@ export default function LocationPage() {
   return (
     <div className="max-w-3xl mx-auto px-8 py-14 fade-up">
       <div className="mb-14">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">오시는길</p>
+        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{LOCATION.eyebrow}</p>
         <div className="flex items-end justify-between gap-6">
           <div>
-            <h1 className="display-heading mb-3">찾아오시는 방법</h1>
-            <p className="text-[14px] text-[#666] leading-relaxed">
-              수색과 의정부 두 곳에서 만나뵐 수 있습니다.
-            </p>
+            <h1 className="display-heading mb-3">{LOCATION.heading}</h1>
+            <p className="text-[14px] text-[#666] leading-relaxed">{LOCATION.subtext}</p>
           </div>
           {isAdmin && !editing && (
             <button onClick={() => setEditing(true)}

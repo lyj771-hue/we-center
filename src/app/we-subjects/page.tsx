@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { Subject } from '@/lib/types';
 import { getSubjects, addSubject, updateSubject, deleteSubject } from '@/lib/store';
+import { WE_SUBJECTS } from '@/lib/content';
 
 export default function WeSubjectsPage() {
   const { isAdmin } = useAdmin();
@@ -46,13 +47,11 @@ export default function WeSubjectsPage() {
   return (
     <div className="max-w-5xl mx-auto px-8 py-14 fade-up">
       <div className="mb-14">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">We 수업과목</p>
+        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_SUBJECTS.eyebrow}</p>
         <div className="flex items-end justify-between gap-6">
           <div>
-            <h1 className="display-heading mb-3">아이에게 맞는 치료를 찾습니다</h1>
-            <p className="text-[14px] text-[#666] leading-relaxed">
-              한 아이를 위한 하나의 치료 계획—각 프로그램은 개별 발달 목표에 맞게 구성됩니다.
-            </p>
+            <h1 className="display-heading mb-3">{WE_SUBJECTS.heading}</h1>
+            <p className="text-[14px] text-[#666] leading-relaxed">{WE_SUBJECTS.subtext}</p>
           </div>
           {isAdmin && (
             <button onClick={() => { setAdding(true); setForm({ name: '', description: '' }); }}

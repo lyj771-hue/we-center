@@ -4,11 +4,9 @@ import { useState, useEffect } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { CenterRoom } from '@/lib/types';
 import { getRooms, addRoom, updateRoom, deleteRoom } from '@/lib/store';
+import { WE_CENTER } from '@/lib/content';
 
-const CENTERS = [
-  { id: 'susaek'     as const, label: '수색 센터',   addr: '서울특별시 은평구' },
-  { id: 'uijeongbu' as const, label: '의정부 센터', addr: '경기도 의정부시' },
-];
+const CENTERS = WE_CENTER.centers;
 
 export default function WeCenterPage() {
   const { isAdmin } = useAdmin();
@@ -54,11 +52,9 @@ export default function WeCenterPage() {
     <div className="max-w-5xl mx-auto px-8 py-14 fade-up">
       {/* Page heading */}
       <div className="mb-14">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">We 센터</p>
-        <h1 className="display-heading mb-4">우리의 공간을 소개합니다</h1>
-        <p className="text-[14px] text-[#666] leading-relaxed max-w-md">
-          아이가 편안함을 느낄 수 있도록, 모든 공간을 세심하게 준비했습니다.
-        </p>
+        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_CENTER.eyebrow}</p>
+        <h1 className="display-heading mb-4">{WE_CENTER.heading}</h1>
+        <p className="text-[14px] text-[#666] leading-relaxed max-w-md">{WE_CENTER.subtext}</p>
       </div>
 
       {/* Center tabs */}

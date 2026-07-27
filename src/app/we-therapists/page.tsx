@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { Therapist } from '@/lib/types';
 import { getTherapists, addTherapist, updateTherapist, deleteTherapist } from '@/lib/store';
+import { WE_THERAPISTS } from '@/lib/content';
 
 export default function WeTherapistsPage() {
   const { isAdmin } = useAdmin();
@@ -46,13 +47,11 @@ export default function WeTherapistsPage() {
   return (
     <div className="max-w-5xl mx-auto px-8 py-14 fade-up">
       <div className="mb-14">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">We 재활사</p>
+        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_THERAPISTS.eyebrow}</p>
         <div className="flex items-end justify-between gap-6">
           <div>
-            <h1 className="display-heading mb-3">아이와 함께 걷는 사람들</h1>
-            <p className="text-[14px] text-[#666] leading-relaxed">
-              각 재활사는 아이의 속도를 존중하며, 발달의 모든 순간에 함께합니다.
-            </p>
+            <h1 className="display-heading mb-3">{WE_THERAPISTS.heading}</h1>
+            <p className="text-[14px] text-[#666] leading-relaxed">{WE_THERAPISTS.subtext}</p>
           </div>
           {isAdmin && (
             <button onClick={() => { setAdding(true); setForm({ name: '', role: '', description: '', photoUrl: '' }); }}
