@@ -1,39 +1,59 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { Therapist } from '@/lib/types';
 import { getTherapists, addTherapist, updateTherapist, deleteTherapist } from '@/lib/store';
+import { uploadImage } from '@/lib/imageUpload';
 import { WE_THERAPISTS } from '@/lib/content';
+import ViewToggle from '@/components/ViewToggle';
 
 export default function WeTherapistsPage() {
   const { isAdmin } = useAdmin();
   const [therapists, setTherapists] = useState<Therapist[]>([]);
+  const [viewCols, setViewCols] = useState<1 | 2>(2);
   const [editTarget, setEditTarget] = useState<Therapist | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: '', role: '', description: '', photoUrl: '' });
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const refresh = () => setTherapists(getTherapists());
+  const refresh = async () => setTherapists(await getTherapists());
   useEffect(() => { refresh(); }, []);
 
-  const handleAdd = () => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadImage(file, 'therapists');
+      setForm(f => ({ ...f, photoUrl: url }));
+    } catch {
+      alert('사진 업로드에 실패했습니다. 다시 시도해 주세요.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const handleAdd = async () => {
     if (!form.name.trim()) return;
-    addTherapist({ name: form.name, role: form.role, description: form.description, photoUrl: form.photoUrl || undefined, order: therapists.length + 1 });
+    await addTherapist({ name: form.name, role: form.role, description: form.description, photoUrl: form.photoUrl || undefined, order: therapists.length + 1 });
     setForm({ name: '', role: '', description: '', photoUrl: '' });
     setAdding(false);
     refresh();
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editTarget) return;
-    updateTherapist(editTarget.id, { ...form, photoUrl: form.photoUrl || undefined });
+    await updateTherapist(editTarget.id, { ...form, photoUrl: form.photoUrl || undefined });
     setEditTarget(null);
     refresh();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return;
-    deleteTherapist(id);
+    await deleteTherapist(id);
     refresh();
   };
 
@@ -62,10 +82,12 @@ export default function WeTherapistsPage() {
         </div>
       </div>
 
+      <ViewToggle cols={viewCols} onChange={setViewCols} />
+
       {therapists.length === 0 ? (
         <div className="py-24 text-center text-sm text-[#ccc]">등록된 재활사가 없습니다</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+        <div className={`grid ${viewCols === 1 ? 'grid-cols-1' : 'grid-cols-2'} sm:grid-cols-2 lg:grid-cols-3 gap-10`}>
           {therapists.map(t => (
             <div key={t.id} className="group text-center">
               {/* Photo */}
@@ -105,11 +127,24 @@ export default function WeTherapistsPage() {
                 className="w-full border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] placeholder:text-[#ccc]" />
               <textarea placeholder="소개" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={5}
                 className="w-full border border-[#e5e5e5] p-3 text-sm outline-none focus:border-[#0a0a0a] resize-none placeholder:text-[#ccc]" />
-              <input type="url" placeholder="사진 URL (선택)" value={form.photoUrl} onChange={e => setForm(f => ({ ...f, photoUrl: e.target.value }))}
-                className="w-full border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] placeholder:text-[#ccc]" />
+              <div>
+                <p className="text-[11px] tracking-[0.2em] text-[#aaa] mb-2">사진 (선택)</p>
+                {form.photoUrl && (
+                  <div className="relative w-24 h-24 rounded-full overflow-hidden bg-[#f2f2f2] mb-2">
+                    <img src={form.photoUrl} alt="" className="w-full h-full object-cover" />
+                    <button onClick={() => setForm(f => ({ ...f, photoUrl: '' }))}
+                      className="absolute top-0.5 right-0.5 bg-white/90 text-red-400 text-[10px] w-5 h-5 flex items-center justify-center rounded-full hover:bg-white shadow-sm">✕</button>
+                  </div>
+                )}
+                <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                  className="text-[11px] border border-[#ddd] px-4 py-1.5 hover:bg-[#f8f8f8] transition-colors disabled:opacity-50">
+                  {uploading ? '업로드 중...' : '사진 선택'}
+                </button>
+              </div>
             </div>
             <div className="flex gap-2 mt-7">
-              <button onClick={editTarget ? handleEdit : handleAdd} className="flex-1 bg-[#0a0a0a] text-white text-[11px] py-3 tracking-widest hover:bg-[#333] transition-colors">저장</button>
+              <button onClick={editTarget ? handleEdit : handleAdd} disabled={uploading} className="flex-1 bg-[#0a0a0a] text-white text-[11px] py-3 tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50">저장</button>
               <button onClick={() => { setAdding(false); setEditTarget(null); }} className="flex-1 border border-[#e5e5e5] text-[11px] py-3 tracking-widest hover:bg-[#f8f8f8] transition-colors">취소</button>
             </div>
           </div>

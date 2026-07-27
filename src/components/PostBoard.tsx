@@ -1,10 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost } from '@/lib/store';
+
+const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
+  ssr: false,
+  loading: () => <div className="border border-[#e5e5e5] p-4 text-[12px] text-[#bbb]">에디터 불러오는 중...</div>,
+});
 
 interface Props {
   category: Category;
@@ -15,22 +21,22 @@ export default function PostBoard({ category, basePath }: Props) {
   const { isAdmin } = useAdmin();
   const [posts, setPosts] = useState<Post[]>([]);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: '', content: '', imageUrl: '' });
+  const [form, setForm] = useState({ title: '', content: '' });
 
-  const refresh = () => setPosts(getAllPosts(category));
+  const refresh = async () => setPosts(await getAllPosts(category));
   useEffect(() => { refresh(); }, [category]);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.title.trim()) return;
-    addPost(category, { title: form.title, content: form.content, imageUrl: form.imageUrl || undefined });
-    setForm({ title: '', content: '', imageUrl: '' });
+    await addPost(category, { title: form.title, content: form.content });
+    setForm({ title: '', content: '' });
     setEditing(false);
     refresh();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return;
-    deletePost(category, id);
+    await deletePost(category, id);
     refresh();
   };
 
@@ -59,15 +65,15 @@ export default function PostBoard({ category, basePath }: Props) {
       {/* Write modal */}
       {editing && (
         <div
-          className="fixed inset-0 z-[200] flex items-start justify-center bg-black/20 backdrop-blur-sm overflow-y-auto py-20 px-4"
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm p-4"
           onClick={() => setEditing(false)}
         >
           <div
-            className="bg-white border border-[#e5e5e5] w-full max-w-xl p-8 shadow-2xl"
+            className="bg-white border border-[#e5e5e5] w-full max-w-2xl max-h-[90vh] shadow-2xl flex flex-col"
             onClick={e => e.stopPropagation()}
           >
-            <p className="text-[11px] tracking-[0.2em] text-[#888] mb-6">새 글 작성</p>
-            <div className="space-y-4">
+            <div className="p-8 pb-4 shrink-0">
+              <p className="text-[11px] tracking-[0.2em] text-[#888] mb-6">새 글 작성</p>
               <input
                 type="text"
                 placeholder="제목"
@@ -75,22 +81,14 @@ export default function PostBoard({ category, basePath }: Props) {
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 className="w-full border-b border-[#ddd] py-2 text-[15px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]"
               />
-              <textarea
-                placeholder="내용"
-                value={form.content}
-                onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-                rows={10}
-                className="w-full border border-[#e5e5e5] p-4 text-sm leading-relaxed outline-none focus:border-[#0a0a0a] resize-none transition-colors placeholder:text-[#ccc]"
-              />
-              <input
-                type="url"
-                placeholder="이미지 URL (선택)"
-                value={form.imageUrl}
-                onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))}
-                className="w-full border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]"
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto px-8">
+              <RichTextEditor
+                initialContent={form.content}
+                onChange={html => setForm(f => ({ ...f, content: html }))}
               />
             </div>
-            <div className="flex gap-2 mt-7">
+            <div className="flex gap-2 p-8 pt-4 shrink-0">
               <button
                 onClick={handleAdd}
                 className="flex-1 bg-[#0a0a0a] text-white text-[11px] py-3 tracking-widest hover:bg-[#333] transition-colors"

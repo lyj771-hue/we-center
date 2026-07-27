@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { CenterRoom } from '@/lib/types';
 import { getRooms, addRoom, updateRoom, deleteRoom } from '@/lib/store';
+import { uploadImage } from '@/lib/imageUpload';
 import { WE_CENTER } from '@/lib/content';
+import ViewToggle from '@/components/ViewToggle';
 
 const CENTERS = WE_CENTER.centers;
 
@@ -12,31 +14,49 @@ export default function WeCenterPage() {
   const { isAdmin } = useAdmin();
   const [tab, setTab] = useState<'susaek' | 'uijeongbu'>('susaek');
   const [rooms, setRooms] = useState<CenterRoom[]>([]);
+  const [viewCols, setViewCols] = useState<1 | 2>(2);
   const [editTarget, setEditTarget] = useState<CenterRoom | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', imageUrl: '' });
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const refresh = () => setRooms(getRooms(tab));
+  const refresh = async () => setRooms(await getRooms(tab));
   useEffect(() => { refresh(); }, [tab]);
 
-  const handleAdd = () => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadImage(file, 'rooms');
+      setForm(f => ({ ...f, imageUrl: url }));
+    } catch {
+      alert('사진 업로드에 실패했습니다. 다시 시도해 주세요.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const handleAdd = async () => {
     if (!form.name.trim()) return;
-    addRoom({ centerId: tab, name: form.name, description: form.description, imageUrl: form.imageUrl || undefined, order: rooms.length + 1 });
+    await addRoom({ centerId: tab, name: form.name, description: form.description, imageUrl: form.imageUrl || undefined, order: rooms.length + 1 });
     setForm({ name: '', description: '', imageUrl: '' });
     setAdding(false);
     refresh();
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editTarget) return;
-    updateRoom(editTarget.id, { name: form.name, description: form.description, imageUrl: form.imageUrl || undefined });
+    await updateRoom(editTarget.id, { name: form.name, description: form.description, imageUrl: form.imageUrl || undefined });
     setEditTarget(null);
     refresh();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return;
-    deleteRoom(id);
+    await deleteRoom(id);
     refresh();
   };
 
@@ -85,11 +105,13 @@ export default function WeCenterPage() {
       {/* Center sub-label */}
       <p className="text-[12px] text-[#aaa] mb-8">{activeCenter.addr}</p>
 
+      <ViewToggle cols={viewCols} onChange={setViewCols} />
+
       {/* Room grid */}
       {rooms.length === 0 ? (
         <div className="py-24 text-center text-sm text-[#ccc]">등록된 공간이 없습니다</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10">
+        <div className={`grid ${viewCols === 1 ? 'grid-cols-1' : 'grid-cols-2'} sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10`}>
           {rooms.map(room => (
             <div key={room.id} className="group">
               <div className="aspect-[4/3] overflow-hidden bg-[#f0f0f0] mb-4 relative">
@@ -129,13 +151,25 @@ export default function WeCenterPage() {
               <textarea placeholder="설명" value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={4}
                 className="w-full border border-[#e5e5e5] p-3 text-sm outline-none focus:border-[#0a0a0a] resize-none placeholder:text-[#ccc]" />
-              <input type="url" placeholder="이미지 URL (선택)" value={form.imageUrl}
-                onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))}
-                className="w-full border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] placeholder:text-[#ccc]" />
+              <div>
+                <p className="text-[11px] tracking-[0.2em] text-[#aaa] mb-2">사진 (선택)</p>
+                {form.imageUrl && (
+                  <div className="relative w-32 aspect-[4/3] overflow-hidden bg-[#f2f2f2] mb-2">
+                    <img src={form.imageUrl} alt="" className="w-full h-full object-cover" />
+                    <button onClick={() => setForm(f => ({ ...f, imageUrl: '' }))}
+                      className="absolute top-1 right-1 bg-white/90 text-red-400 text-[10px] w-5 h-5 flex items-center justify-center hover:bg-white shadow-sm">✕</button>
+                  </div>
+                )}
+                <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                  className="text-[11px] border border-[#ddd] px-4 py-1.5 hover:bg-[#f8f8f8] transition-colors disabled:opacity-50">
+                  {uploading ? '업로드 중...' : '사진 선택'}
+                </button>
+              </div>
             </div>
             <div className="flex gap-2 mt-7">
-              <button onClick={editTarget ? handleEdit : handleAdd}
-                className="flex-1 bg-[#0a0a0a] text-white text-[11px] py-3 tracking-widest hover:bg-[#333] transition-colors">저장</button>
+              <button onClick={editTarget ? handleEdit : handleAdd} disabled={uploading}
+                className="flex-1 bg-[#0a0a0a] text-white text-[11px] py-3 tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50">저장</button>
               <button onClick={() => { setAdding(false); setEditTarget(null); }}
                 className="flex-1 border border-[#e5e5e5] text-[11px] py-3 tracking-widest hover:bg-[#f8f8f8] transition-colors">취소</button>
             </div>

@@ -46,6 +46,31 @@ body {
   background: linear-gradient(135deg, #f0f0f0 0%, #e6e6e6 100%);
 }
 
+/* Rich content — shared by the post editor and the read-only post view,
+   so what the admin sees while writing matches what visitors see. */
+.rich-content {
+  font-size: 14px;
+  line-height: 1.95;
+  color: var(--ink-2);
+  white-space: pre-wrap; /* keeps line breaks in legacy plain-text posts readable */
+}
+.rich-content p { margin: 0 0 1em; }
+.rich-content p:last-child { margin-bottom: 0; }
+.rich-content strong { font-weight: 700; color: var(--ink); }
+.rich-content img { width: 100%; margin: 1.5em 0; display: block; }
+.rich-content table { width: 100%; border-collapse: collapse; margin: 1.5em 0; font-size: 13px; }
+.rich-content th, .rich-content td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+.rich-content th { background: var(--line-lt); font-weight: 600; }
+.rich-content ul, .rich-content ol { margin: 0 0 1em; padding-left: 1.4em; }
+.rich-content ul { list-style: disc; }
+.rich-content ol { list-style: decimal; }
+.rich-content li { margin-bottom: 0.3em; }
+.rich-content blockquote { margin: 0 0 1em; padding-left: 1em; border-left: 2px solid var(--line); color: var(--ink-3); }
+.rich-content hr { border: none; border-top: 1px solid var(--line); margin: 2em 0; }
+.rich-content a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+
+.rich-editor .ProseMirror { min-height: 320px; outline: none; padding: 16px; }
+
 /* Serif display heading — used on every page */
 .display-heading {
   font-family: var(--font-noto-serif), "Noto Serif KR", Georgia, serif;

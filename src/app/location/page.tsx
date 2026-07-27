@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { getLocation, saveLocation, LocationData } from '@/lib/store';
+import { uploadImage } from '@/lib/imageUpload';
 import { LOCATION } from '@/lib/content';
 
 export default function LocationPage() {
@@ -10,38 +11,36 @@ export default function LocationPage() {
   const [data, setData] = useState<LocationData>({ content: '', imageUrls: [] });
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<LocationData>({ content: '', imageUrls: [] });
-  const [newUrl, setNewUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { const d = getLocation(); setData(d); setForm(d); }, []);
+  useEffect(() => { getLocation().then(d => { setData(d); setForm(d); }); }, []);
 
-  const handleSave = () => {
-    saveLocation(form);
+  const handleSave = async () => {
+    await saveLocation(form);
     setData(form);
     setEditing(false);
-  };
-
-  const addImageUrl = () => {
-    if (!newUrl.trim()) return;
-    setForm(f => ({ ...f, imageUrls: [...f.imageUrls, newUrl.trim()] }));
-    setNewUrl('');
   };
 
   const removeImage = (idx: number) => {
     setForm(f => ({ ...f, imageUrls: f.imageUrls.filter((_, i) => i !== idx) }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = ev => {
-        const url = ev.target?.result as string;
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const url = await uploadImage(file, 'location');
         setForm(f => ({ ...f, imageUrls: [...f.imageUrls, url] }));
-      };
-      reader.readAsDataURL(file);
-    });
-    if (fileRef.current) fileRef.current.value = '';
+      }
+    } catch {
+      alert('사진 업로드에 실패했습니다. 다시 시도해 주세요.');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
   };
 
   return (
@@ -75,16 +74,10 @@ export default function LocationPage() {
           {/* Image management */}
           <div>
             <p className="text-[11px] tracking-[0.2em] text-[#aaa] mb-3">이미지</p>
-            <div className="flex gap-2 mb-3">
-              <input type="url" value={newUrl} onChange={e => setNewUrl(e.target.value)} placeholder="이미지 URL 입력"
-                className="flex-1 border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] placeholder:text-[#ccc]" />
-              <button onClick={addImageUrl} className="text-[11px] border border-[#0a0a0a] px-4 py-1 hover:bg-[#0a0a0a] hover:text-white transition-colors">추가</button>
-            </div>
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-[11px] text-[#aaa]">또는</span>
               <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleFileChange} className="hidden" />
-              <button onClick={() => fileRef.current?.click()} className="text-[11px] border border-[#ddd] px-4 py-1.5 hover:bg-[#f8f8f8] transition-colors">
-                파일 업로드
+              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-[11px] border border-[#ddd] px-4 py-1.5 hover:bg-[#f8f8f8] transition-colors disabled:opacity-50">
+                {uploading ? '업로드 중...' : '사진 선택'}
               </button>
             </div>
             {form.imageUrls.length > 0 && (
@@ -100,7 +93,7 @@ export default function LocationPage() {
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button onClick={handleSave} className="bg-[#0a0a0a] text-white text-[11px] px-8 py-3 tracking-widest hover:bg-[#333] transition-colors">저장</button>
+            <button onClick={handleSave} disabled={uploading} className="bg-[#0a0a0a] text-white text-[11px] px-8 py-3 tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50">저장</button>
             <button onClick={() => { setEditing(false); setForm(data); }} className="border border-[#e5e5e5] text-[11px] px-8 py-3 tracking-widest hover:bg-[#f8f8f8] transition-colors">취소</button>
           </div>
         </div>

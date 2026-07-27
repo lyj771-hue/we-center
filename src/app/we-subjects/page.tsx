@@ -13,27 +13,27 @@ export default function WeSubjectsPage() {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: '', description: '' });
 
-  const refresh = () => setSubjects(getSubjects());
+  const refresh = async () => setSubjects(await getSubjects());
   useEffect(() => { refresh(); }, []);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.name.trim()) return;
-    addSubject({ name: form.name, description: form.description, order: subjects.length + 1 });
+    await addSubject({ name: form.name, description: form.description, order: subjects.length + 1 });
     setForm({ name: '', description: '' });
     setAdding(false);
     refresh();
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editTarget) return;
-    updateSubject(editTarget.id, form);
+    await updateSubject(editTarget.id, form);
     setEditTarget(null);
     refresh();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return;
-    deleteSubject(id);
+    await deleteSubject(id);
     refresh();
   };
 

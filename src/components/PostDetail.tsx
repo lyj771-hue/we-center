@@ -1,11 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getPost, updatePost, deletePost } from '@/lib/store';
+import RichContent from './RichContent';
+
+const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
+  ssr: false,
+  loading: () => <div className="border border-[#e5e5e5] p-4 text-[12px] text-[#bbb]">에디터 불러오는 중...</div>,
+});
 
 interface Props {
   category: Category;
@@ -19,26 +26,27 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
   const { isAdmin } = useAdmin();
   const [post, setPost] = useState<Post | null>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: '', content: '', imageUrl: '' });
+  const [form, setForm] = useState({ title: '', content: '' });
 
   useEffect(() => {
-    const found = getPost(category, id);
-    if (found) {
-      setPost(found);
-      setForm({ title: found.title, content: found.content, imageUrl: found.imageUrl ?? '' });
-    }
+    getPost(category, id).then(found => {
+      if (found) {
+        setPost(found);
+        setForm({ title: found.title, content: found.content });
+      }
+    });
   }, [category, id]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!post) return;
-    updatePost(category, id, { ...form, imageUrl: form.imageUrl || undefined });
+    await updatePost(category, id, { title: form.title, content: form.content });
     setPost(p => p ? { ...p, ...form } : p);
     setEditing(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!confirm('삭제하시겠습니까?')) return;
-    deletePost(category, id);
+    await deletePost(category, id);
     router.push(backHref);
   };
 
@@ -70,18 +78,9 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             className="w-full border-b border-[#ddd] py-2 text-xl font-medium outline-none focus:border-[#0a0a0a]"
           />
-          <textarea
-            value={form.content}
-            onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-            rows={16}
-            className="w-full border border-[#e5e5e5] p-4 text-[14px] leading-relaxed outline-none focus:border-[#0a0a0a] resize-none"
-          />
-          <input
-            type="url"
-            value={form.imageUrl}
-            onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))}
-            placeholder="이미지 URL"
-            className="w-full border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] placeholder:text-[#ccc]"
+          <RichTextEditor
+            initialContent={form.content}
+            onChange={html => setForm(f => ({ ...f, content: html }))}
           />
           <div className="flex gap-2 pt-2">
             <button onClick={handleSave} className="bg-[#0a0a0a] text-white text-[11px] px-7 py-2.5 tracking-widest hover:bg-[#333] transition-colors">저장</button>
@@ -108,9 +107,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             </div>
           )}
 
-          <div className="text-[14px] leading-[1.95] text-[#444] whitespace-pre-wrap">
-            {post.content}
-          </div>
+          <RichContent html={post.content} />
         </>
       )}
     </article>

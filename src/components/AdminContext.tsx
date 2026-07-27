@@ -8,7 +8,11 @@ import {
   useCallback,
   ReactNode,
 } from 'react';
-import { isAdminSession, setAdminSession, ADMIN_PASSWORD } from '@/lib/store';
+import { supabase } from '@/lib/supabaseClient';
+
+// 관리자 로그인은 이 고정 계정 하나만 사용한다. 실제 "비밀번호"는
+// Supabase 대시보드 → Authentication → Users에서 이 계정에 설정한 값이다.
+const ADMIN_EMAIL = 'admin@we-center.local';
 
 interface AdminCtx {
   isAdmin: boolean;
@@ -24,25 +28,29 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const [pw, setPw] = useState('');
   const [err, setErr] = useState(false);
 
-  useEffect(() => { setIsAdmin(isAdminSession()); }, []);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setIsAdmin(!!data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAdmin(!!session);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
   const requestAdmin = useCallback(() => setModal(true), []);
 
   const logout = useCallback(() => {
-    setAdminSession(false);
-    setIsAdmin(false);
+    supabase.auth.signOut();
   }, []);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pw === ADMIN_PASSWORD) {
-      setAdminSession(true);
-      setIsAdmin(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: pw });
+    if (error) {
+      setErr(true);
+    } else {
       setModal(false);
       setPw('');
       setErr(false);
-    } else {
-      setErr(true);
     }
   };
 

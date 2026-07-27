@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' https://hzhnvrfqwqpwxcnkierj.supabase.co/storage/v1/bucket/wecenter -H 'apikey: sb_publishable_MeZ2nsTGCkzseMZPrkCm5A_snqSVk9Z' -H 'Authorization: Bearer sb_publishable_MeZ2nsTGCkzseMZPrkCm5A_snqSVk9Z')"
+    ]
+  }
+}

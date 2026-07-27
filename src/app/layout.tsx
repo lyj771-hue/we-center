@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Noto_Sans_KR, Noto_Serif_KR } from 'next/font/google';
+import { Noto_Sans_KR, Noto_Serif_KR, Gowun_Dodum, Nanum_Myeongjo, Black_Han_Sans } from 'next/font/google';
 import './globals.css';
 import Header from '@/components/Header';
 import { AdminProvider } from '@/components/AdminContext';
@@ -18,6 +18,27 @@ const notoSerif = Noto_Serif_KR({
   display: 'swap',
 });
 
+const gowunDodum = Gowun_Dodum({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-gowun-dodum',
+  display: 'swap',
+});
+
+const nanumMyeongjo = Nanum_Myeongjo({
+  subsets: ['latin'],
+  weight: ['400', '700', '800'],
+  variable: '--font-nanum-myeongjo',
+  display: 'swap',
+});
+
+const blackHanSans = Black_Han_Sans({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-black-han-sans',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: { default: 'WE 소아재활센터', template: '%s | WE 재활센터' },
   description: '아이들의 더 나은 내일을 위한 We 소아재활센터',
@@ -25,7 +46,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" className={`${notoSans.variable} ${notoSerif.variable}`}>
+    <html lang="ko" className={`${notoSans.variable} ${notoSerif.variable} ${gowunDodum.variable} ${nanumMyeongjo.variable} ${blackHanSans.variable}`}>
       <body className="min-h-screen flex flex-col font-sans antialiased">
         <AdminProvider>
           <Header />
