@@ -20,10 +20,12 @@ export default function Header() {
   const pathname = usePathname();
   const { isAdmin, requestAdmin, logout } = useAdmin();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Triple-click the WE logo → admin prompt
   const clicks = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleLogoClick = () => {
     clicks.current += 1;
@@ -37,6 +39,34 @@ export default function Header() {
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
   const currentLabel = pathname === '/' ? '홈' : NAV.find(n => isActive(n.href))?.label ?? '';
+
+  const handleCopyUrl = async () => {
+    if (typeof window === 'undefined') return;
+
+    const url = window.location.href;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = url;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+
+      setCopied(true);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <>
@@ -52,10 +82,11 @@ export default function Header() {
 
         {/* Logo row */}
         <div className="relative flex justify-center pt-7 pb-2">
-          <button
+          <Link
+            href="/"
             onClick={handleLogoClick}
             aria-label="WE 센터 홈"
-            className="group cursor-default select-none"
+            className="group select-none"
           >
             <div
               className="w-[76px] h-[76px] rounded-full border-[2.5px] border-[#0a0a0a]
@@ -66,6 +97,14 @@ export default function Header() {
                 We
               </span>
             </div>
+          </Link>
+
+          <button
+            onClick={handleCopyUrl}
+            aria-label="현재 페이지 주소 복사"
+            className="absolute right-14 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-1.5 rounded-full border border-[#d9d9d9] px-3 py-1.5 text-[11px] font-medium tracking-[0.16em] text-[#666] transition hover:border-[#0a0a0a] hover:text-[#0a0a0a]"
+          >
+            <span>{copied ? '복사됨' : 'URL 복사'}</span>
           </button>
 
           {/* Hamburger — mobile only */}

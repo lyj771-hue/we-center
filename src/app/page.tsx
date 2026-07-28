@@ -10,7 +10,7 @@ export default function HomePage() {
           <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-8 fade-up">
             {HOME.eyebrow}
           </p>
-          <h1 className="font-serif font-black text-[#0a0a0a] text-[48px] sm:text-[60px] lg:text-[72px] leading-[1.1] tracking-[-0.03em] mb-8 fade-up-d1">
+          <h1 className="font-serif font-black text-[#0a0a0a] text-[28px] sm:text-[40px] lg:text-[52px] leading-[1.1] tracking-[-0.03em] mb-8 fade-up-d1">
             {HOME.headline[0]}<br />{HOME.headline[1]}
           </h1>
           <p className="text-[15px] text-[#555] leading-[2] max-w-[420px] mb-16 fade-up-d2">
