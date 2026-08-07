@@ -118,12 +118,12 @@ export default function Header() {
                   href={href}
                   className={[
                     'relative block px-4 py-3 text-[15px] tracking-wide transition-colors duration-150',
-                    isActive(href) ? 'text-[#0a0a0a] font-medium' : 'text-[#888] hover:text-[#0a0a0a]',
+                    isActive(href) ? 'text-[#1e40af] font-medium' : 'text-[#60a5fa] hover:text-[#1e40af]',
                   ].join(' ')}
                 >
                   {label}
                   {isActive(href) && (
-                    <span className="absolute bottom-0 left-0 w-full h-[1.5px] bg-[#0a0a0a]" />
+                    <span className="absolute bottom-0 left-0 w-full h-[3px] bg-[#1e40af] rounded-full" />
                   )}
                 </Link>
               </li>
@@ -167,7 +167,7 @@ export default function Header() {
                     onClick={() => setMobileOpen(false)}
                     className={[
                       'block py-2.5 text-[15px] tracking-wide transition-colors',
-                      isActive(href) ? 'text-[#0a0a0a] font-medium' : 'text-[#888]',
+                      isActive(href) ? 'text-[#1e40af] font-medium' : 'text-[#60a5fa]',
                     ].join(' ')}
                   >
                     {label}
