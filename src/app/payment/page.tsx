@@ -5,9 +5,9 @@ export const metadata: Metadata = { title: '결제정보' };
 
 export default function PaymentPage() {
   return (
-    <div className="max-w-3xl mx-auto px-8 py-14 fade-up">
+    <div className="max-w-3xl mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
       <div className="mb-14">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{PAYMENT.eyebrow}</p>
+        <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{PAYMENT.eyebrow}</p>
         <h1 className="display-heading mb-3">{PAYMENT.heading}</h1>
         <p className="text-[14px] text-[#666] leading-relaxed">
           {PAYMENT.subtext.map((line, i) => (

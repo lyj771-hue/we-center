@@ -69,10 +69,10 @@ export default function WeCenterPage() {
   const activeCenter = CENTERS.find(c => c.id === tab)!;
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-14 fade-up">
+    <div className="max-w-5xl mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
       {/* Page heading */}
       <div className="mb-14">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_CENTER.eyebrow}</p>
+        <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_CENTER.eyebrow}</p>
         <h1 className="display-heading mb-4">{WE_CENTER.heading}</h1>
         <p className="text-[14px] text-[#666] leading-relaxed max-w-md">{WE_CENTER.subtext}</p>
       </div>

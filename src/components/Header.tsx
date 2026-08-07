@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import { useAdmin } from './AdminContext';
 
 const NAV = [
+  { href: '/we-concept',     label: 'We컨셉' },
   { href: '/we-center',      label: 'We센터' },
   { href: '/we-subjects',    label: 'We수업과목' },
   { href: '/we-therapists',  label: 'We재활사' },
@@ -38,7 +39,6 @@ export default function Header() {
   };
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
-  const currentLabel = pathname === '/' ? '홈' : NAV.find(n => isActive(n.href))?.label ?? '';
 
   const handleCopyUrl = async () => {
     if (typeof window === 'undefined') return;
@@ -81,22 +81,14 @@ export default function Header() {
         )}
 
         {/* Logo row */}
-        <div className="relative flex justify-center pt-7 pb-2">
+        <div className="relative flex justify-center pt-3 pb-2 md:pt-7">
           <Link
             href="/"
             onClick={handleLogoClick}
             aria-label="WE 센터 홈"
-            className="group select-none"
+            className="group select-none block w-[64px] h-[64px] md:w-[100px] md:h-[100px] transition-opacity duration-200 hover:opacity-70"
           >
-            <div
-              className="w-[76px] h-[76px] rounded-full border-[2.5px] border-[#0a0a0a]
-                         flex items-center justify-center
-                         group-hover:bg-[#f5f5f5] transition-colors duration-200"
-            >
-              <span className="font-serif font-black text-[1.45rem] tracking-[-0.04em] text-[#0a0a0a] leading-none select-none">
-                We
-              </span>
-            </div>
+            <img src="/logo.jpg" alt="WE 소아재활센터" className="w-full h-full object-contain" />
           </Link>
 
           <button
@@ -117,13 +109,6 @@ export default function Header() {
           </button>
         </div>
 
-        {/* Current page name — mobile only */}
-        {currentLabel && (
-          <p className="md:hidden text-center text-[11px] text-[#aaa] tracking-widest pb-4">
-            {currentLabel}
-          </p>
-        )}
-
         {/* Desktop navigation */}
         <nav aria-label="메인 메뉴" className="hidden md:block pb-0">
           <ul className="flex justify-center flex-wrap">
@@ -132,7 +117,7 @@ export default function Header() {
                 <Link
                   href={href}
                   className={[
-                    'relative block px-3.5 py-3 text-[13px] tracking-wide transition-colors duration-150',
+                    'relative block px-4 py-3 text-[15px] tracking-wide transition-colors duration-150',
                     isActive(href) ? 'text-[#0a0a0a] font-medium' : 'text-[#888] hover:text-[#0a0a0a]',
                   ].join(' ')}
                 >

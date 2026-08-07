@@ -45,9 +45,9 @@ export default function WeSubjectsPage() {
   const isModal = adding || editTarget !== null;
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-14 fade-up">
+    <div className="max-w-5xl mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
       <div className="mb-14">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_SUBJECTS.eyebrow}</p>
+        <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_SUBJECTS.eyebrow}</p>
         <div className="flex items-end justify-between gap-6">
           <div>
             <h1 className="display-heading mb-3">{WE_SUBJECTS.heading}</h1>
