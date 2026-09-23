@@ -19,6 +19,22 @@
   size-adjust: 100%;
 }
 
+/* ── 나눔손글씨 암스테르담 — 메인 홈(.home-font) 전용 ── */
+@font-face {
+  font-family: "NanumAmSeuTeReuDam";
+  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumAmSeuTeReuDam.woff2") format("woff2"),
+       url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumAmSeuTeReuDam.woff") format("woff");
+  font-display: swap;
+  size-adjust: 200%;
+}
+@font-face {
+  font-family: "NanumAmSeuTeReuDam Heading";
+  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumAmSeuTeReuDam.woff2") format("woff2"),
+       url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumAmSeuTeReuDam.woff") format("woff");
+  font-display: swap;
+  size-adjust: 100%;
+}
+
 /* ── Font theme — runtime CSS vars from next/font ── */
 @theme inline {
   --font-sans:  "NanumDdaAgDanDan", var(--font-noto-sans),  "Noto Sans KR",  -apple-system, sans-serif;
@@ -101,6 +117,14 @@ body {
   line-height: 1.2;
   letter-spacing: -0.025em;
   color: var(--brand);
+}
+
+/* 메인 홈만 암스테르담 폰트 — 본문과 제목(.font-serif) 모두 덮어쓴다 */
+.home-font {
+  font-family: "NanumAmSeuTeReuDam", var(--font-noto-sans), "Noto Sans KR", -apple-system, sans-serif;
+}
+.home-font .font-serif {
+  font-family: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
 }
 
 /* Note board — We재활생각 메모 보드 */
