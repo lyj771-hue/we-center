@@ -116,9 +116,14 @@ export const WE_THERAPISTS = {
 
 // ── We재활생각 (/we-thoughts) ────────────────
 export const WE_THOUGHTS = {
-  eyebrow: 'We 재활생각',
-  heading: '재활을 바라보는 우리의 시선',
-  subtext: '치료 현장에서 발견한 이야기들을 나눕니다.',
+  eyebrow: 'WE 소아재활센터',
+  heading: 'We재활생각',
+  subtext: '재활사들의 생각과 이야기를 메모처럼 붙여둡니다.',
+  // 게시글 앞에 항상 붙어 있는 "준비 중" 메모
+  comingSoon: {
+    title: '지금 쓰고 있는 이야기',
+    desc: '재활 현장에서 느낀 이야기를 정리하고 있어요. 곧 찾아올게요!',
+  },
 };
 
 // ── 공지사항 (/notices) ───────────────────────

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost } from '@/lib/store';
+import NoteBoard from './NoteBoard';
 
 const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
   ssr: false,
@@ -15,9 +16,11 @@ const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
 interface Props {
   category: Category;
   basePath: string;
+  /** 'notes': We재활생각 메모 보드 형태로 보여준다 */
+  variant?: 'list' | 'notes';
 }
 
-export default function PostBoard({ category, basePath }: Props) {
+export default function PostBoard({ category, basePath, variant = 'list' }: Props) {
   const { isAdmin } = useAdmin();
   const [posts, setPosts] = useState<Post[]>([]);
   const [editing, setEditing] = useState(false);
@@ -47,20 +50,24 @@ export default function PostBoard({ category, basePath }: Props) {
 
   return (
     <section className="fade-up">
-      {/* Header row */}
-      <div className="flex items-center justify-between mb-10">
-        <p className="text-[11px] tracking-[0.2em] text-[#aaa]">
-          총 {posts.length}건
-        </p>
-        {isAdmin && (
-          <button
-            onClick={() => setEditing(true)}
-            className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors"
-          >
-            + 작성
-          </button>
-        )}
-      </div>
+      {/* Header row — 메모 보드에선 관리자일 때만 (작성 버튼) */}
+      {(variant === 'list' || isAdmin) && (
+        <div className={`flex items-center mb-10 ${variant === 'notes' ? 'justify-end' : 'justify-between'}`}>
+          {variant === 'list' && (
+            <p className="text-[11px] tracking-[0.2em] text-[#aaa]">
+              총 {posts.length}건
+            </p>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => setEditing(true)}
+              className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors"
+            >
+              + 작성
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Write modal */}
       {editing && (
@@ -107,7 +114,9 @@ export default function PostBoard({ category, basePath }: Props) {
       )}
 
       {/* List */}
-      {posts.length === 0 ? (
+      {variant === 'notes' ? (
+        <NoteBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
+      ) : posts.length === 0 ? (
         <div className="py-24 text-center text-sm text-[#ccc] tracking-widest">
           등록된 게시물이 없습니다
         </div>

@@ -22,7 +22,7 @@ export default function WeConceptPage() {
 
       {/* Pull quote */}
       <div className="max-w-3xl mx-auto px-8 mb-24 text-center">
-        <p className="font-serif font-bold text-[28px] sm:text-[36px] leading-[1.4] text-[#0a0a0a] tracking-tight">
+        <p className="font-serif font-bold text-[28px] sm:text-[36px] leading-[1.4] text-[var(--brand)] tracking-tight">
           &ldquo;{WE_CONCEPT.quote}&rdquo;
         </p>
       </div>
@@ -34,7 +34,7 @@ export default function WeConceptPage() {
           {WE_CONCEPT.pillars.map(({ num, title, desc }) => (
             <div key={num}>
               <span className="text-[10px] text-[#ccc] tracking-widest block mb-4">{num}</span>
-              <h2 className="font-serif font-bold text-[22px] text-[#0a0a0a] tracking-tight mb-3 leading-snug">{title}</h2>
+              <h2 className="font-serif font-bold text-[22px] text-[var(--brand)] tracking-tight mb-3 leading-snug">{title}</h2>
               <p className="text-[13px] text-[#666] leading-[1.9]">{desc}</p>
             </div>
           ))}

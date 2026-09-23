@@ -1,9 +1,28 @@
 @import "tailwindcss";
 
+/* ── 나눔손글씨 따악단단 (네이버 무료 웹폰트) ──────────
+   네이버 CSS 대신 직접 선언: 손글씨체라 글자가 작게 그려져서
+   size-adjust로 키우고, 로딩 중엔 기본 글꼴을 먼저 보여준다.
+   본문·메뉴는 2배로 키우고, 제목(Heading)은 원래 크기 — 같은 파일이라 한 번만 받는다. */
+@font-face {
+  font-family: "NanumDdaAgDanDan";
+  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumDdaAgDanDan.woff2") format("woff2"),
+       url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumDdaAgDanDan.woff") format("woff");
+  font-display: swap;
+  size-adjust: 200%;
+}
+@font-face {
+  font-family: "NanumDdaAgDanDan Heading";
+  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumDdaAgDanDan.woff2") format("woff2"),
+       url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumDdaAgDanDan.woff") format("woff");
+  font-display: swap;
+  size-adjust: 100%;
+}
+
 /* ── Font theme — runtime CSS vars from next/font ── */
 @theme inline {
-  --font-sans:  var(--font-noto-sans),  "Noto Sans KR",  -apple-system, sans-serif;
-  --font-serif: var(--font-noto-serif), "Noto Serif KR", Georgia,       serif;
+  --font-sans:  "NanumDdaAgDanDan", var(--font-noto-sans),  "Noto Sans KR",  -apple-system, sans-serif;
+  --font-serif: "NanumDdaAgDanDan Heading", var(--font-noto-serif), "Noto Serif KR", Georgia,       serif;
 }
 
 /* ── Design tokens ────────────────────────────────── */
@@ -16,6 +35,7 @@
   --line-lt: #f0f0f0;
   --surface: #f5f5f3;   /* barely-warm, not cream */
   --white:   #ffffff;
+  --brand:   #2a4a95;   /* 메뉴·제목 색 */
 }
 
 /* ── Base ─────────────────────────────────────────── */
@@ -27,6 +47,8 @@ body {
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 전체 볼드 — 손글씨 폰트엔 굵은 버전이 없어서 외곽선으로 두께를 낸다 */
+  -webkit-text-stroke: 0.035em currentColor;
 }
 
 ::-webkit-scrollbar { width: 4px; }
@@ -73,12 +95,36 @@ body {
 
 /* Serif display heading — used on every page */
 .display-heading {
-  font-family: var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
+  font-family: "NanumDdaAgDanDan Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
   font-weight: 700;
   font-size: clamp(22px, 3.2vw, 32px);
   line-height: 1.2;
   letter-spacing: -0.025em;
-  color: var(--ink);
+  color: var(--brand);
+}
+
+/* Note board — We재활생각 메모 보드 */
+.note-board-bg {
+  background-color: #f6f6f3;
+  background-image: radial-gradient(#dcdcd6 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.note {
+  margin: 0 0 40px;
+  transform: rotate(var(--tilt-mobile));
+  box-shadow: 0 10px 24px -14px rgba(31, 56, 100, 0.35);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+@media (min-width: 768px) {
+  .note {
+    margin: var(--lift) -18px 48px;   /* 옆 메모와 살짝 겹치게 */
+    transform: rotate(var(--tilt));
+  }
+}
+.note:hover {
+  transform: translateY(-6px) rotate(0deg);
+  box-shadow: 0 18px 30px -14px rgba(31, 56, 100, 0.4);
+  z-index: 20 !important;
 }
 
 /* ── Animations ───────────────────────────────────── */

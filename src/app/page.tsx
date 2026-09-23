@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { HOME } from '@/lib/content';
+import NoticeBar from '@/components/NoticeBar';
 
 export default function HomePage() {
   return (
@@ -10,7 +11,7 @@ export default function HomePage() {
           <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-8 fade-up">
             {HOME.eyebrow}
           </p>
-          <h1 className="font-serif font-black text-[#0a0a0a] text-[28px] sm:text-[40px] lg:text-[52px] leading-[1.1] tracking-[-0.03em] mb-8 fade-up-d1">
+          <h1 className="font-serif font-black text-[var(--brand)] text-[28px] sm:text-[40px] lg:text-[52px] leading-[1.1] tracking-[-0.03em] mb-8 fade-up-d1">
             {HOME.headline[0]}<br />{HOME.headline[1]}
           </h1>
           <p className="text-[15px] text-[#555] leading-[2] max-w-[420px] mb-16 fade-up-d2">
@@ -38,7 +39,7 @@ export default function HomePage() {
           {HOME.values.map(({ num, title, desc }) => (
             <div key={num}>
               <span className="text-[10px] text-[#ccc] tracking-widest block mb-4">{num}</span>
-              <h2 className="font-serif font-bold text-[26px] text-[#0a0a0a] tracking-tight mb-3 leading-snug">{title}</h2>
+              <h2 className="font-serif font-bold text-[26px] text-[var(--brand)] tracking-tight mb-3 leading-snug">{title}</h2>
               <p className="text-[13px] text-[#666] leading-[1.9]">{desc}</p>
             </div>
           ))}
@@ -46,19 +47,7 @@ export default function HomePage() {
       </section>
 
       {/* ── Notice bar ──────────────────────────────── */}
-      <section className="border-t border-[#ebebeb]">
-        <div className="max-w-5xl mx-auto px-8 py-10 flex items-center justify-between gap-6 flex-wrap">
-          <p className="text-[13px] text-[#444]">{HOME.noticeBar.text}</p>
-          <div className="flex gap-4 text-[12px]">
-            {HOME.noticeBar.links.map(({ href, label }, i) => (
-              <span key={href} className="flex items-center gap-4">
-                {i > 0 && <span className="text-[#ddd]">|</span>}
-                <Link href={href} className="text-[#888] hover:text-[#0a0a0a] transition-colors underline underline-offset-2">{label}</Link>
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
+      <NoticeBar />
     </div>
   );
 }

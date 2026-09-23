@@ -20,6 +20,7 @@ const FONTS = [
   { label: '고운돋움', value: 'var(--font-gowun-dodum)' },
   { label: '나눔명조', value: 'var(--font-nanum-myeongjo)' },
   { label: '블랙한산스', value: 'var(--font-black-han-sans)' },
+  { label: '따악단단', value: 'NanumDdaAgDanDan' },
 ];
 
 const SIZES = [
