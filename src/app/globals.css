@@ -112,7 +112,10 @@ body {
 }
 
 
-/* Scrapbook — We재활생각 (rehab-thoughts.html). 좌표는 원본 단위, 전체를 zoom으로 1/3 축소 */
+/* Scrapbook — We재활생각 (rehab-thoughts.html).
+   좌표·크기는 원본 단위로 적고, .scrap-stage를 transform으로 1/3 축소한다.
+   (CSS zoom은 아이폰 사파리에서 글자 크기·터치 위치가 어긋나서 쓰지 않는다)
+   .scrap-frame이 축소된 뒤의 실제 크기 자리를 잡고, 높이는 컴포넌트가 정한다. */
 .scrapbook-bg {
   background-color: #f7f7f7;
   background-image:
@@ -120,16 +123,20 @@ body {
     linear-gradient(90deg, #ebebeb 1px, transparent 1px);
   background-size: 28px 28px;
 }
-/* 한 칸의 폭은 왼쪽 메모 끝(-690)부터 오른쪽 사진 끝(+600)까지만 — 옆 칸과 촘촘히 붙는다 */
+/* 한 칸의 폭은 왼쪽 메모 끝(-690)부터 오른쪽 사진 끝(+600)까지만(원본 1310) — 옆 칸과 촘촘히 붙는다 */
+.scrap-frame {
+  width: 436.67px;          /* 1310 ÷ 3 */
+  max-width: 100%;
+}
 .scrap-stage {
   --xk: 1;                 /* 좁은 화면에서 조각들을 안쪽으로 모으는 비율 */
   --cx: 690px;             /* 가운데 카드 중심의 가로 위치 */
-  zoom: 0.3333;
   position: relative;
   overflow-x: clip;
-  width: 1310px;
-  max-width: 100%;
-  padding: 30px 0 100px;
+  width: 300%;             /* 1/3로 줄이면 .scrap-frame 폭과 같아진다 */
+  padding-top: 30px;
+  transform: scale(0.33333);
+  transform-origin: 0 0;
 }
 .scrap-card {
   position: relative;
@@ -160,11 +167,13 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 10px 24px rgba(0, 0, 0, 0.08);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-/* 마우스를 올리면 살짝 커지며 맨 앞으로 */
-.scrap-photo:hover {
-  z-index: 10;
-  transform: rotate(var(--r)) scale(1.12);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12), 0 22px 40px rgba(0, 0, 0, 0.14);
+/* 마우스를 올리면 살짝 커지며 맨 앞으로 — 마우스가 있는 기기에서만 (터치는 첫 탭에 바로 열리게) */
+@media (hover: hover) {
+  .scrap-photo:hover {
+    z-index: 10;
+    transform: rotate(var(--r)) scale(1.12);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12), 0 22px 40px rgba(0, 0, 0, 0.14);
+  }
 }
 .scrap-note {
   background: #f2f2f3;
@@ -176,13 +185,13 @@ body {
   overflow: hidden;
   mask-image: linear-gradient(#000 80%, transparent);
 }
-.scrap-controls { zoom: 3; }   /* 관리자 버튼은 축소하지 않는다 */
 /* 휴대폰: 한 칸이 화면 폭 전체, 카드는 가운데, 조각은 안쪽으로 */
 @media (max-width: 480px) {
-  .scrap-stage { --xk: 0.7; --cx: 50%; width: 100%; }
+  .scrap-stage { --xk: 0.7; --cx: 50%; }
   .scrap-card { margin: 0 auto; }
   .scrap-body { padding-right: 90px; }   /* 안쪽으로 모인 사진이 본문을 가리지 않게 */
   .scrap-note { left: calc(var(--cx) - 440px); width: 360px; }   /* 화면 안에 들어오고 더보기는 덮지 않게 */
+  .scrap-note-title { font-size: 22px; }   /* 좁은 메모에 맞게 제목을 작게 */
 }
 
 /* Note board — We재활생각 메모 보드 */

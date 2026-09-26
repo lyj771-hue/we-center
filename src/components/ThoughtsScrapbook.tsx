@@ -8,7 +8,7 @@ import { toParagraphs, extractImages } from '@/lib/postText';
 
 // We재활생각 스크랩북 — rehab-thoughts.html 디자인. 재활생각 글 하나가 스크랩북 하나.
 // 모눈종이 위 가운데 본문 카드(본문 + 더보기), 오른쪽에 본문 사진들, 압정 꽂힌 메모(제목·날짜).
-// 좌표·크기는 원본 파일 단위로 적고, 전체는 CSS(.scrap-stage의 zoom)로 1/3 축소한다.
+// 좌표·크기는 원본 파일 단위로 적고, 전체는 CSS(.scrap-stage의 transform)로 1/3 축소한다.
 // 사진은 본문에 들어 있는 사진 수만큼 흩뿌린다. 마우스를 올리면 살짝 커지며 앞으로 나오고,
 // 클릭하면 화면 가운데에 크게 띄운다.
 
@@ -102,10 +102,12 @@ function ScrapbookEntry({ post, basePath, isAdmin, onDelete }: EntryProps) {
   const slots = layoutPhotos(images.length);
   // 사진이 많아 아래로 내려가면 그만큼 칸을 늘린다
   const photosBottom = Math.max(0, ...slots.map(s => 30 + s.y + (s.w * s.ratio[1]) / s.ratio[0] + 60));
-  const stageStyle = photosBottom > STAGE_HEIGHT ? { minHeight: `${photosBottom}px` } : undefined;
+  const height = Math.max(STAGE_HEIGHT, photosBottom);
 
   return (
-    <article className="scrap-stage" style={stageStyle}>
+    // 축소 전 높이는 stage에, 축소 후(1/3) 높이는 frame에 준다
+    <article className="scrap-frame" style={{ height: `${height / 3}px` }}>
+    <div className="scrap-stage" style={{ height: `${height}px` }}>
       {/* 가운데 본문 카드 — 왼쪽 아래는 메모가 살짝 덮고, 더보기는 메모가 닿지 않는 오른쪽 아래 */}
       <div className="scrap-card">
         <div className="aspect-[4/5] flex flex-col px-[48px] pt-[52px] pb-[40px]">
@@ -131,7 +133,7 @@ function ScrapbookEntry({ post, basePath, isAdmin, onDelete }: EntryProps) {
             style={place(s.x, s.y, s.r, s.w)}
           >
             {s.clipped && (
-              <span aria-hidden="true" className="absolute -top-[22px] right-[26px] text-[34px] rotate-[20deg] select-none">📎</span>
+              <span aria-hidden="true" className="absolute z-[1] -top-[30px] left-1/2 -translate-x-1/2 rotate-[12deg] text-[40px] leading-none select-none pointer-events-none">📎</span>
             )}
             <button
               type="button"
@@ -150,20 +152,21 @@ function ScrapbookEntry({ post, basePath, isAdmin, onDelete }: EntryProps) {
       {/* 왼쪽 메모 — 제목과 작성 날짜, 가로로 넓게. 본문 아래쪽을 살짝 가리고, 오른쪽 더보기 앞에서 끝난다 */}
       <div className="scrap-piece scrap-note" style={place(-690, 540, -2, 587)}>
         <span aria-hidden="true" className="absolute -top-[28px] left-[56px] text-[38px] select-none">📌</span>
-        <h2 className="break-keep text-[var(--brand)] text-[31px] leading-[2.2]">{post.title}</h2>
+        <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[2.2]">{post.title}</h2>
         <div className="mt-3 flex items-center gap-4">
           <span className="text-[#71717b] text-[16px]">{fmt(post.createdAt)}</span>
           {isAdmin && (
             <button
               type="button"
               onClick={() => onDelete(post.id)}
-              className="scrap-controls ml-auto text-[11px] text-[#aaa] hover:text-red-400 transition-colors"
+              className="ml-auto px-3 py-2 text-[33px] text-[#aaa] hover:text-red-400 transition-colors"
             >
               삭제
             </button>
           )}
         </div>
       </div>
+    </div>
     </article>
   );
 }
