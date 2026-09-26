@@ -4,7 +4,7 @@ import NoticeBar from '@/components/NoticeBar';
 
 export default function HomePage() {
   return (
-    <div className="home-font">
+    <div>
       {/* ── Hero ────────────────────────────────────── */}
       <section className="min-h-[calc(100svh-160px)] flex flex-col justify-center bg-[#f5f5f3] px-8 py-24">
         <div className="max-w-5xl mx-auto w-full">

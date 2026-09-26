@@ -7,6 +7,7 @@ import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost } from '@/lib/store';
 import NoteBoard, { PinnedNote } from './NoteBoard';
+import ThoughtsScrapbook from './ThoughtsScrapbook';
 
 const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
   ssr: false,
@@ -16,8 +17,8 @@ const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
 interface Props {
   category: Category;
   basePath: string;
-  /** 'notes': We재활생각 메모 보드 형태로 보여준다 */
-  variant?: 'list' | 'notes';
+  /** 'notes': 메모 보드(공지사항), 'scrapbook': 스크랩북(We재활생각) */
+  variant?: 'list' | 'notes' | 'scrapbook';
   /** notes 모드에서 맨 앞에 고정할 메모 */
   pinnedNote?: PinnedNote;
 }
@@ -52,9 +53,9 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
 
   return (
     <section className="fade-up">
-      {/* Header row — 메모 보드에선 관리자일 때만 (작성 버튼) */}
+      {/* Header row — 메모 보드·스크랩북에선 관리자일 때만 (작성 버튼) */}
       {(variant === 'list' || isAdmin) && (
-        <div className={`flex items-center mb-10 ${variant === 'notes' ? 'justify-end' : 'justify-between'}`}>
+        <div className={`flex items-center mb-10 ${variant === 'list' ? 'justify-between' : 'justify-end'}`}>
           {variant === 'list' && (
             <p className="text-[11px] tracking-[0.2em] text-[#aaa]">
               총 {posts.length}건
@@ -116,7 +117,9 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       )}
 
       {/* List */}
-      {variant === 'notes' ? (
+      {variant === 'scrapbook' ? (
+        <ThoughtsScrapbook posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
+      ) : variant === 'notes' ? (
         <NoteBoard posts={posts} pinned={pinnedNote} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
       ) : posts.length === 0 ? (
         <div className="py-24 text-center text-sm text-[#ccc] tracking-widest">

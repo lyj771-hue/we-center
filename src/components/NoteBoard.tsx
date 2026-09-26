@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Post } from '@/lib/types';
+import { toText, excerpt } from '@/lib/postText';
 
 // 메모 보드 — We재활생각·공지사항 목록. 디자인은 Claude Design 캔버스 "We재활생각"을 옮긴 것.
 // 메모 3장마다 기울기·높이·겹침 순서가 반복된다.
@@ -17,19 +18,6 @@ const ICONS = [
   // 전구
   ['M30 14c-8 0-13 6-13 13 0 5 3 8 5 11h16c2-3 5-6 5-11 0-7-5-13-13-13z', 'M25 38h10M27 43h6', 'M30 14v-4M20 20l-3-3M40 20l3-3'],
 ];
-
-const toText = (html: string) =>
-  html
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const excerpt = (text: string, max = 60) => (text.length > max ? `${text.slice(0, max).trim()}…` : text);
 
 // 한국어 기준 1분에 약 500자
 const readMinutes = (text: string) => Math.max(1, Math.round(text.length / 500));

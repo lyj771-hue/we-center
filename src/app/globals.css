@@ -1,9 +1,8 @@
 @import "tailwindcss";
 
-/* ── 나눔손글씨 따악단단 (네이버 무료 웹폰트) ──────────
+/* ── 나눔손글씨 따악단단 — 글쓰기 편집기의 글꼴 선택('따악단단')용 ──────────
    네이버 CSS 대신 직접 선언: 손글씨체라 글자가 작게 그려져서
-   size-adjust로 키우고, 로딩 중엔 기본 글꼴을 먼저 보여준다.
-   본문·메뉴는 2배로 키우고, 제목(Heading)은 원래 크기 — 같은 파일이라 한 번만 받는다. */
+   size-adjust로 키우고, 로딩 중엔 기본 글꼴을 먼저 보여준다. */
 @font-face {
   font-family: "NanumDdaAgDanDan";
   src: url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumDdaAgDanDan.woff2") format("woff2"),
@@ -11,15 +10,8 @@
   font-display: swap;
   size-adjust: 200%;
 }
-@font-face {
-  font-family: "NanumDdaAgDanDan Heading";
-  src: url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumDdaAgDanDan.woff2") format("woff2"),
-       url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumDdaAgDanDan.woff") format("woff");
-  font-display: swap;
-  size-adjust: 100%;
-}
 
-/* ── 나눔손글씨 암스테르담 — 메인 홈(.home-font) 전용 ── */
+/* ── 나눔손글씨 암스테르담 — 사이트 기본 폰트 ── */
 @font-face {
   font-family: "NanumAmSeuTeReuDam";
   src: url("https://hangeul.pstatic.net/hangeul_static/webfont/clova/NanumAmSeuTeReuDam.woff2") format("woff2"),
@@ -37,8 +29,8 @@
 
 /* ── Font theme — runtime CSS vars from next/font ── */
 @theme inline {
-  --font-sans:  "NanumDdaAgDanDan", var(--font-noto-sans),  "Noto Sans KR",  -apple-system, sans-serif;
-  --font-serif: "NanumDdaAgDanDan Heading", var(--font-noto-serif), "Noto Serif KR", Georgia,       serif;
+  --font-sans:  "NanumAmSeuTeReuDam", var(--font-noto-sans),  "Noto Sans KR",  -apple-system, sans-serif;
+  --font-serif: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia,       serif;
 }
 
 /* ── Design tokens ────────────────────────────────── */
@@ -111,7 +103,7 @@ body {
 
 /* Serif display heading — used on every page */
 .display-heading {
-  font-family: "NanumDdaAgDanDan Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
+  font-family: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
   font-weight: 700;
   font-size: clamp(22px, 3.2vw, 32px);
   line-height: 1.2;
@@ -119,12 +111,78 @@ body {
   color: var(--brand);
 }
 
-/* 메인 홈만 암스테르담 폰트 — 본문과 제목(.font-serif) 모두 덮어쓴다 */
-.home-font {
-  font-family: "NanumAmSeuTeReuDam", var(--font-noto-sans), "Noto Sans KR", -apple-system, sans-serif;
+
+/* Scrapbook — We재활생각 (rehab-thoughts.html). 좌표는 원본 단위, 전체를 zoom으로 1/3 축소 */
+.scrapbook-bg {
+  background-color: #f7f7f7;
+  background-image:
+    linear-gradient(#ebebeb 1px, transparent 1px),
+    linear-gradient(90deg, #ebebeb 1px, transparent 1px);
+  background-size: 28px 28px;
 }
-.home-font .font-serif {
-  font-family: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
+/* 한 칸의 폭은 왼쪽 메모 끝(-690)부터 오른쪽 사진 끝(+600)까지만 — 옆 칸과 촘촘히 붙는다 */
+.scrap-stage {
+  --xk: 1;                 /* 좁은 화면에서 조각들을 안쪽으로 모으는 비율 */
+  --cx: 690px;             /* 가운데 카드 중심의 가로 위치 */
+  zoom: 0.3333;
+  position: relative;
+  overflow-x: clip;
+  width: 1310px;
+  max-width: 100%;
+  padding: 30px 0 100px;
+}
+.scrap-card {
+  position: relative;
+  z-index: 1;
+  width: 540px;
+  max-width: 100%;
+  margin-left: calc(var(--cx) - 270px);
+  background: #fff;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), 0 10px 24px rgba(0, 0, 0, 0.05);
+}
+/* 조각은 가운데 카드 중심선에서 --x 만큼 떨어진 곳에 붙는다 */
+.scrap-piece {
+  position: absolute;
+  z-index: 2;
+  left: calc(var(--cx) + var(--x) * var(--xk));
+  top: var(--y);
+  width: var(--w);
+  margin: 0;
+  transform: rotate(var(--r));
+}
+.scrap-piece.behind { z-index: 0; }
+.scrap-photo {
+  background: #fff;
+  padding: 5px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 10px 24px rgba(0, 0, 0, 0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+/* 마우스를 올리면 살짝 커지며 맨 앞으로 */
+.scrap-photo:hover {
+  z-index: 10;
+  transform: rotate(var(--r)) scale(1.12);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12), 0 22px 40px rgba(0, 0, 0, 0.14);
+}
+.scrap-note {
+  background: #f2f2f3;
+  border-radius: 6px;
+  padding: 26px 22px 24px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.scrap-body {                /* 카드 높이를 넘는 본문은 흐리게 잘라낸다 */
+  overflow: hidden;
+  mask-image: linear-gradient(#000 80%, transparent);
+}
+.scrap-controls { zoom: 3; }   /* 관리자 버튼은 축소하지 않는다 */
+/* 휴대폰: 한 칸이 화면 폭 전체, 카드는 가운데, 조각은 안쪽으로 */
+@media (max-width: 480px) {
+  .scrap-stage { --xk: 0.7; --cx: 50%; width: 100%; }
+  .scrap-card { margin: 0 auto; }
+  .scrap-body { padding-right: 90px; }   /* 안쪽으로 모인 사진이 본문을 가리지 않게 */
+  .scrap-note { left: calc(var(--cx) - 440px); width: 360px; }   /* 화면 안에 들어오고 더보기는 덮지 않게 */
 }
 
 /* Note board — We재활생각 메모 보드 */
