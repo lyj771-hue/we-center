@@ -16,7 +16,7 @@ export default function WeThoughtsPage() {
           </h1>
           <p className="text-[14px] leading-[1.9] text-[#555]">{WE_THOUGHTS.subtext}</p>
         </div>
-        <PostBoard category="thoughts" basePath="/we-thoughts" variant="notes" />
+        <PostBoard category="thoughts" basePath="/we-thoughts" variant="notes" pinnedNote={WE_THOUGHTS.comingSoon} />
       </div>
       <NoticeBar />
     </>

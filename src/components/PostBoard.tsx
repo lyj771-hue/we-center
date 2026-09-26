@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost } from '@/lib/store';
-import NoteBoard from './NoteBoard';
+import NoteBoard, { PinnedNote } from './NoteBoard';
 
 const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
   ssr: false,
@@ -18,9 +18,11 @@ interface Props {
   basePath: string;
   /** 'notes': We재활생각 메모 보드 형태로 보여준다 */
   variant?: 'list' | 'notes';
+  /** notes 모드에서 맨 앞에 고정할 메모 */
+  pinnedNote?: PinnedNote;
 }
 
-export default function PostBoard({ category, basePath, variant = 'list' }: Props) {
+export default function PostBoard({ category, basePath, variant = 'list', pinnedNote }: Props) {
   const { isAdmin } = useAdmin();
   const [posts, setPosts] = useState<Post[]>([]);
   const [editing, setEditing] = useState(false);
@@ -115,7 +117,7 @@ export default function PostBoard({ category, basePath, variant = 'list' }: Prop
 
       {/* List */}
       {variant === 'notes' ? (
-        <NoteBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
+        <NoteBoard posts={posts} pinned={pinnedNote} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
       ) : posts.length === 0 ? (
         <div className="py-24 text-center text-sm text-[#ccc] tracking-widest">
           등록된 게시물이 없습니다

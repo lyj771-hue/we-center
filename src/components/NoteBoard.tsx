@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { Post } from '@/lib/types';
-import { WE_THOUGHTS } from '@/lib/content';
 
-// 메모 보드 — We재활생각 목록. 디자인은 Claude Design 캔버스 "We재활생각"을 옮긴 것.
+// 메모 보드 — We재활생각·공지사항 목록. 디자인은 Claude Design 캔버스 "We재활생각"을 옮긴 것.
 // 메모 3장마다 기울기·높이·겹침 순서가 반복된다.
 const PATTERN = [
   { tilt: -4, tiltMobile: -2,   lift: 0,  layer: 1 },
@@ -77,25 +76,37 @@ function Note({ index, title, children }: NoteProps) {
 const linkCls =
   'inline-block text-[14px] font-bold text-[#2e4172] underline decoration-[1.5px] underline-offset-[3px] hover:opacity-75 transition-opacity';
 
+export interface PinnedNote {
+  title: string;
+  desc: string;
+}
+
 interface Props {
   posts: Post[];
+  /** 게시글 앞에 항상 붙는 메모 (링크 없음) */
+  pinned?: PinnedNote;
   basePath: string;
   isAdmin: boolean;
   onDelete: (id: string) => void;
 }
 
-export default function NoteBoard({ posts, basePath, isAdmin, onDelete }: Props) {
-  const { comingSoon } = WE_THOUGHTS;
+export default function NoteBoard({ posts, pinned, basePath, isAdmin, onDelete }: Props) {
+  const offset = pinned ? 1 : 0;
+  if (!pinned && posts.length === 0) {
+    return <div className="py-24 text-center text-sm text-[#bbb] tracking-widest">등록된 게시물이 없습니다</div>;
+  }
   return (
     <div className="max-w-[860px] mx-auto flex flex-col items-center md:flex-row md:flex-wrap md:justify-center md:items-start">
-      <Note index={0} title={comingSoon.title}>
-        <p className="text-[14px] leading-[1.7] text-[#2e4172]">{comingSoon.desc}</p>
-      </Note>
+      {pinned && (
+        <Note index={0} title={pinned.title}>
+          <p className="text-[14px] leading-[1.7] text-[#2e4172]">{pinned.desc}</p>
+        </Note>
+      )}
 
       {posts.map((post, i) => {
         const text = toText(post.content);
         return (
-          <Note key={post.id} index={i + 1} title={post.title}>
+          <Note key={post.id} index={i + offset} title={post.title}>
             <p className="text-[14px] leading-[1.7] text-[#2e4172] mb-[18px]">{excerpt(text)}</p>
             <p className="text-[13px] font-semibold text-[#2e4172] opacity-85 mb-3.5">
               {readMinutes(text)}분 · {yearMonth(post.createdAt)}
