@@ -116,9 +116,7 @@ export const WE_THERAPISTS = {
 
 // ── We재활생각 (/we-thoughts) ────────────────
 export const WE_THOUGHTS = {
-  eyebrow: 'WE 소아재활센터',
   heading: 'We재활생각',
-  subtext: '재활사들의 생각과 이야기를 메모처럼 붙여둡니다.',
 };
 
 // ── 공지사항 (/notices) ───────────────────────
