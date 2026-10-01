@@ -7,7 +7,7 @@ import { uploadImage } from '@/lib/imageUpload';
 import { LOCATION } from '@/lib/content';
 
 // 오시는길 — 센터별(수색 → 의정부)로 "이름 + 정보" 아래 지도 사진.
-// 센터 목록은 location_info.content에 JSON으로 저장한다(별도 테이블 없이).
+// 페이지 제목·소개 문구와 센터 목록은 location_info.content에 JSON으로 저장한다(별도 테이블 없이).
 // 예전처럼 글만 저장돼 있으면 센터 이름 줄을 기준으로 나눠서 보여준다.
 
 interface CenterSection {
@@ -16,15 +16,31 @@ interface CenterSection {
   imageUrl: string;
 }
 
+interface LocationPage {
+  heading: string;
+  subtext: string;
+  sections: CenterSection[];
+}
+
 const DEFAULT_NAMES = ['은평구 수색센터', '의정부센터'];
 
-function parseSections(content: string, imageUrls: string[]): CenterSection[] {
+function parsePage(content: string, imageUrls: string[]): LocationPage {
   try {
     const parsed = JSON.parse(content);
-    if (Array.isArray(parsed?.sections)) return parsed.sections as CenterSection[];
+    if (Array.isArray(parsed?.sections)) {
+      return {
+        heading: parsed.heading ?? LOCATION.heading,
+        subtext: parsed.subtext ?? LOCATION.subtext,
+        sections: parsed.sections as CenterSection[],
+      };
+    }
   } catch {
     // 예전 형식(글 한 덩어리) — 아래에서 나눈다
   }
+  return { heading: LOCATION.heading, subtext: LOCATION.subtext, sections: parseLegacySections(content, imageUrls) };
+}
+
+function parseLegacySections(content: string, imageUrls: string[]): CenterSection[] {
   const text = content.replace(/\r/g, '');
   const blocks = text.split(/\n\s*\n/);
   const pick = (keyword: string) =>
@@ -35,24 +51,24 @@ function parseSections(content: string, imageUrls: string[]): CenterSection[] {
   ];
 }
 
-export default function LocationPage() {
+export default function LocationPageView() {
   const { isAdmin } = useAdmin();
-  const [sections, setSections] = useState<CenterSection[]>([]);
+  const [page, setPage] = useState<LocationPage>({ heading: LOCATION.heading, subtext: LOCATION.subtext, sections: [] });
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<CenterSection[]>([]);
+  const [form, setForm] = useState<LocationPage>(page);
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const fileRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     getLocation().then(d => {
-      const s = parseSections(d.content, d.imageUrls);
-      setSections(s);
-      setForm(s);
+      const p = parsePage(d.content, d.imageUrls);
+      setPage(p);
+      setForm(p);
     });
   }, []);
 
   const updateForm = (idx: number, patch: Partial<CenterSection>) =>
-    setForm(f => f.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+    setForm(f => ({ ...f, sections: f.sections.map((s, i) => (i === idx ? { ...s, ...patch } : s)) }));
 
   const handleFileChange = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -71,10 +87,10 @@ export default function LocationPage() {
   const handleSave = async () => {
     try {
       await saveLocation({
-        content: JSON.stringify({ sections: form }),
-        imageUrls: form.map(s => s.imageUrl).filter(Boolean),
+        content: JSON.stringify(form),
+        imageUrls: form.sections.map(s => s.imageUrl).filter(Boolean),
       });
-      setSections(form);
+      setPage(form);
       setEditing(false);
     } catch {
       alert('저장에 실패했습니다. 다시 시도해 주세요.');
@@ -87,11 +103,11 @@ export default function LocationPage() {
         <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{LOCATION.eyebrow}</p>
         <div className="flex items-end justify-between gap-6">
           <div>
-            <h1 className="display-heading mb-3">{LOCATION.heading}</h1>
-            <p className="text-[14px] text-[#666] leading-relaxed">{LOCATION.subtext}</p>
+            <h1 className="display-heading mb-3">{page.heading}</h1>
+            {page.subtext && <p className="text-[14px] text-[#666] leading-relaxed whitespace-pre-line">{page.subtext}</p>}
           </div>
           {isAdmin && !editing && (
-            <button onClick={() => { setForm(sections); setEditing(true); }}
+            <button onClick={() => { setForm(page); setEditing(true); }}
               className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
               편집
             </button>
@@ -101,7 +117,24 @@ export default function LocationPage() {
 
       {editing ? (
         <div className="space-y-12">
-          {form.map((s, idx) => (
+          <div className="space-y-4">
+            <p className="text-[11px] tracking-[0.2em] text-[#aaa]">페이지 제목 · 소개 문구</p>
+            <input
+              type="text"
+              value={form.heading}
+              onChange={e => setForm(f => ({ ...f, heading: e.target.value }))}
+              placeholder="페이지 제목 (예: 찾아오시는 방법)"
+              className="w-full border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] placeholder:text-[#ccc]"
+            />
+            <textarea
+              value={form.subtext}
+              onChange={e => setForm(f => ({ ...f, subtext: e.target.value }))}
+              rows={2}
+              placeholder="소개 문구 (비워 두면 숨겨져요)"
+              className="w-full border border-[#e5e5e5] p-3 text-sm leading-relaxed outline-none focus:border-[#0a0a0a] resize-none placeholder:text-[#ccc]"
+            />
+          </div>
+          {form.sections.map((s, idx) => (
             <div key={idx} className="space-y-4 border-t border-[#e5e5e5] pt-8">
               <p className="text-[11px] tracking-[0.2em] text-[#aaa]">센터 {idx + 1}</p>
               <input
@@ -140,13 +173,13 @@ export default function LocationPage() {
           <div className="flex gap-2 pt-2">
             <button onClick={handleSave} disabled={uploadingIdx !== null}
               className="bg-[#0a0a0a] text-white text-[11px] px-8 py-3 tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50">저장</button>
-            <button onClick={() => { setEditing(false); setForm(sections); }}
+            <button onClick={() => { setEditing(false); setForm(page); }}
               className="border border-[#e5e5e5] text-[11px] px-8 py-3 tracking-widest hover:bg-[#f8f8f8] transition-colors">취소</button>
           </div>
         </div>
       ) : (
         <div className="space-y-16 md:space-y-20">
-          {sections.map((s, idx) => (
+          {page.sections.map((s, idx) => (
             <section key={idx}>
               <h2 className="font-serif font-bold text-[24px] md:text-[30px] leading-snug tracking-tight text-[var(--brand)] mb-4">{s.name}</h2>
               <div className="text-[14px] leading-[1.95] text-[#444] whitespace-pre-wrap mb-6">
