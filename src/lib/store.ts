@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Post, Category, CenterRoom, Therapist, Subject } from './types';
+import { Post, Category, CenterRoom, Therapist, Subject, PaymentMethod } from './types';
 
 // ── Posts (thoughts / notices / etc) ─────────────────────────────────────────
 
@@ -247,5 +247,56 @@ export async function saveLocation(data: LocationData): Promise<void> {
   const { error } = await supabase
     .from('location_info')
     .upsert({ id: 1, content: data.content, image_urls: data.imageUrls });
+  if (error) throw error;
+}
+
+// ── Payment methods (결제정보 카드) ───────────────────────────────────────────
+
+interface PaymentMethodRow {
+  id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  sort_order: number;
+}
+
+function fromPaymentMethodRow(row: PaymentMethodRow): PaymentMethod {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? '',
+    imageUrl: row.image_url ?? undefined,
+    order: row.sort_order,
+  };
+}
+
+export async function getPaymentMethods(): Promise<PaymentMethod[]> {
+  const { data, error } = await supabase.from('payment_methods').select('*').order('sort_order', { ascending: true });
+  if (error) throw error;
+  return (data as PaymentMethodRow[]).map(fromPaymentMethodRow);
+}
+
+export async function addPaymentMethod(data: Omit<PaymentMethod, 'id'>): Promise<void> {
+  const { error } = await supabase.from('payment_methods').insert({
+    name: data.name,
+    description: data.description,
+    image_url: data.imageUrl ?? null,
+    sort_order: data.order,
+  });
+  if (error) throw error;
+}
+
+export async function updatePaymentMethod(id: string, data: Partial<Omit<PaymentMethod, 'id'>>): Promise<void> {
+  const patch: Partial<PaymentMethodRow> = {};
+  if (data.name !== undefined) patch.name = data.name;
+  if (data.description !== undefined) patch.description = data.description;
+  if (data.imageUrl !== undefined) patch.image_url = data.imageUrl ?? null;
+  if (data.order !== undefined) patch.sort_order = data.order;
+  const { error } = await supabase.from('payment_methods').update(patch).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deletePaymentMethod(id: string): Promise<void> {
+  const { error } = await supabase.from('payment_methods').delete().eq('id', id);
   if (error) throw error;
 }

@@ -32,4 +32,13 @@ export interface Subject {
   order: number;
 }
 
+/** 결제정보 페이지의 결제 수단 카드 (바우처, 굳센 카드 등) */
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl?: string;
+  order: number;
+}
+
 export type Category = 'thoughts' | 'notices' | 'etc';

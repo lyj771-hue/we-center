@@ -231,3 +231,29 @@ A. 두 센터 모두 보호자 및 형제자매를 위한 대기 공간을 운�
   '/images/posts/et-3.svg',
   '2026-06-15T09:00:00.000Z'
 );
+
+-- ─────────────────────────────────────────────
+-- 5. 결제정보 카드 (2026-10 추가) — 관리자가 사진·이름·설명·순서를 관리
+-- ─────────────────────────────────────────────
+
+create table if not exists payment_methods (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text not null default '',
+  image_url text,
+  sort_order int not null default 0
+);
+
+alter table payment_methods enable row level security;
+
+create policy "public read payment_methods" on payment_methods for select using (true);
+create policy "admin insert payment_methods" on payment_methods for insert to authenticated with check (true);
+create policy "admin update payment_methods" on payment_methods for update to authenticated using (true) with check (true);
+create policy "admin delete payment_methods" on payment_methods for delete to authenticated using (true);
+
+insert into payment_methods (name, description, sort_order) values
+  ('바우처', '', 1),
+  ('굳센 카드', '', 2),
+  ('꿈이든 카드', '', 3),
+  ('선결제 카드', '', 4),
+  ('신용카드 / 현금', '', 5);
