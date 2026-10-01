@@ -50,8 +50,7 @@ export default function WeSubjectsPage() {
         <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_SUBJECTS.eyebrow}</p>
         <div className="flex items-end justify-between gap-6">
           <div>
-            <h1 className="display-heading mb-3">{WE_SUBJECTS.heading}</h1>
-            <p className="text-[14px] text-[#666] leading-relaxed">{WE_SUBJECTS.subtext}</p>
+            <h1 className="display-heading">{WE_SUBJECTS.heading}</h1>
           </div>
           {isAdmin && (
             <button onClick={() => { setAdding(true); setForm({ name: '', description: '' }); }}
@@ -75,7 +74,7 @@ export default function WeSubjectsPage() {
               )}
             </div>
             <h2 className="text-[17px] font-medium mb-3">{s.name}</h2>
-            <p className="text-[13px] text-[#666] leading-[1.8]">{s.description}</p>
+            <p className="text-[13px] text-[#666] leading-[1.8] whitespace-pre-line">{s.description}</p>
           </div>
         ))}
       </div>

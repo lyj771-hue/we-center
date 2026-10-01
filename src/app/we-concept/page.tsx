@@ -11,7 +11,7 @@ export default function WeConceptPage() {
       <div className="max-w-5xl mx-auto px-8 pt-8 md:pt-14">
         <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_CONCEPT.eyebrow}</p>
         <h1 className="display-heading mb-4 max-w-lg">{WE_CONCEPT.heading}</h1>
-        <p className="text-[14px] text-[#666] leading-relaxed max-w-md mb-10">{WE_CONCEPT.subtext}</p>
+        <p className="text-[14px] text-[#666] leading-[2] max-w-[548px] mb-10 whitespace-pre-line">{WE_CONCEPT.subtext}</p>
       </div>
 
       <div className="max-w-5xl mx-auto px-8 mb-16">

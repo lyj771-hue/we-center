@@ -54,8 +54,9 @@ export const HOME = {
 // ── We컨셉 (/we-concept) ───────────────────────
 export const WE_CONCEPT = {
   eyebrow: 'We 컨셉',
-  heading: '우리가 재활을 대하는 방식',
-  subtext: '치료 하나하나가 아이의 하루, 그리고 성장의 이야기가 되도록 설계합니다.',
+  heading: 'We가 재활을 대하는 생각',
+  // \n 자리에서 줄을 바꾼다
+  subtext: '단순한 아이의 기능 증가가 아닌\n아이를 포함한 가정의 삶의 질 향상을 추구합니다',
   heroImage: '/images/concept/hero.svg',
   quote: '치료가 아니라, 함께 자라는 시간입니다.',
   pillars: [
@@ -92,8 +93,7 @@ export const WE_CONCEPT = {
 // ── We센터 (/we-center) ───────────────────────
 export const WE_CENTER = {
   eyebrow: 'We 센터',
-  heading: '우리의 공간을 소개합니다',
-  subtext: '아이가 편안함을 느낄 수 있도록, 모든 공간을 세심하게 준비했습니다.',
+  heading: 'We 공간을 소개합니다',
   centers: [
     { id: 'susaek'     as const, label: '수색 센터',   addr: '서울특별시 은평구' },
     { id: 'uijeongbu' as const, label: '의정부 센터', addr: '경기도 의정부시' },
@@ -103,8 +103,7 @@ export const WE_CENTER = {
 // ── We수업과목 (/we-subjects) ─────────────────
 export const WE_SUBJECTS = {
   eyebrow: 'We 수업과목',
-  heading: '아이에게 맞는 치료를 찾습니다',
-  subtext: '한 아이를 위한 하나의 치료 계획—각 프로그램은 개별 발달 목표에 맞게 구성됩니다.',
+  heading: 'We 수업 과목을 소개합니다',
 };
 
 // ── We재활사 (/we-therapists) ─────────────────

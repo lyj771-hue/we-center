@@ -54,6 +54,27 @@ export default function WeCenterPage() {
     refresh();
   };
 
+  // 관리자: 공간을 한 칸 앞(-1)/뒤(+1)로 옮기고, 화면 순서대로 번호를 다시 매겨 저장한다
+  const [moving, setMoving] = useState(false);
+  const handleMove = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (moving || target < 0 || target >= rooms.length) return;
+    const next = [...rooms];
+    [next[index], next[target]] = [next[target], next[index]];
+    setRooms(next);
+    setMoving(true);
+    try {
+      await Promise.all(
+        next.map((r, i) => (r.order === i + 1 ? null : updateRoom(r.id, { order: i + 1 }))).filter(Boolean)
+      );
+    } catch {
+      alert('순서 변경에 실패했습니다. 다시 시도해 주세요.');
+    } finally {
+      setMoving(false);
+      refresh();
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return;
     await deleteRoom(id);
@@ -73,8 +94,7 @@ export default function WeCenterPage() {
       {/* Page heading */}
       <div className="mb-14">
         <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_CENTER.eyebrow}</p>
-        <h1 className="display-heading mb-4">{WE_CENTER.heading}</h1>
-        <p className="text-[14px] text-[#666] leading-relaxed max-w-md">{WE_CENTER.subtext}</p>
+        <h1 className="display-heading">{WE_CENTER.heading}</h1>
       </div>
 
       {/* Center tabs */}
@@ -112,7 +132,7 @@ export default function WeCenterPage() {
         <div className="py-24 text-center text-sm text-[#ccc]">등록된 공간이 없습니다</div>
       ) : (
         <div className={`grid ${viewCols === 1 ? 'grid-cols-1' : 'grid-cols-2'} sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10`}>
-          {rooms.map(room => (
+          {rooms.map((room, index) => (
             <div key={room.id} className="group">
               <div className="aspect-[4/3] overflow-hidden bg-[#f0f0f0] mb-4 relative">
                 {room.imageUrl ? (
@@ -124,9 +144,30 @@ export default function WeCenterPage() {
                   </div>
                 )}
                 {isAdmin && (
-                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openEdit(room)} className="bg-white/95 text-[10px] px-3 py-1 shadow-sm">수정</button>
-                    <button onClick={() => handleDelete(room.id)} className="bg-white/95 text-[10px] px-3 py-1 shadow-sm text-red-400">삭제</button>
+                  // 관리자 버튼은 휴대폰에서도 누를 수 있게 항상 보인다
+                  <div className="absolute top-2 inset-x-2 flex justify-between gap-1">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleMove(index, -1)}
+                        disabled={moving || index === 0}
+                        aria-label={`${room.name} 앞으로 옮기기`}
+                        className="bg-white/95 text-[12px] w-7 h-7 shadow-sm disabled:opacity-30"
+                      >
+                        ←
+                      </button>
+                      <button
+                        onClick={() => handleMove(index, 1)}
+                        disabled={moving || index === rooms.length - 1}
+                        aria-label={`${room.name} 뒤로 옮기기`}
+                        className="bg-white/95 text-[12px] w-7 h-7 shadow-sm disabled:opacity-30"
+                      >
+                        →
+                      </button>
+                    </div>
+                    <div className="flex gap-1">
+                      <button onClick={() => openEdit(room)} className="bg-white/95 text-[10px] px-3 py-1 shadow-sm">수정</button>
+                      <button onClick={() => handleDelete(room.id)} className="bg-white/95 text-[10px] px-3 py-1 shadow-sm text-red-400">삭제</button>
+                    </div>
                   </div>
                 )}
               </div>

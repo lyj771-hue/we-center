@@ -88,7 +88,7 @@ export default function Header() {
             aria-label="WE 센터 홈"
             className="group select-none block w-[64px] h-[64px] md:w-[100px] md:h-[100px] transition-opacity duration-200 hover:opacity-70"
           >
-            <img src="/logo.jpg" alt="WE 소아재활센터" className="w-full h-full object-contain" />
+            <img src="/logo-we.jpg" alt="WE 소아재활센터" className="w-full h-full object-contain" />
           </Link>
 
           <button
