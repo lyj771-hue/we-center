@@ -2,50 +2,88 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAdmin } from '@/components/AdminContext';
-import { getLocation, saveLocation, LocationData } from '@/lib/store';
+import { getLocation, saveLocation } from '@/lib/store';
 import { uploadImage } from '@/lib/imageUpload';
 import { LOCATION } from '@/lib/content';
 
+// 오시는길 — 센터별(수색 → 의정부)로 "이름 + 정보" 아래 지도 사진.
+// 센터 목록은 location_info.content에 JSON으로 저장한다(별도 테이블 없이).
+// 예전처럼 글만 저장돼 있으면 센터 이름 줄을 기준으로 나눠서 보여준다.
+
+interface CenterSection {
+  name: string;
+  info: string;
+  imageUrl: string;
+}
+
+const DEFAULT_NAMES = ['은평구 수색센터', '의정부센터'];
+
+function parseSections(content: string, imageUrls: string[]): CenterSection[] {
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed?.sections)) return parsed.sections as CenterSection[];
+  } catch {
+    // 예전 형식(글 한 덩어리) — 아래에서 나눈다
+  }
+  const text = content.replace(/\r/g, '');
+  const blocks = text.split(/\n\s*\n/);
+  const pick = (keyword: string) =>
+    blocks.filter(b => b.includes(keyword)).map(b => b.split('\n').slice(1).join('\n')).join('\n\n');
+  return [
+    { name: DEFAULT_NAMES[0], info: pick('수색'), imageUrl: imageUrls[0] ?? '' },
+    { name: DEFAULT_NAMES[1], info: pick('의정부'), imageUrl: imageUrls[1] ?? '' },
+  ];
+}
+
 export default function LocationPage() {
   const { isAdmin } = useAdmin();
-  const [data, setData] = useState<LocationData>({ content: '', imageUrls: [] });
+  const [sections, setSections] = useState<CenterSection[]>([]);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<LocationData>({ content: '', imageUrls: [] });
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState<CenterSection[]>([]);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  const fileRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  useEffect(() => { getLocation().then(d => { setData(d); setForm(d); }); }, []);
+  useEffect(() => {
+    getLocation().then(d => {
+      const s = parseSections(d.content, d.imageUrls);
+      setSections(s);
+      setForm(s);
+    });
+  }, []);
 
-  const handleSave = async () => {
-    await saveLocation(form);
-    setData(form);
-    setEditing(false);
-  };
+  const updateForm = (idx: number, patch: Partial<CenterSection>) =>
+    setForm(f => f.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
 
-  const removeImage = (idx: number) => {
-    setForm(f => ({ ...f, imageUrls: f.imageUrls.filter((_, i) => i !== idx) }));
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    setUploading(true);
+  const handleFileChange = async (idx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingIdx(idx);
     try {
-      for (const file of files) {
-        const url = await uploadImage(file, 'location');
-        setForm(f => ({ ...f, imageUrls: [...f.imageUrls, url] }));
-      }
+      updateForm(idx, { imageUrl: await uploadImage(file, 'location') });
     } catch {
       alert('사진 업로드에 실패했습니다. 다시 시도해 주세요.');
     } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
+      setUploadingIdx(null);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      await saveLocation({
+        content: JSON.stringify({ sections: form }),
+        imageUrls: form.map(s => s.imageUrl).filter(Boolean),
+      });
+      setSections(form);
+      setEditing(false);
+    } catch {
+      alert('저장에 실패했습니다. 다시 시도해 주세요.');
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
-      <div className="mb-14">
+    <div className="max-w-3xl mx-auto px-6 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
+      <div className="mb-12 md:mb-14">
         <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{LOCATION.eyebrow}</p>
         <div className="flex items-end justify-between gap-6">
           <div>
@@ -53,7 +91,7 @@ export default function LocationPage() {
             <p className="text-[14px] text-[#666] leading-relaxed">{LOCATION.subtext}</p>
           </div>
           {isAdmin && !editing && (
-            <button onClick={() => setEditing(true)}
+            <button onClick={() => { setForm(sections); setEditing(true); }}
               className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
               편집
             </button>
@@ -62,58 +100,65 @@ export default function LocationPage() {
       </div>
 
       {editing ? (
-        <div className="space-y-6">
-          <textarea
-            value={form.content}
-            onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-            rows={12}
-            placeholder="위치 정보, 교통편, 주차 안내 등을 입력하세요"
-            className="w-full border border-[#e5e5e5] p-4 text-sm leading-relaxed outline-none focus:border-[#0a0a0a] resize-none placeholder:text-[#ccc]"
-          />
-
-          {/* Image management */}
-          <div>
-            <p className="text-[11px] tracking-[0.2em] text-[#aaa] mb-3">이미지</p>
-            <div className="flex items-center gap-3 mb-4">
-              <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleFileChange} className="hidden" />
-              <button onClick={() => fileRef.current?.click()} disabled={uploading} className="text-[11px] border border-[#ddd] px-4 py-1.5 hover:bg-[#f8f8f8] transition-colors disabled:opacity-50">
-                {uploading ? '업로드 중...' : '사진 선택'}
-              </button>
-            </div>
-            {form.imageUrls.length > 0 && (
-              <div className="grid grid-cols-3 gap-3">
-                {form.imageUrls.map((url, i) => (
-                  <div key={i} className="relative aspect-[4/3] overflow-hidden bg-[#f2f2f2]">
-                    <img src={url} alt="" className="w-full h-full object-cover" />
-                    <button onClick={() => removeImage(i)} className="absolute top-1 right-1 bg-white/90 text-red-400 text-[10px] w-5 h-5 flex items-center justify-center hover:bg-white shadow-sm">✕</button>
+        <div className="space-y-12">
+          {form.map((s, idx) => (
+            <div key={idx} className="space-y-4 border-t border-[#e5e5e5] pt-8">
+              <p className="text-[11px] tracking-[0.2em] text-[#aaa]">센터 {idx + 1}</p>
+              <input
+                type="text"
+                value={s.name}
+                onChange={e => updateForm(idx, { name: e.target.value })}
+                placeholder="센터 이름 (예: 은평구 수색센터)"
+                className="w-full border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] placeholder:text-[#ccc]"
+              />
+              <textarea
+                value={s.info}
+                onChange={e => updateForm(idx, { info: e.target.value })}
+                rows={7}
+                placeholder="주소, 전화번호, 교통편, 주차 안내 등을 입력하세요"
+                className="w-full border border-[#e5e5e5] p-4 text-sm leading-relaxed outline-none focus:border-[#0a0a0a] resize-none placeholder:text-[#ccc]"
+              />
+              <div>
+                <p className="text-[11px] tracking-[0.2em] text-[#aaa] mb-2">지도 사진</p>
+                {s.imageUrl && (
+                  <div className="relative w-48 mb-2 overflow-hidden bg-[#f2f2f2]">
+                    <img src={s.imageUrl} alt="" className="w-full h-auto" />
+                    <button onClick={() => updateForm(idx, { imageUrl: '' })} aria-label="지도 사진 지우기"
+                      className="absolute top-1 right-1 bg-white/90 text-red-400 text-[10px] w-5 h-5 flex items-center justify-center hover:bg-white shadow-sm">✕</button>
                   </div>
-                ))}
+                )}
+                <input ref={el => { fileRefs.current[idx] = el; }} type="file" accept="image/*"
+                  onChange={e => handleFileChange(idx, e)} className="hidden" />
+                <button onClick={() => fileRefs.current[idx]?.click()} disabled={uploadingIdx !== null}
+                  className="text-[11px] border border-[#ddd] px-4 py-1.5 hover:bg-[#f8f8f8] transition-colors disabled:opacity-50">
+                  {uploadingIdx === idx ? '업로드 중...' : s.imageUrl ? '사진 바꾸기' : '사진 선택'}
+                </button>
               </div>
-            )}
-          </div>
+            </div>
+          ))}
 
           <div className="flex gap-2 pt-2">
-            <button onClick={handleSave} disabled={uploading} className="bg-[#0a0a0a] text-white text-[11px] px-8 py-3 tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50">저장</button>
-            <button onClick={() => { setEditing(false); setForm(data); }} className="border border-[#e5e5e5] text-[11px] px-8 py-3 tracking-widest hover:bg-[#f8f8f8] transition-colors">취소</button>
+            <button onClick={handleSave} disabled={uploadingIdx !== null}
+              className="bg-[#0a0a0a] text-white text-[11px] px-8 py-3 tracking-widest hover:bg-[#333] transition-colors disabled:opacity-50">저장</button>
+            <button onClick={() => { setEditing(false); setForm(sections); }}
+              className="border border-[#e5e5e5] text-[11px] px-8 py-3 tracking-widest hover:bg-[#f8f8f8] transition-colors">취소</button>
           </div>
         </div>
       ) : (
-        <div>
-          {/* Text content */}
-          <div className="text-[14px] leading-[1.95] text-[#444] whitespace-pre-wrap mb-10">
-            {data.content || <span className="text-[#ccc]">내용이 없습니다</span>}
-          </div>
-
-          {/* Images */}
-          {data.imageUrls.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {data.imageUrls.map((url, i) => (
-                <div key={i} className="overflow-hidden bg-[#f2f2f2] aspect-[4/3]">
-                  <img src={url} alt={`위치 이미지 ${i + 1}`} className="w-full h-full object-cover hover:scale-[1.03] transition-transform duration-500" />
+        <div className="space-y-16 md:space-y-20">
+          {sections.map((s, idx) => (
+            <section key={idx}>
+              <h2 className="font-serif font-bold text-[24px] md:text-[30px] leading-snug tracking-tight text-[var(--brand)] mb-4">{s.name}</h2>
+              <div className="text-[14px] leading-[1.95] text-[#444] whitespace-pre-wrap mb-6">
+                {s.info || <span className="text-[#ccc]">정보가 없습니다</span>}
+              </div>
+              {s.imageUrl && (
+                <div className="overflow-hidden bg-[#f2f2f2]">
+                  <img src={s.imageUrl} alt={`${s.name} 지도`} className="w-full h-auto block" />
                 </div>
-              ))}
-            </div>
-          )}
+              )}
+            </section>
+          ))}
         </div>
       )}
     </div>

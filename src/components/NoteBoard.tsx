@@ -38,7 +38,7 @@ function Note({ index, title, children }: NoteProps) {
   const icon = ICONS[index % ICONS.length];
   return (
     <article
-      className="note relative box-border w-[300px] min-h-[280px] md:min-h-[300px] px-[26px] pt-[28px] pb-[26px] bg-[#fdfdfc] border-[1.5px] border-[#1f3864]"
+      className="note relative box-border w-[300px] min-h-[280px] md:min-h-[300px] px-[26px] pt-[28px] pb-[26px] bg-[#fdfdfc] border-[1.5px] border-[var(--brand)]"
       style={{
         '--tilt': `${p.tilt}deg`,
         '--tilt-mobile': `${p.tiltMobile}deg`,
@@ -48,21 +48,21 @@ function Note({ index, title, children }: NoteProps) {
     >
       <div aria-hidden="true" className="absolute -top-[26px] -right-[18px] w-[60px] h-[60px] z-[5]">
         <svg viewBox="0 0 60 60" width="60" height="60" className="overflow-visible">
-          <circle cx="30" cy="30" r="26" fill="#e1e6f2" />
+          <circle cx="30" cy="30" r="26" fill="#e3f0fd" />
           {icon.map(d => (
             <path key={d} d={d} fill="none" stroke="var(--brand)" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
           ))}
         </svg>
       </div>
       <h2 className="font-serif font-bold text-[28px] leading-[1.3] text-[var(--brand)] mt-1.5 mb-3.5">{title}</h2>
-      <hr className="border-0 border-t-[1.5px] border-[#1f3864] opacity-55 mb-4" />
+      <hr className="border-0 border-t-[1.5px] border-[var(--brand)] opacity-55 mb-4" />
       {children}
     </article>
   );
 }
 
 const linkCls =
-  'inline-block text-[14px] font-bold text-[#2e4172] underline decoration-[1.5px] underline-offset-[3px] hover:opacity-75 transition-opacity';
+  'inline-block text-[14px] font-bold text-[var(--brand)] underline decoration-[1.5px] underline-offset-[3px] hover:opacity-75 transition-opacity';
 
 export interface PinnedNote {
   title: string;
@@ -87,7 +87,7 @@ export default function NoteBoard({ posts, pinned, basePath, isAdmin, onDelete }
     <div className="max-w-[860px] mx-auto flex flex-col items-center md:flex-row md:flex-wrap md:justify-center md:items-start">
       {pinned && (
         <Note index={0} title={pinned.title}>
-          <p className="text-[14px] leading-[1.7] text-[#2e4172]">{pinned.desc}</p>
+          <p className="text-[14px] leading-[1.7] text-[var(--brand)]">{pinned.desc}</p>
         </Note>
       )}
 
@@ -95,8 +95,8 @@ export default function NoteBoard({ posts, pinned, basePath, isAdmin, onDelete }
         const text = toText(post.content);
         return (
           <Note key={post.id} index={i + offset} title={post.title}>
-            <p className="text-[14px] leading-[1.7] text-[#2e4172] mb-[18px]">{excerpt(text)}</p>
-            <p className="text-[13px] font-semibold text-[#2e4172] opacity-85 mb-3.5">
+            <p className="text-[14px] leading-[1.7] text-[var(--brand)] mb-[18px]">{excerpt(text)}</p>
+            <p className="text-[13px] font-semibold text-[var(--brand)] opacity-85 mb-3.5">
               {readMinutes(text)}분 · {yearMonth(post.createdAt)}
             </p>
             <div className="flex items-center justify-between">
