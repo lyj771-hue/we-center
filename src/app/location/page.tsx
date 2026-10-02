@@ -6,8 +6,9 @@ import { getLocation, saveLocation } from '@/lib/store';
 import { uploadImage } from '@/lib/imageUpload';
 import { LOCATION } from '@/lib/content';
 import PageShell, { PageTitle } from '@/components/PageShell';
+import PhotoViewer from '@/components/PhotoViewer';
 
-// 오시는길 — 센터별(수색 → 의정부)로 "이름 + 정보" 아래 지도 사진.
+// 오시는길 — 센터별(수색 → 의정부)로 "이름 + 정보" 아래 지도 사진(누르면 크게)과 "네이버 지도에서 보기" 버튼.
 // 센터 목록은 location_info.content에 JSON으로 저장한다. 페이지 제목·소개 문구·폭은 PageShell(page_settings)이 맡는다.
 // (예전에 JSON에 같이 저장했던 heading/subtext는 그대로 두되 화면에는 쓰지 않는다)
 // 예전처럼 글만 저장돼 있으면 센터 이름 줄을 기준으로 나눠서 보여준다.
@@ -16,6 +17,8 @@ interface CenterSection {
   name: string;
   info: string;
   imageUrl: string;
+  /** 네이버 지도 공유 링크 (예: https://naver.me/...) */
+  mapUrl?: string;
 }
 
 interface LocationPage {
@@ -59,6 +62,7 @@ export default function LocationPageView() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<LocationPage>(page);
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null);
   const fileRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -132,6 +136,13 @@ export default function LocationPageView() {
                 placeholder="주소, 전화번호, 교통편, 주차 안내 등을 입력하세요"
                 className="w-full border border-[#e5e5e5] p-4 text-sm leading-relaxed outline-none focus:border-[#0a0a0a] resize-none placeholder:text-[#ccc]"
               />
+              <input
+                type="url"
+                value={s.mapUrl ?? ''}
+                onChange={e => updateForm(idx, { mapUrl: e.target.value.trim() })}
+                placeholder="네이버 지도 링크 (네이버 지도 → 공유 → 링크 복사)"
+                className="w-full border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] placeholder:text-[#ccc]"
+              />
               <div>
                 <p className="text-[11px] tracking-[0.2em] text-[#aaa] mb-2">지도 사진</p>
                 {s.imageUrl && (
@@ -167,14 +178,23 @@ export default function LocationPageView() {
                 {s.info || <span className="text-[#ccc]">정보가 없습니다</span>}
               </div>
               {s.imageUrl && (
-                <div className="overflow-hidden bg-[#f2f2f2]">
+                <button type="button" onClick={() => setViewing(s.imageUrl)} aria-label={`${s.name} 지도 크게 보기`}
+                  className="block w-full overflow-hidden bg-[#f2f2f2] cursor-zoom-in">
                   <img src={s.imageUrl} alt={`${s.name} 지도`} className="w-full h-auto block" />
-                </div>
+                </button>
+              )}
+              {s.mapUrl && (
+                <a href={s.mapUrl} target="_blank" rel="noopener noreferrer"
+                  className="mt-4 inline-flex items-center gap-2 bg-[#03C75A] text-white text-[14px] px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity">
+                  <span className="font-black text-[13px] leading-none bg-white text-[#03C75A] w-5 h-5 rounded-[4px] flex items-center justify-center" style={{ fontFamily: 'Arial, sans-serif', WebkitTextStroke: 0 }}>N</span>
+                  네이버 지도에서 보기
+                </a>
               )}
             </section>
           ))}
         </div>
       )}
+      {viewing && <PhotoViewer src={viewing} pan onClose={() => setViewing(null)} />}
     </div>
     </PageShell>
   );

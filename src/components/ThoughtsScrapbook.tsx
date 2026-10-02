@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useState } from 'react';
+import PhotoViewer from './PhotoViewer';
 import { Post } from '@/lib/types';
 import { toParagraphs, extractImages } from '@/lib/postText';
 
@@ -54,39 +54,6 @@ const fmt = (iso: string) => {
 };
 
 /** 사진 크게 보기 — 줌이 걸린 스크랩북 밖(body)에 띄운다. 바깥 클릭·✕·Esc로 닫는다 */
-function PhotoViewer({ src, onClose }: { src: string; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="사진 크게 보기"
-      onClick={onClose}
-      className="fixed inset-0 z-[400] flex items-center justify-center bg-black/70 p-6"
-    >
-      <img
-        src={src}
-        alt=""
-        onClick={e => e.stopPropagation()}
-        className="max-w-[90vw] max-h-[85vh] object-contain rounded-md bg-white shadow-2xl"
-      />
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="닫기"
-        className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center text-white text-[22px] hover:opacity-70"
-      >
-        ✕
-      </button>
-    </div>,
-    document.body
-  );
-}
 
 interface EntryProps {
   post: Post;
