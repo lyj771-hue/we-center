@@ -185,8 +185,8 @@ export default function LocationPageView() {
               )}
               {s.mapUrl && (
                 <a href={s.mapUrl} target="_blank" rel="noopener noreferrer"
-                  className="mt-4 inline-flex items-center gap-2 bg-[#03C75A] text-white text-[14px] px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity">
-                  <span className="font-black text-[13px] leading-none bg-white text-[#03C75A] w-5 h-5 rounded-[4px] flex items-center justify-center" style={{ fontFamily: 'Arial, sans-serif', WebkitTextStroke: 0 }}>N</span>
+                  className="mt-4 inline-flex items-center gap-2 bg-[var(--brand)] text-white text-[14px] px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity">
+                  <span className="font-black text-[13px] leading-none bg-white text-[var(--brand)] w-5 h-5 rounded-[4px] flex items-center justify-center" style={{ fontFamily: 'Arial, sans-serif', WebkitTextStroke: 0 }}>N</span>
                   네이버 지도에서 보기
                 </a>
               )}
