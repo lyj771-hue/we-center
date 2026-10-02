@@ -9,7 +9,6 @@ const NAV = [
   { href: '/we-concept',     label: 'We컨셉' },
   { href: '/we-center',      label: 'We센터' },
   { href: '/we-subjects',    label: 'We수업과목' },
-  { href: '/we-therapists',  label: 'We재활사' },
   { href: '/we-thoughts',    label: 'We재활생각' },
   { href: '/payment',        label: '결제정보' },
   { href: '/location',       label: '오시는길' },

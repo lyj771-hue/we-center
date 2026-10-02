@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Post, Category, CenterRoom, Therapist, Subject, PaymentMethod } from './types';
+import { Post, Category, CenterRoom, Subject, PaymentMethod } from './types';
 
 // ── Posts (thoughts / notices / etc) ─────────────────────────────────────────
 
@@ -124,61 +124,6 @@ export async function updateRoom(id: string, data: Partial<Omit<CenterRoom, 'id'
 
 export async function deleteRoom(id: string): Promise<void> {
   const { error } = await supabase.from('rooms').delete().eq('id', id);
-  if (error) throw error;
-}
-
-// ── Therapists ────────────────────────────────────────────────────────────────
-
-interface TherapistRow {
-  id: string;
-  name: string;
-  role: string | null;
-  description: string | null;
-  photo_url: string | null;
-  sort_order: number;
-}
-
-function fromTherapistRow(row: TherapistRow): Therapist {
-  return {
-    id: row.id,
-    name: row.name,
-    role: row.role ?? '',
-    description: row.description ?? '',
-    photoUrl: row.photo_url ?? undefined,
-    order: row.sort_order,
-  };
-}
-
-export async function getTherapists(): Promise<Therapist[]> {
-  const { data, error } = await supabase.from('therapists').select('*').order('sort_order', { ascending: true });
-  if (error) throw error;
-  return (data as TherapistRow[]).map(fromTherapistRow);
-}
-
-export async function addTherapist(data: Omit<Therapist, 'id'>): Promise<void> {
-  const { error } = await supabase.from('therapists').insert({
-    name: data.name,
-    role: data.role,
-    description: data.description,
-    photo_url: data.photoUrl ?? null,
-    sort_order: data.order,
-  });
-  if (error) throw error;
-}
-
-export async function updateTherapist(id: string, data: Partial<Omit<Therapist, 'id'>>): Promise<void> {
-  const patch: Partial<TherapistRow> = {};
-  if (data.name !== undefined) patch.name = data.name;
-  if (data.role !== undefined) patch.role = data.role;
-  if (data.description !== undefined) patch.description = data.description;
-  if (data.photoUrl !== undefined) patch.photo_url = data.photoUrl ?? null;
-  if (data.order !== undefined) patch.sort_order = data.order;
-  const { error } = await supabase.from('therapists').update(patch).eq('id', id);
-  if (error) throw error;
-}
-
-export async function deleteTherapist(id: string): Promise<void> {
-  const { error } = await supabase.from('therapists').delete().eq('id', id);
   if (error) throw error;
 }
 

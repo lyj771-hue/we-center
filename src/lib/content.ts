@@ -21,7 +21,6 @@ export const HOME = {
   quickLinks: [
     { href: '/we-center',     label: 'We센터',    sub: '수색·의정부 공간 안내' },
     { href: '/we-subjects',   label: 'We수업과목', sub: '치료 프로그램 소개' },
-    { href: '/we-therapists', label: 'We재활사',   sub: '전문 치료진 소개' },
     { href: '/location',      label: '오시는길',   sub: '찾아오시는 방법' },
   ],
   valuesSectionLabel: 'We가 추구하는 가치',
@@ -104,13 +103,6 @@ export const WE_CENTER = {
 export const WE_SUBJECTS = {
   eyebrow: 'We 수업과목',
   heading: 'We 수업 과목을 소개합니다',
-};
-
-// ── We재활사 (/we-therapists) ─────────────────
-export const WE_THERAPISTS = {
-  eyebrow: 'We 재활사',
-  heading: '아이와 함께 걷는 사람들',
-  subtext: '각 재활사는 아이의 속도를 존중하며, 발달의 모든 순간에 함께합니다.',
 };
 
 // ── We재활생각 (/we-thoughts) ────────────────

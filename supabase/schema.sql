@@ -25,15 +25,6 @@ create table if not exists rooms (
   sort_order int not null default 0
 );
 
-create table if not exists therapists (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  role text,
-  description text,
-  photo_url text,
-  sort_order int not null default 0
-);
-
 create table if not exists subjects (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -54,7 +45,6 @@ create table if not exists location_info (
 
 alter table posts enable row level security;
 alter table rooms enable row level security;
-alter table therapists enable row level security;
 alter table subjects enable row level security;
 alter table location_info enable row level security;
 
@@ -68,10 +58,6 @@ create policy "admin insert rooms" on rooms for insert to authenticated with che
 create policy "admin update rooms" on rooms for update to authenticated using (true) with check (true);
 create policy "admin delete rooms" on rooms for delete to authenticated using (true);
 
-create policy "public read therapists" on therapists for select using (true);
-create policy "admin insert therapists" on therapists for insert to authenticated with check (true);
-create policy "admin update therapists" on therapists for update to authenticated using (true) with check (true);
-create policy "admin delete therapists" on therapists for delete to authenticated using (true);
 
 create policy "public read subjects" on subjects for select using (true);
 create policy "admin insert subjects" on subjects for insert to authenticated with check (true);
@@ -102,11 +88,6 @@ insert into rooms (center_id, name, description, image_url, sort_order) values
   ('uijeongbu',  '대기실',   '편안한 휴식을 위한 대기 공간입니다.',                 '/images/rooms/uijeongbu-waiting.svg', 1),
   ('uijeongbu',  '치료실 1', '개인 심리운동 치료가 이루어지는 공간입니다.',         '/images/rooms/uijeongbu-room1.svg', 2),
   ('uijeongbu',  '치료실 2', '감각통합 치료를 위한 전용 공간입니다.',               '/images/rooms/uijeongbu-room2.svg', 3);
-
-insert into therapists (name, role, description, photo_url, sort_order) values
-  ('김지현', '심리운동 재활사', '10년의 임상 경험을 바탕으로 아동 심리운동 치료를 전문으로 합니다.', '/images/therapists/kim-jihyun.svg', 1),
-  ('박소연', '감각통합 재활사', '감각처리 어려움을 가진 아동을 위한 맞춤형 치료를 제공합니다.', '/images/therapists/park-soyeon.svg', 2),
-  ('이민준', '언어 재활사',     '언어 발달 지연 및 의사소통 향상을 위한 치료를 담당합니다.', '/images/therapists/lee-minjun.svg', 3);
 
 insert into subjects (name, description, sort_order) values
   ('심리운동',     '움직임을 통해 아동의 심리적·신체적 발달을 촉진하는 치료입니다. 놀이, 운동, 신체 활동을 통해 자아 인식과 사회성을 향상시킵니다.', 1),
@@ -274,3 +255,9 @@ alter table page_settings enable row level security;
 create policy "public read page_settings" on page_settings for select using (true);
 create policy "admin insert page_settings" on page_settings for insert to authenticated with check (true);
 create policy "admin update page_settings" on page_settings for update to authenticated using (true) with check (true);
+
+-- ─────────────────────────────────────────────
+-- 7. We재활사 메뉴 삭제 (2026-10) — 재활사 표를 지운다
+-- ─────────────────────────────────────────────
+
+drop table if exists therapists;

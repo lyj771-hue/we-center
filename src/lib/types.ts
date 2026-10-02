@@ -16,15 +16,6 @@ export interface CenterRoom {
   order: number;
 }
 
-export interface Therapist {
-  id: string;
-  name: string;
-  role: string;
-  description: string;
-  photoUrl?: string;
-  order: number;
-}
-
 export interface Subject {
   id: string;
   name: string;
