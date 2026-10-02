@@ -5,9 +5,11 @@ import { useAdmin } from '@/components/AdminContext';
 import { getLocation, saveLocation } from '@/lib/store';
 import { uploadImage } from '@/lib/imageUpload';
 import { LOCATION } from '@/lib/content';
+import PageShell, { PageTitle } from '@/components/PageShell';
 
 // 오시는길 — 센터별(수색 → 의정부)로 "이름 + 정보" 아래 지도 사진.
-// 페이지 제목·소개 문구와 센터 목록은 location_info.content에 JSON으로 저장한다(별도 테이블 없이).
+// 센터 목록은 location_info.content에 JSON으로 저장한다. 페이지 제목·소개 문구·폭은 PageShell(page_settings)이 맡는다.
+// (예전에 JSON에 같이 저장했던 heading/subtext는 그대로 두되 화면에는 쓰지 않는다)
 // 예전처럼 글만 저장돼 있으면 센터 이름 줄을 기준으로 나눠서 보여준다.
 
 interface CenterSection {
@@ -98,42 +100,21 @@ export default function LocationPageView() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-6 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
-      <div className="mb-12 md:mb-14">
-        <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{LOCATION.eyebrow}</p>
-        <div className="flex items-end justify-between gap-6">
-          <div>
-            <h1 className="display-heading mb-3">{page.heading}</h1>
-            {page.subtext && <p className="text-[14px] text-[#666] leading-relaxed whitespace-pre-line">{page.subtext}</p>}
-          </div>
-          {isAdmin && !editing && (
-            <button onClick={() => { setForm(page); setEditing(true); }}
-              className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
-              편집
-            </button>
-          )}
-        </div>
-      </div>
+    <PageShell page="location" heading={LOCATION.heading} subtext={LOCATION.subtext} defaultWidth={768}>
+    <div className="max-w-[var(--page-w)] mx-auto px-6 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
+      <PageTitle
+        eyebrow={LOCATION.eyebrow}
+        className="mb-12 md:mb-14"
+        actions={isAdmin && !editing && (
+          <button onClick={() => { setForm(page); setEditing(true); }}
+            className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
+            센터 정보 편집
+          </button>
+        )}
+      />
 
       {editing ? (
         <div className="space-y-12">
-          <div className="space-y-4">
-            <p className="text-[11px] tracking-[0.2em] text-[#aaa]">페이지 제목 · 소개 문구</p>
-            <input
-              type="text"
-              value={form.heading}
-              onChange={e => setForm(f => ({ ...f, heading: e.target.value }))}
-              placeholder="페이지 제목 (예: 찾아오시는 방법)"
-              className="w-full border-b border-[#ddd] py-2 text-sm outline-none focus:border-[#0a0a0a] placeholder:text-[#ccc]"
-            />
-            <textarea
-              value={form.subtext}
-              onChange={e => setForm(f => ({ ...f, subtext: e.target.value }))}
-              rows={2}
-              placeholder="소개 문구 (비워 두면 숨겨져요)"
-              className="w-full border border-[#e5e5e5] p-3 text-sm leading-relaxed outline-none focus:border-[#0a0a0a] resize-none placeholder:text-[#ccc]"
-            />
-          </div>
           {form.sections.map((s, idx) => (
             <div key={idx} className="space-y-4 border-t border-[#e5e5e5] pt-8">
               <p className="text-[11px] tracking-[0.2em] text-[#aaa]">센터 {idx + 1}</p>
@@ -195,5 +176,6 @@ export default function LocationPageView() {
         </div>
       )}
     </div>
+    </PageShell>
   );
 }

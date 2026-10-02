@@ -7,6 +7,7 @@ import { getTherapists, addTherapist, updateTherapist, deleteTherapist } from '@
 import { uploadImage } from '@/lib/imageUpload';
 import { WE_THERAPISTS } from '@/lib/content';
 import ViewToggle from '@/components/ViewToggle';
+import PageShell, { PageTitle } from '@/components/PageShell';
 
 export default function WeTherapistsPage() {
   const { isAdmin } = useAdmin();
@@ -65,22 +66,18 @@ export default function WeTherapistsPage() {
   const isModal = adding || editTarget !== null;
 
   return (
-    <div className="max-w-5xl mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
-      <div className="mb-14">
-        <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_THERAPISTS.eyebrow}</p>
-        <div className="flex items-end justify-between gap-6">
-          <div>
-            <h1 className="display-heading mb-3">{WE_THERAPISTS.heading}</h1>
-            <p className="text-[14px] text-[#666] leading-relaxed">{WE_THERAPISTS.subtext}</p>
-          </div>
-          {isAdmin && (
-            <button onClick={() => { setAdding(true); setForm({ name: '', role: '', description: '', photoUrl: '' }); }}
-              className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
-              + 재활사 추가
-            </button>
-          )}
-        </div>
-      </div>
+    <PageShell page="we-therapists" heading={WE_THERAPISTS.heading} subtext={WE_THERAPISTS.subtext} defaultWidth={1024}>
+    <div className="max-w-[var(--page-w)] mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
+      <PageTitle
+        eyebrow={WE_THERAPISTS.eyebrow}
+        className="mb-14"
+        actions={isAdmin && (
+          <button onClick={() => { setAdding(true); setForm({ name: '', role: '', description: '', photoUrl: '' }); }}
+            className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
+            + 재활사 추가
+          </button>
+        )}
+      />
 
       <ViewToggle cols={viewCols} onChange={setViewCols} />
 
@@ -151,5 +148,6 @@ export default function WeTherapistsPage() {
         </div>
       )}
     </div>
+    </PageShell>
   );
 }

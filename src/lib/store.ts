@@ -300,3 +300,41 @@ export async function deletePaymentMethod(id: string): Promise<void> {
   const { error } = await supabase.from('payment_methods').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ── Page settings (페이지 제목·소개 문구·본문 폭) ─────────────────────────────
+// 행이 없거나 값이 비면 각 페이지의 기본 문구(content.ts)를 쓴다.
+
+export interface PageSetting {
+  heading?: string;
+  subtext?: string;
+  contentWidth?: number;
+}
+
+interface PageSettingRow {
+  page: string;
+  heading: string | null;
+  subtext: string | null;
+  content_width: number | null;
+}
+
+export async function getPageSetting(page: string): Promise<PageSetting> {
+  const { data, error } = await supabase.from('page_settings').select('*').eq('page', page).maybeSingle();
+  if (error) throw error;
+  const row = data as PageSettingRow | null;
+  return {
+    heading: row?.heading ?? undefined,
+    subtext: row?.subtext ?? undefined,
+    contentWidth: row?.content_width ?? undefined,
+  };
+}
+
+export async function savePageSetting(page: string, data: PageSetting): Promise<void> {
+  const { error } = await supabase.from('page_settings').upsert({
+    page,
+    heading: data.heading ?? null,
+    subtext: data.subtext ?? null,
+    content_width: data.contentWidth ?? null,
+  });
+  if (error) throw error;
+}
+

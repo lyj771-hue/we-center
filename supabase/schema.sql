@@ -257,3 +257,20 @@ insert into payment_methods (name, description, sort_order) values
   ('꿈이든 카드', '', 3),
   ('선결제 카드', '', 4),
   ('신용카드 / 현금', '', 5);
+
+-- ─────────────────────────────────────────────
+-- 6. 페이지 설정 (2026-10 추가) — 관리자가 페이지별 제목·소개 문구·본문 폭을 수정
+-- ─────────────────────────────────────────────
+
+create table if not exists page_settings (
+  page text primary key,
+  heading text,
+  subtext text,
+  content_width int
+);
+
+alter table page_settings enable row level security;
+
+create policy "public read page_settings" on page_settings for select using (true);
+create policy "admin insert page_settings" on page_settings for insert to authenticated with check (true);
+create policy "admin update page_settings" on page_settings for update to authenticated using (true) with check (true);

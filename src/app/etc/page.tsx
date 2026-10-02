@@ -1,18 +1,17 @@
 import PostBoard from '@/components/PostBoard';
 import type { Metadata } from 'next';
 import { ETC } from '@/lib/content';
+import PageShell, { PageTitle } from '@/components/PageShell';
 
 export const metadata: Metadata = { title: '기타' };
 
 export default function EtcPage() {
   return (
-    <div className="max-w-3xl mx-auto px-8 pt-8 pb-14 md:pt-14">
-      <div className="mb-12">
-        <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{ETC.eyebrow}</p>
-        <h1 className="display-heading mb-3">{ETC.heading}</h1>
-        <p className="text-[14px] text-[#666] leading-relaxed">{ETC.subtext}</p>
+    <PageShell page="etc" heading={ETC.heading} subtext={ETC.subtext} defaultWidth={768}>
+      <div className="max-w-[var(--page-w)] mx-auto px-8 pt-8 pb-14 md:pt-14">
+        <PageTitle eyebrow={ETC.eyebrow} className="mb-12" />
+        <PostBoard category="etc" basePath="/etc" />
       </div>
-      <PostBoard category="etc" basePath="/etc" />
-    </div>
+    </PageShell>
   );
 }

@@ -7,6 +7,7 @@ import { getRooms, addRoom, updateRoom, deleteRoom } from '@/lib/store';
 import { uploadImage } from '@/lib/imageUpload';
 import { WE_CENTER } from '@/lib/content';
 import ViewToggle from '@/components/ViewToggle';
+import PageShell, { PageTitle } from '@/components/PageShell';
 
 const CENTERS = WE_CENTER.centers;
 
@@ -90,12 +91,9 @@ export default function WeCenterPage() {
   const activeCenter = CENTERS.find(c => c.id === tab)!;
 
   return (
-    <div className="max-w-5xl mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
-      {/* Page heading */}
-      <div className="mb-14">
-        <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_CENTER.eyebrow}</p>
-        <h1 className="display-heading">{WE_CENTER.heading}</h1>
-      </div>
+    <PageShell page="we-center" heading={WE_CENTER.heading} defaultWidth={1024}>
+    <div className="max-w-[var(--page-w)] mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
+      <PageTitle eyebrow={WE_CENTER.eyebrow} className="mb-14" />
 
       {/* Center tabs */}
       <div className="flex items-end gap-0 mb-10 border-b border-[#e5e5e5]">
@@ -218,5 +216,6 @@ export default function WeCenterPage() {
         </div>
       )}
     </div>
+    </PageShell>
   );
 }

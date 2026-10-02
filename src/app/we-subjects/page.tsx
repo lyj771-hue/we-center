@@ -5,6 +5,7 @@ import { useAdmin } from '@/components/AdminContext';
 import { Subject } from '@/lib/types';
 import { getSubjects, addSubject, updateSubject, deleteSubject } from '@/lib/store';
 import { WE_SUBJECTS } from '@/lib/content';
+import PageShell, { PageTitle } from '@/components/PageShell';
 
 export default function WeSubjectsPage() {
   const { isAdmin } = useAdmin();
@@ -45,21 +46,18 @@ export default function WeSubjectsPage() {
   const isModal = adding || editTarget !== null;
 
   return (
-    <div className="max-w-5xl mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
-      <div className="mb-14">
-        <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{WE_SUBJECTS.eyebrow}</p>
-        <div className="flex items-end justify-between gap-6">
-          <div>
-            <h1 className="display-heading">{WE_SUBJECTS.heading}</h1>
-          </div>
-          {isAdmin && (
-            <button onClick={() => { setAdding(true); setForm({ name: '', description: '' }); }}
-              className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
-              + 과목 추가
-            </button>
-          )}
-        </div>
-      </div>
+    <PageShell page="we-subjects" heading={WE_SUBJECTS.heading} defaultWidth={1024}>
+    <div className="max-w-[var(--page-w)] mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
+      <PageTitle
+        eyebrow={WE_SUBJECTS.eyebrow}
+        className="mb-14"
+        actions={isAdmin && (
+          <button onClick={() => { setAdding(true); setForm({ name: '', description: '' }); }}
+            className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
+            + 과목 추가
+          </button>
+        )}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-[#f0f0f0]">
         {subjects.map((s, i) => (
@@ -97,5 +95,6 @@ export default function WeSubjectsPage() {
         </div>
       )}
     </div>
+    </PageShell>
   );
 }
