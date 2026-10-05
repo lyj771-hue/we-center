@@ -55,8 +55,8 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     }
     return t;
   });
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [inputOpen, setInputOpen] = useState<Record<string, boolean>>({});
+  // 요일 칸마다 열린 개별 선택 — 'weekday' = 평일 시간 중에서, 'holiday' = 휴일 시간 중에서 고른다
+  const [inputOpen, setInputOpen] = useState<Record<string, 'weekday' | 'holiday' | undefined>>({});
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateId, setTemplateId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -348,25 +348,32 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                       })}
                       {!off && (
                         <span className="order-first inline-flex items-center gap-1">
-                          <button type="button" onClick={() => { setDayTimes(t.id, d, []); setInputOpen(o => ({ ...o, [key]: true })); }}
-                            className={`text-[12px] border px-2.5 py-1 transition-colors ${inputOpen[key] ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[var(--brand)] text-[var(--brand)] hover:bg-[#e8f1fd]'}`}>
-                            개별입력
-                          </button>
-                          <button type="button" onClick={() => { setDayTimes(t.id, d, WEEKDAY_TIMES); setInputOpen(o => ({ ...o, [key]: false })); }}
+                          {([['weekday', '개별(평일)'], ['holiday', '개별(휴일)']] as const).map(([kind, name]) => (
+                            <button key={kind} type="button"
+                              onClick={() => {
+                                if (inputOpen[key] === kind) { setInputOpen(o => ({ ...o, [key]: undefined })); return; }
+                                setDayTimes(t.id, d, []);
+                                setInputOpen(o => ({ ...o, [key]: kind }));
+                              }}
+                              className={`text-[12px] border px-2.5 py-1 transition-colors ${inputOpen[key] === kind ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[var(--brand)] text-[var(--brand)] hover:bg-[#e8f1fd]'}`}>
+                              {name}
+                            </button>
+                          ))}
+                          <button type="button" onClick={() => { setDayTimes(t.id, d, WEEKDAY_TIMES); setInputOpen(o => ({ ...o, [key]: undefined })); }}
                             className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]">평일</button>
-                          <button type="button" onClick={() => { setDayTimes(t.id, d, HOLIDAY_TIMES); setInputOpen(o => ({ ...o, [key]: false })); }}
+                          <button type="button" onClick={() => { setDayTimes(t.id, d, HOLIDAY_TIMES); setInputOpen(o => ({ ...o, [key]: undefined })); }}
                             className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]">휴일</button>
                         </span>
                       )}
                       {!off && inputOpen[key] && (
-                        <span className="order-first basis-full sm:basis-auto inline-flex items-center gap-1">
-                          <input type="time" step={600} value={drafts[key] ?? ''} aria-label={`${t.name} 선생님 ${shortDay(d)} 시간`}
-                            onChange={e => setDrafts(x => ({ ...x, [key]: e.target.value }))}
-                            className="text-[13px] border border-[#ddd] px-2 py-1 w-[110px]" />
-                          <button type="button" disabled={!drafts[key]}
-                            onClick={() => { addTime(t.id, d, drafts[key] ?? ''); setDrafts(x => ({ ...x, [key]: '' })); }}
-                            className="text-[13px] border border-[#ddd] px-2.5 py-1 hover:bg-[#f8f8f8] disabled:opacity-40">추가</button>
-                        </span>
+                        <select value="" aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 추가`}
+                          onChange={e => { if (e.target.value) addTime(t.id, d, e.target.value); }}
+                          className="order-first text-[13px] border border-[var(--brand)] bg-white px-2 py-1">
+                          <option value="">{inputOpen[key] === 'weekday' ? '평일' : '휴일'} 시간 추가…</option>
+                          {(inputOpen[key] === 'weekday' ? WEEKDAY_TIMES : HOLIDAY_TIMES)
+                            .filter(x => !(times[t.id]?.[d] ?? []).includes(x))
+                            .map(x => <option key={x} value={x}>{x}</option>)}
+                        </select>
                       )}
                     </div>
                   </div>
