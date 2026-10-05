@@ -9,7 +9,7 @@ import {
 
 // 관리자: 스케쥴 올리기·고치기.
 // 스케줄 선택(이번 주 / 다음 주 / 공휴일) → (형식 불러오기) → 선생님별·날짜별 시간 넣기 → 올리기.
-// 이번 주·다음 주는 월~금이고 휴무일을 표시할 수 있다. 공휴일은 날짜를 직접 적는다("2026/10/9, 2026/12/25").
+// 이번 주·다음 주는 월~토이고 휴무일을 표시할 수 있다. 공휴일은 날짜를 직접 적는다("2026/10/9, 2026/12/25").
 // 지금 상태를 형식으로 저장할 수 있다(요일 기준). 고칠 땐 이미 신청된 시간은 잠겨서 뺄 수 없다(먼저 신청 취소).
 
 const DEFAULT_NOTICE = '원하시는 시간을 누르면 바로 신청돼요. 선착순이에요!\n취소가 필요하면 센터로 연락해 주세요.';
@@ -56,6 +56,8 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     return t;
   });
   // 요일 칸마다 열린 개별 선택 — 'weekday' = 평일 시간 중에서, 'holiday' = 휴일 시간 중에서 고른다
+  // 드롭박스의 "직접 입력"을 고른 칸 — 시간 입력 칸을 보여 준다
+  const [custom, setCustom] = useState<Record<string, string | undefined>>({});
   const [inputOpen, setInputOpen] = useState<Record<string, 'weekday' | 'holiday' | undefined>>({});
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateId, setTemplateId] = useState('');
@@ -122,8 +124,9 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     }));
   const removeTime = (tid: string, day: string, time: string) =>
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: (p[tid]?.[day] ?? []).filter(x => x !== time) } }));
+  // 평일 동일 적용 — 첫 평일 시간을 나머지 평일(월~금)에 똑같이. 토·일은 건드리지 않는다
   const copyFirstToAll = (tid: string) => {
-    const open = days.filter(d => !closed[d]);
+    const open = days.filter(d => !closed[d] && parseYmd(d).getDay() >= 1 && parseYmd(d).getDay() <= 5);
     if (open.length < 2) return;
     const first = times[tid]?.[open[0]] ?? [];
     setTimes(p => ({
@@ -319,9 +322,10 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
             <section key={t.id} className="border border-[#eee] rounded-xl p-4 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-[17px] text-[#27272a]">{t.name} 선생님</h3>
-                {days.length > 1 && (
-                  <button type="button" onClick={() => copyFirstToAll(t.id)} className="text-[12px] text-[var(--brand)] underline underline-offset-2">
-                    첫 날 시간을 나머지 날에 똑같이
+                {days.filter(d => parseYmd(d).getDay() >= 1 && parseYmd(d).getDay() <= 5).length > 1 && (
+                  <button type="button" onClick={() => copyFirstToAll(t.id)} title="첫 평일 시간을 나머지 평일(월~금)에 똑같이 넣어요. 토요일은 그대로예요."
+                    className="text-[12px] text-[var(--brand)] underline underline-offset-2">
+                    평일 동일 적용
                   </button>
                 )}
               </div>
@@ -367,13 +371,30 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                       )}
                       {!off && inputOpen[key] && (
                         <select value="" aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 추가`}
-                          onChange={e => { if (e.target.value) addTime(t.id, d, e.target.value); }}
+                          onChange={e => {
+                            const v = e.target.value;
+                            if (v === 'custom') setCustom(c => ({ ...c, [key]: '' }));
+                            else if (v) addTime(t.id, d, v);
+                          }}
                           className="order-first text-[13px] border border-[var(--brand)] bg-white px-2 py-1">
                           <option value="">{inputOpen[key] === 'weekday' ? '평일' : '휴일'} 시간 추가…</option>
                           {(inputOpen[key] === 'weekday' ? WEEKDAY_TIMES : HOLIDAY_TIMES)
                             .filter(x => !(times[t.id]?.[d] ?? []).includes(x))
                             .map(x => <option key={x} value={x}>{x}</option>)}
+                          <option value="custom">직접 입력…</option>
                         </select>
+                      )}
+                      {!off && inputOpen[key] && custom[key] !== undefined && (
+                        <span className="order-first inline-flex items-center gap-1">
+                          <input type="time" step={600} value={custom[key]} autoFocus aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 직접 입력`}
+                            onChange={e => setCustom(c => ({ ...c, [key]: e.target.value }))}
+                            className="text-[13px] border border-[#ddd] px-2 py-1 w-[110px]" />
+                          <button type="button" disabled={!custom[key]}
+                            onClick={() => { addTime(t.id, d, custom[key] ?? ''); setCustom(c => ({ ...c, [key]: undefined })); }}
+                            className="text-[13px] border border-[#ddd] px-2.5 py-1 hover:bg-[#f8f8f8] disabled:opacity-40">추가</button>
+                          <button type="button" onClick={() => setCustom(c => ({ ...c, [key]: undefined }))} aria-label="직접 입력 닫기"
+                            className="text-[12px] text-[#999] px-1 hover:text-[#333]">✕</button>
+                        </span>
                       )}
                     </div>
                   </div>

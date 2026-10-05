@@ -36,9 +36,9 @@ export interface Booking {
 
 export interface Schedule {
   id: string;
-  /** 월~금 스케쥴이면 그 주 월요일, 공휴일 스케쥴이면 첫 날짜 */
+  /** 한 주 스케쥴이면 그 주 월요일, 공휴일 스케쥴이면 첫 날짜 */
   weekStart: string;
-  /** 공휴일 스케쥴: 관리자가 고른 날짜들. 없으면 월~금 */
+  /** 공휴일 스케쥴: 관리자가 고른 날짜들. 없으면 월~토 */
   days?: string[];
   title: string;
   notice: string;
@@ -84,9 +84,9 @@ export function thisMonday(): string {
   return toYmd(d);
 }
 
-/** 월~금 날짜 5개 */
+/** 월~토 날짜 6개 */
 export function weekDays(weekStart: string): string[] {
-  return [0, 1, 2, 3, 4].map(i => addDays(weekStart, i));
+  return [0, 1, 2, 3, 4, 5].map(i => addDays(weekStart, i));
 }
 
 /** "10/5(월)" */
@@ -106,12 +106,12 @@ export function longDay(s: string): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일(${DOW[d.getDay()]})`;
 }
 
-/** "10월 5일(월) ~ 10월 9일(금)" */
+/** "10월 5일(월) ~ 10월 10일(토)" */
 export function weekRange(weekStart: string): string {
-  return `${longDay(weekStart)} ~ ${longDay(addDays(weekStart, 4))}`;
+  return `${longDay(weekStart)} ~ ${longDay(addDays(weekStart, 5))}`;
 }
 
-/** 스케쥴의 날짜들 — 공휴일 스케쥴이면 고른 날짜, 아니면 월~금 */
+/** 스케쥴의 날짜들 — 공휴일 스케쥴이면 고른 날짜, 아니면 월~토 */
 export function scheduleDays(s: Pick<Schedule, 'weekStart' | 'days'>): string[] {
   return s.days?.length ? s.days : weekDays(s.weekStart);
 }
@@ -211,7 +211,7 @@ export async function cancelSlot(slotId: string): Promise<void> {
 
 export interface ScheduleDraft {
   weekStart: string;
-  /** 공휴일 스케쥴의 날짜들 (월~금이면 비움) */
+  /** 공휴일 스케쥴의 날짜들 (월~토 한 주면 비움) */
   days?: string[];
   title: string;
   notice: string;
