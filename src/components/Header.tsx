@@ -43,6 +43,9 @@ export default function Header() {
     }
   };
 
+  // 관리자에게만 보이는 메뉴 — 시간표 관리
+  const nav = isAdmin ? [...NAV, { href: '/admin/timetable', label: '시간표 관리' }] : NAV;
+
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
   return (
@@ -105,7 +108,7 @@ export default function Header() {
         {/* Desktop navigation */}
         <nav aria-label="메인 메뉴" className="hidden md:block pb-0">
           <ul className="flex justify-center flex-wrap">
-            {NAV.map(({ href, label }) => (
+            {nav.map(({ href, label }) => (
               <li key={href}>
                 <Link
                   href={href}
@@ -153,7 +156,7 @@ export default function Header() {
           </button>
           <nav aria-label="모바일 메뉴">
             <ul className="space-y-1">
-              {NAV.map(({ href, label }) => (
+              {nav.map(({ href, label }) => (
                 <li key={href}>
                   <Link
                     href={href}
