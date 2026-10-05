@@ -16,6 +16,9 @@ const DEFAULT_NOTICE = '원하시는 시간을 누르면 바로 신청돼요. �
 
 type Mode = 'this' | 'next' | 'holiday';
 
+/** "모두 불러오기" 로 한 번에 넣는 센터 기본 수업 시간 */
+const ALL_TIMES = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '14:00', '14:50', '15:40', '16:30', '17:40', '18:30', '19:20'];
+
 /** 선생님 id → 날짜(YYYY-MM-DD) → 시간들 */
 type Times = Record<string, Record<string, string[]>>;
 
@@ -52,6 +55,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     return t;
   });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [inputOpen, setInputOpen] = useState<Record<string, boolean>>({});
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateId, setTemplateId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -109,6 +113,8 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     if (!/^\d{2}:\d{2}$/.test(time)) return;
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), time]) } }));
   };
+  const addAllTimes = (tid: string, day: string) =>
+    setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), ...ALL_TIMES]) } }));
   const removeTime = (tid: string, day: string, time: string) =>
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: (p[tid]?.[day] ?? []).filter(x => x !== time) } }));
   const copyFirstToAll = (tid: string) => {
@@ -336,7 +342,19 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                         );
                       })}
                       {!off && (
-                        <span className="inline-flex items-center gap-1">
+                        <span className="order-first inline-flex items-center gap-1">
+                          <button type="button" onClick={() => setInputOpen(o => ({ ...o, [key]: !o[key] }))}
+                            className={`text-[12px] border px-2.5 py-1 transition-colors ${inputOpen[key] ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[var(--brand)] text-[var(--brand)] hover:bg-[#e8f1fd]'}`}>
+                            개별입력
+                          </button>
+                          <button type="button" onClick={() => addAllTimes(t.id, d)}
+                            className="text-[12px] border border-[#ddd] px-2.5 py-1 hover:bg-[#f8f8f8]">
+                            모두 불러오기
+                          </button>
+                        </span>
+                      )}
+                      {!off && inputOpen[key] && (
+                        <span className="order-first basis-full sm:basis-auto inline-flex items-center gap-1">
                           <input type="time" step={600} value={drafts[key] ?? ''} aria-label={`${t.name} 선생님 ${shortDay(d)} 시간`}
                             onChange={e => setDrafts(x => ({ ...x, [key]: e.target.value }))}
                             className="text-[13px] border border-[#ddd] px-2 py-1 w-[110px]" />
