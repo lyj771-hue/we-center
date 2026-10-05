@@ -39,6 +39,13 @@ export function MemberProvider({ children }: { children: ReactNode }) {
         .catch(() => setProfile(null))
         .finally(() => setLoading(false));
     };
+    // 카카오 로그인이 실패해서 돌아오면 주소에 error_description 이 붙는다 — 알려 주고 주소를 깨끗이
+    const params = new URLSearchParams(window.location.hash.slice(1) || window.location.search);
+    const err = params.get('error_description');
+    if (err) {
+      history.replaceState(null, '', window.location.pathname);
+      alert(`로그인하지 못했어요.\n(${err.replace(/\+/g, ' ')})`);
+    }
     supabase.auth.getSession().then(({ data }) => apply(data.session?.user.id ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => apply(session?.user.id ?? null));
     return () => sub.subscription.unsubscribe();

@@ -307,7 +307,8 @@ function fromProfileRow(row: ProfileRow): Profile {
 export async function signInWithKakao(): Promise<void> {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'kakao',
-    options: { redirectTo: window.location.href },
+    // 돌아올 곳은 지금 페이지 경로만 — 주소 뒤에 붙은 #토큰·?error 같은 꼬리까지 넘기면 주소가 계속 길어진다(414)
+    options: { redirectTo: window.location.origin + window.location.pathname },
   });
   if (error) throw error;
 }
