@@ -71,11 +71,15 @@ export default function Header() {
           {/* 보호자 로그인 + 카카오톡 채널 — PC는 오른쪽, 휴대폰은 왼쪽(오른쪽엔 메뉴 버튼) */}
           <div className="absolute left-4 md:left-auto md:right-14 top-1/2 -translate-y-1/2 flex items-center gap-2">
             {!isAdmin && (userId ? (
-              <button onClick={() => { if (confirm('로그아웃할까요?')) memberLogout(); }}
-                title={profile && !profile.approvedAt ? '센터 승인 대기 중' : '누르면 로그아웃'}
-                className="max-w-[140px] truncate rounded-full border border-[var(--brand)] px-3 py-1.5 text-[12px] tracking-[0.05em] text-[var(--brand)] transition hover:bg-[var(--brand)] hover:text-white">
-                {profile?.centerNickname || (profile ? `${profile.nickname}(미승인)` : '로그아웃')}
-              </button>
+              <span className="flex flex-col md:flex-row items-start md:items-center gap-0.5 md:gap-2 text-[12px] md:text-[13px] leading-tight text-[#555] whitespace-nowrap">
+                {profile && (
+                  <span className="max-w-[130px] md:max-w-none truncate">
+                    <span className="text-[var(--brand)]">{profile.centerNickname || profile.nickname}</span>님 반갑습니다
+                    {!profile.approvedAt && <span className="text-[#aaa]">(미승인)</span>}
+                  </span>
+                )}
+                <button onClick={memberLogout} className="underline underline-offset-2 text-[#888] hover:text-[#0a0a0a]">로그아웃</button>
+              </span>
             ) : (
               <button onClick={login}
                 className="rounded-full border border-[var(--brand)] bg-[var(--brand)] px-3 py-1.5 text-[12px] tracking-[0.1em] text-white transition hover:opacity-90">
