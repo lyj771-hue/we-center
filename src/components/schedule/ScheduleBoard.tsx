@@ -202,27 +202,27 @@ export default function ScheduleBoard({
       </article>
 
       {/* 신청 댓글 — 오래된 것부터, 수정 불가 */}
-      <section className="bg-white rounded-[18px] shadow-[0_2px_6px_rgba(0,0,0,0.05)] px-5 md:px-7 py-5 space-y-3">
+      <section className="bg-white rounded-[18px] shadow-[0_2px_6px_rgba(0,0,0,0.05)] px-5 md:px-7 py-5 space-y-1.5">
         <div className="flex items-center justify-between">
           <h3 className="text-[16px] text-[#27272a]">댓글 <span className="text-[var(--brand)]">{comments.length}</span></h3>
           <span className="text-[12px] text-[#a1a1aa]">댓글은 수정할 수 없어요</span>
         </div>
         {comments.length === 0 && <p className="text-[13px] text-[#bbb] py-3">아직 신청이 없어요.</p>}
         {comments.map(c => (
-          <div key={c.id} className={`flex gap-2.5 p-2.5 rounded-xl ${c.userId && c.userId === myId ? 'bg-[#f0f6fe]' : 'bg-[#fafafa]'}`}>
-            <span className="w-8 h-8 shrink-0 rounded-full bg-[var(--brand)] text-white text-[13px] flex items-center justify-center">
+          <div key={c.id} className={`flex gap-2 px-2.5 py-1.5 rounded-lg ${c.userId && c.userId === myId ? 'bg-[#f0f6fe]' : 'bg-[#fafafa]'}`}>
+            <span className="w-5 h-5 shrink-0 rounded-full bg-[var(--brand)] text-white text-[7px] flex items-center justify-center">
               {c.nickname.slice(0, 1)}
             </span>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[14px] text-[var(--brand)]">{c.nickname}</span>
-                <span className="text-[11px] text-[#a1a1aa]">{fmtTime(c.createdAt)}</span>
-                {c.cancelledAt && <span className="text-[11px] text-white bg-[#a1a1aa] px-2 rounded-full">취소</span>}
-                {c.kind === 'cancel_request' && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-2 rounded-full">취소 신청</span>}
-                {c.kind === 'cancel_withdraw' && <span className="text-[11px] text-[#166534] bg-[#e8f5ee] px-2 rounded-full">철회</span>}
-                {c.kind === 'cancel_approved' && <span className="text-[11px] text-white bg-[#71717a] px-2 rounded-full">취소 승인</span>}
+              <div className="flex items-center gap-1 flex-wrap leading-[1.9]">
+                <span className="text-[7px] text-[var(--brand)]">{c.nickname}</span>
+                <span className="text-[6px] text-[#a1a1aa]">{fmtTime(c.createdAt)}</span>
+                {c.cancelledAt && <span className="text-[6px] text-white bg-[#a1a1aa] px-1.5 rounded-full">취소</span>}
+                {c.kind === 'cancel_request' && <span className="text-[6px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded-full">취소 신청</span>}
+                {c.kind === 'cancel_withdraw' && <span className="text-[6px] text-[#166534] bg-[#e8f5ee] px-1.5 rounded-full">철회</span>}
+                {c.kind === 'cancel_approved' && <span className="text-[6px] text-white bg-[#71717a] px-1.5 rounded-full">취소 승인</span>}
               </div>
-              <p className={`text-[14px] text-[#3f3f46] ${c.cancelledAt ? 'line-through text-[#a1a1aa]' : ''}`}>{c.label}</p>
+              <p className={`text-[7px] leading-[1.9] text-[#3f3f46] ${c.cancelledAt ? 'line-through text-[#a1a1aa]' : ''}`}>{c.label}</p>
             </div>
           </div>
         ))}
