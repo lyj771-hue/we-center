@@ -70,7 +70,7 @@ export default function Header() {
           </Link>
 
           {/* 보호자 로그인 + 카카오톡 채널 — PC는 둘 다 오른쪽.
-              휴대폰은 로그인 버튼을 왼쪽, 채널 아이콘을 메뉴 버튼 옆에 두고, 로그인 뒤 인사는 로고 아래 한 줄로(로고와 겹치지 않게) */}
+              휴대폰은 로그인 버튼을 왼쪽, 채널 아이콘은 펼친 메뉴 맨 아래에 두고, 로그인 뒤 인사는 로고 아래 한 줄로(로고와 겹치지 않게) */}
           <div className="absolute left-4 md:left-auto md:right-14 top-1/2 -translate-y-1/2 flex items-center gap-2">
             {!isAdmin && (userId ? (
               <span className="hidden md:flex"><Greeting profile={profile} onLogout={memberLogout} /></span>
@@ -82,7 +82,6 @@ export default function Header() {
             ))}
             <span className="hidden md:flex"><KakaoChannelIcon /></span>
           </div>
-          <span className="md:hidden absolute right-14 top-1/2 -translate-y-1/2 flex"><KakaoChannelIcon /></span>
 
           {/* Hamburger — mobile only */}
           <button
@@ -167,6 +166,11 @@ export default function Header() {
               ))}
             </ul>
           </nav>
+          {/* 카카오톡 채널 — 휴대폰은 메뉴 맨 아래에 */}
+          <div className="mt-auto pt-6 border-t border-[#f0f0f0] flex items-center gap-2 text-[14px] text-[var(--brand)]">
+            <KakaoChannelIcon />
+            카카오톡 채널
+          </div>
         </div>
       </div>
     </>
