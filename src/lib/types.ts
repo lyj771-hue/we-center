@@ -32,4 +32,14 @@ export interface PaymentMethod {
   order: number;
 }
 
+/** 카카오로 로그인한 보호자의 닉네임. 처음 한 번 보호자가 입력하고, 그 뒤엔 관리자만 바꾼다 */
+export type ProfileStatus = 'pending' | 'approved' | 'rejected';
+
+export interface Profile {
+  userId: string;
+  nickname: string;
+  status: ProfileStatus;
+  createdAt: string;
+}
+
 export type Category = 'thoughts' | 'notices' | 'etc';

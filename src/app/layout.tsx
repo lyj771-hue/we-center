@@ -3,6 +3,8 @@ import { Noto_Sans_KR, Noto_Serif_KR, Gowun_Dodum, Nanum_Myeongjo, Black_Han_San
 import './globals.css';
 import Header from '@/components/Header';
 import { AdminProvider } from '@/components/AdminContext';
+import { MemberProvider } from '@/components/MemberContext';
+import Footer from '@/components/Footer';
 
 const notoSans = Noto_Sans_KR({
   subsets: ['latin'],
@@ -49,13 +51,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ko" className={`${notoSans.variable} ${notoSerif.variable} ${gowunDodum.variable} ${nanumMyeongjo.variable} ${blackHanSans.variable}`}>
       <body className="min-h-screen flex flex-col font-sans antialiased">
         <AdminProvider>
-          <Header />
-          <main className="flex-1">
-            {children}
-          </main>
-          <footer className="border-t border-[#ebebeb] py-8 text-center text-[11px] text-[#aaa] tracking-widest">
-            © {new Date().getFullYear()} WE 소아재활센터
-          </footer>
+          <MemberProvider>
+            <Header />
+            <main className="flex-1">
+              {children}
+            </main>
+            <Footer />
+          </MemberProvider>
         </AdminProvider>
       </body>
     </html>

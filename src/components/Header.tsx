@@ -73,6 +73,8 @@ export default function Header() {
         {isAdmin && (
           <div className="bg-[#0a0a0a] text-white text-center text-[10px] tracking-[0.25em] py-1.5">
             관리자 모드&nbsp;&nbsp;
+            <Link href="/members" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원 관리</Link>
+            &nbsp;&nbsp;
             <button onClick={logout} className="underline underline-offset-2 opacity-60 hover:opacity-100">
               종료
             </button>

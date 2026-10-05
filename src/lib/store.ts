@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Post, Category, CenterRoom, Subject, PaymentMethod } from './types';
+import { Post, Category, CenterRoom, Subject, PaymentMethod, Profile, ProfileStatus } from './types';
 
 // ── Posts (thoughts / notices / etc) ─────────────────────────────────────────
 
@@ -283,3 +283,62 @@ export async function savePageSetting(page: string, data: PageSetting): Promise<
   if (error) throw error;
 }
 
+// ── Profiles (카카오 로그인한 보호자의 닉네임) ──────────────────────────────────
+// 보호자는 자기 줄을 한 번만 만들 수 있고(승인 대기), 바꾸기·승인·삭제는 관리자만 된다 — DB 정책이 막는다.
+
+interface ProfileRow {
+  user_id: string;
+  nickname: string;
+  status: ProfileStatus;
+  created_at: string;
+}
+
+function fromProfileRow(row: ProfileRow): Profile {
+  return { userId: row.user_id, nickname: row.nickname, status: row.status, createdAt: row.created_at };
+}
+
+export async function signInWithKakao(): Promise<void> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'kakao',
+    options: { redirectTo: window.location.href },
+  });
+  if (error) throw error;
+}
+
+export async function getMyProfile(userId: string): Promise<Profile | null> {
+  const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle();
+  if (error) throw error;
+  return data ? fromProfileRow(data as ProfileRow) : null;
+}
+
+/** 닉네임이 이미 있으면 'taken' 을 돌려준다 */
+export async function createMyProfile(userId: string, nickname: string): Promise<'ok' | 'taken'> {
+  const { error } = await supabase.from('profiles').insert({ user_id: userId, nickname: nickname.trim() });
+  if (error?.code === '23505' && error.message.includes('nickname')) return 'taken';
+  if (error) throw error;
+  return 'ok';
+}
+
+export async function getProfiles(): Promise<Profile[]> {
+  const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data as ProfileRow[]).map(fromProfileRow);
+}
+
+export async function updateProfile(userId: string, data: { nickname?: string; status?: ProfileStatus }): Promise<'ok' | 'taken'> {
+  const patch: Record<string, unknown> = {};
+  if (data.nickname !== undefined) patch.nickname = data.nickname.trim();
+  if (data.status !== undefined) {
+    patch.status = data.status;
+    patch.approved_at = data.status === 'approved' ? new Date().toISOString() : null;
+  }
+  const { error } = await supabase.from('profiles').update(patch).eq('user_id', userId);
+  if (error?.code === '23505') return 'taken';
+  if (error) throw error;
+  return 'ok';
+}
+
+export async function deleteProfile(userId: string): Promise<void> {
+  const { error } = await supabase.from('profiles').delete().eq('user_id', userId);
+  if (error) throw error;
+}
