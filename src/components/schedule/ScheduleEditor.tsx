@@ -125,7 +125,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     if (!/^\d{2}:\d{2}$/.test(time)) return;
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), time]) } }));
   };
-  // 그날 시간을 통째로 바꾼다(신청된 시간은 남긴다) — 모두 불러오기
+  // 그날 시간을 통째로 바꾼다(신청된 시간은 남긴다) — 모두 불러오기 · 비우기
   const setDayTimes = (tid: string, day: string, list: string[]) =>
     setTimes(p => ({
       ...p,
@@ -379,6 +379,11 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                               {preset.filter(x => !(times[t.id]?.[d] ?? []).includes(x)).map(x => <option key={x} value={x}>{x}</option>)}
                               <option value="custom">직접 입력…</option>
                             </select>
+                            {!!(times[t.id]?.[d] ?? []).length && (
+                              <button type="button" onClick={() => { setDayTimes(t.id, d, []); setCustom(c => ({ ...c, [key]: undefined })); }}
+                                title="그날 시간을 모두 빼요 (신청된 시간은 남아요)"
+                                className="text-[12px] text-[#888] underline underline-offset-2 px-1 hover:text-red-400">비우기</button>
+                            )}
                           </span>
                         );
                       })()}
