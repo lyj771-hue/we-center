@@ -16,7 +16,7 @@ const DEFAULT_NOTICE = '원하시는 시간을 누르면 바로 신청돼요. �
 
 type Mode = 'this' | 'next' | 'holiday';
 
-/** "평일" · "휴일" 버튼으로 한 번에 넣는 센터 기본 수업 시간 */
+/** "모두 불러오기"로 한 번에 넣는 센터 기본 수업 시간 (월~금 = 평일, 토요일·공휴일 = 휴일) */
 const WEEKDAY_TIMES = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '14:00', '14:50', '15:40', '16:30', '17:40', '18:30', '19:20'];
 const HOLIDAY_TIMES = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '13:30', '14:20', '15:10', '16:00', '16:50', '17:40', '18:30', '19:20'];
 
@@ -352,8 +352,8 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                       })}
                       {!off && (
                         <span className="order-first inline-flex items-center gap-1">
-                          {/* 개별 버튼 — 한 주 스케쥴의 월~금은 평일 시간, 토요일과 공휴일 스케쥴은 휴일 시간 */}
-                          {([['weekday', '개별(평일)'], ['holiday', '개별(휴일)']] as const)
+                          {/* 개별입력 버튼 — 한 주 스케쥴의 월~금은 평일 시간, 토요일과 공휴일 스케쥴은 휴일 시간 */}
+                          {([['weekday', '개별입력(평일)'], ['holiday', '개별입력(휴일)']] as const)
                             .filter(([kind]) => (mode !== 'holiday' && parseYmd(d).getDay() !== 6) === (kind === 'weekday'))
                             .map(([kind, name]) => (
                             <button key={kind} type="button"
@@ -366,10 +366,14 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                               {name}
                             </button>
                           ))}
-                          <button type="button" onClick={() => { setDayTimes(t.id, d, WEEKDAY_TIMES); setInputOpen(o => ({ ...o, [key]: undefined })); }}
-                            className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]">평일</button>
-                          <button type="button" onClick={() => { setDayTimes(t.id, d, HOLIDAY_TIMES); setInputOpen(o => ({ ...o, [key]: undefined })); }}
-                            className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]">휴일</button>
+                          {/* 모두 불러오기 — 한 주 스케쥴의 월~금은 평일 기본 시간, 토요일과 공휴일 스케쥴은 휴일 기본 시간 */}
+                          {mode !== 'holiday' && parseYmd(d).getDay() !== 6 ? (
+                            <button type="button" onClick={() => { setDayTimes(t.id, d, WEEKDAY_TIMES); setInputOpen(o => ({ ...o, [key]: undefined })); }}
+                              className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]" title="평일 기본 시간을 모두 넣어요">모두 불러오기</button>
+                          ) : (
+                            <button type="button" onClick={() => { setDayTimes(t.id, d, HOLIDAY_TIMES); setInputOpen(o => ({ ...o, [key]: undefined })); }}
+                              className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]" title="휴일 기본 시간을 모두 넣어요">모두 불러오기</button>
+                          )}
                         </span>
                       )}
                       {!off && inputOpen[key] && (
