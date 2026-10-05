@@ -366,10 +366,6 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                         const btn = 'text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]';
                         return (
                           <span className="order-first inline-flex flex-wrap items-center gap-1">
-                            {/* 개별입력 — 그날 시간을 비우고 아래 "시간 추가"로 하나씩 고른다 */}
-                            <button type="button" onClick={() => { setDayTimes(t.id, d, []); setCustom(c => ({ ...c, [key]: undefined })); }} className={btn}>
-                              {weekday ? '개별입력(평일)' : '개별입력(휴일)'}
-                            </button>
                             <button type="button" onClick={() => setDayTimes(t.id, d, preset)} className={btn}
                               title={`${weekday ? '평일' : '휴일'} 기본 시간을 모두 넣어요`}>모두 불러오기</button>
                             <select value="" aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 추가`}
