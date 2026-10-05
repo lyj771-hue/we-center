@@ -4,6 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { useAdmin } from './AdminContext';
+import { useMember } from './MemberContext';
+
+// 카카오톡 채널 주소 (채널 홈 → 공유 → 링크 복사). 비어 있으면 아이콘을 숨긴다
+const KAKAO_CHANNEL_URL = '';
 
 const NAV = [
   { href: '/we-concept',     label: 'We컨셉' },
@@ -14,18 +18,18 @@ const NAV = [
   { href: '/location',       label: '오시는길' },
   { href: '/notices',        label: '공지사항' },
   { href: '/etc',            label: '기타' },
+  { href: '/schedule',       label: '수업스케쥴' },
 ];
 
 export default function Header() {
   const pathname = usePathname();
   const { isAdmin, requestAdmin, logout } = useAdmin();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { userId, profile, login, logout: memberLogout } = useMember();
 
   // Triple-click the WE logo → admin prompt
   const clicks = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleLogoClick = () => {
     clicks.current += 1;
@@ -38,34 +42,6 @@ export default function Header() {
   };
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
-
-  const handleCopyUrl = async () => {
-    if (typeof window === 'undefined') return;
-
-    const url = window.location.href;
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = url;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      }
-
-      setCopied(true);
-      if (copyTimer.current) clearTimeout(copyTimer.current);
-      copyTimer.current = setTimeout(() => setCopied(false), 1600);
-    } catch {
-      setCopied(false);
-    }
-  };
 
   return (
     <>
@@ -92,13 +68,29 @@ export default function Header() {
             <img src="/logo-we.jpg" alt="WE 소아재활센터" className="w-full h-full object-contain" />
           </Link>
 
-          <button
-            onClick={handleCopyUrl}
-            aria-label="현재 페이지 주소 복사"
-            className="absolute right-14 top-1/2 -translate-y-1/2 hidden md:flex items-center gap-1.5 rounded-full border border-[#d9d9d9] px-3 py-1.5 text-[11px] font-medium tracking-[0.16em] text-[#666] transition hover:border-[#0a0a0a] hover:text-[#0a0a0a]"
-          >
-            <span>{copied ? '복사됨' : 'URL 복사'}</span>
-          </button>
+          {/* 보호자 로그인 + 카카오톡 채널 — PC는 오른쪽, 휴대폰은 왼쪽(오른쪽엔 메뉴 버튼) */}
+          <div className="absolute left-4 md:left-auto md:right-14 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            {!isAdmin && (userId ? (
+              <button onClick={() => { if (confirm('로그아웃할까요?')) memberLogout(); }}
+                title={profile && !profile.approvedAt ? '센터 승인 대기 중' : '누르면 로그아웃'}
+                className="max-w-[120px] truncate rounded-full border border-[var(--brand)] px-3 py-1.5 text-[12px] tracking-[0.05em] text-[var(--brand)] transition hover:bg-[var(--brand)] hover:text-white">
+                {profile?.centerNickname || profile?.nickname || '로그아웃'}
+              </button>
+            ) : (
+              <button onClick={login}
+                className="rounded-full border border-[#d9d9d9] px-3 py-1.5 text-[12px] tracking-[0.1em] text-[#666] transition hover:border-[#0a0a0a] hover:text-[#0a0a0a]">
+                로그인
+              </button>
+            ))}
+            {KAKAO_CHANNEL_URL && (
+              <a href={KAKAO_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="카카오톡 채널"
+                className="w-8 h-8 rounded-full bg-[#FEE500] flex items-center justify-center transition hover:opacity-80">
+                <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#191919" d="M12 3.5c-5.25 0-9.5 3.3-9.5 7.38 0 2.62 1.75 4.92 4.38 6.22l-.9 3.3c-.08.3.26.54.52.37l3.92-2.6c.52.07 1.05.1 1.58.1 5.25 0 9.5-3.3 9.5-7.39S17.25 3.5 12 3.5z"/>
+                </svg>
+              </a>
+            )}
+          </div>
 
           {/* Hamburger — mobile only */}
           <button
