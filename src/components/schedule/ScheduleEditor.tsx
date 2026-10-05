@@ -25,6 +25,17 @@ type Times = Record<string, Record<string, string[]>>;
 
 const sortTimes = (a: string[]) => [...new Set(a)].sort();
 
+/** 직접 입력한 시간 "9:5", "910", "20:10" → "09:05"·"09:10"·"20:10" (24시간). 알아볼 수 없으면 null */
+function normalizeTime(raw: string): string | null {
+  const t = raw.trim();
+  const m = t.match(/^(\d{1,2}):(\d{1,2})$/) ?? t.match(/^(\d{1,2})(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
 interface Props {
   teachers: Teacher[];
   existing?: Schedule;
@@ -393,11 +404,17 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                       )}
                       {!off && inputOpen[key] && custom[key] !== undefined && (
                         <span className="order-first inline-flex items-center gap-1">
-                          <input type="time" step={600} value={custom[key]} autoFocus aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 직접 입력`}
+                          <input type="text" inputMode="numeric" value={custom[key]} autoFocus placeholder="20:10" maxLength={5}
+                            aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 직접 입력 (24시간, 예: 20:10)`}
                             onChange={e => setCustom(c => ({ ...c, [key]: e.target.value }))}
-                            className="text-[13px] border border-[#ddd] px-2 py-1 w-[110px]" />
-                          <button type="button" disabled={!custom[key]}
-                            onClick={() => { addTime(t.id, d, custom[key] ?? ''); setCustom(c => ({ ...c, [key]: undefined })); }}
+                            onKeyDown={e => {
+                              if (e.key !== 'Enter') return;
+                              const v = normalizeTime(custom[key] ?? '');
+                              if (v) { addTime(t.id, d, v); setCustom(c => ({ ...c, [key]: undefined })); }
+                            }}
+                            className="text-[13px] border border-[#ddd] px-2 py-1 w-[80px] placeholder:text-[#ccc]" />
+                          <button type="button" disabled={!normalizeTime(custom[key] ?? '')}
+                            onClick={() => { addTime(t.id, d, normalizeTime(custom[key] ?? '') ?? ''); setCustom(c => ({ ...c, [key]: undefined })); }}
                             className="text-[13px] border border-[#ddd] px-2.5 py-1 hover:bg-[#f8f8f8] disabled:opacity-40">추가</button>
                           <button type="button" onClick={() => setCustom(c => ({ ...c, [key]: undefined }))} aria-label="직접 입력 닫기"
                             className="text-[12px] text-[#999] px-1 hover:text-[#333]">✕</button>
