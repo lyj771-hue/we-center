@@ -53,6 +53,8 @@ export default function Header() {
             관리자 모드&nbsp;&nbsp;
             <Link href="/members" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원 관리</Link>
             &nbsp;&nbsp;
+            <Link href="/admin/timetable" className="underline underline-offset-2 opacity-60 hover:opacity-100">시간표</Link>
+            &nbsp;&nbsp;
             <button onClick={logout} className="underline underline-offset-2 opacity-60 hover:opacity-100">
               종료
             </button>
