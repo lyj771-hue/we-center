@@ -169,7 +169,7 @@ export default function ScheduleBoard({
                         return (
                           <button key={s.id} type="button" disabled={busy} onClick={() => onRequestCancel(s, teacher)}
                             title="누르면 취소를 신청해요"
-                            className={`${pill} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>
+                            className={`${pill} border-[#0a0a0a] bg-[#0a0a0a] text-white hover:opacity-90`}>
                             ✓ {s.time} 신청완료
                           </button>
                         );
