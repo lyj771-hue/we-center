@@ -29,9 +29,12 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   const [err, setErr] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setIsAdmin(!!data.session));
+    // 로그인했다고 다 관리자가 아니다 — 카카오로 로그인한 학부모와 구분한다.
+    // (실제 쓰기 권한은 DB의 admins 표와 정책이 막는다: supabase/admin-roles.sql)
+    const check = (email?: string) => setIsAdmin(email === ADMIN_EMAIL);
+    supabase.auth.getSession().then(({ data }) => check(data.session?.user.email));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAdmin(!!session);
+      check(session?.user.email);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
