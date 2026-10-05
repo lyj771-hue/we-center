@@ -42,8 +42,19 @@ export interface Profile {
   approvedAt?: string;
 }
 
+/** 회원 관리의 지원 항목(받으면 true)과 선결제 남은 횟수 — 관리자만 본다 */
+export interface MemberExtras {
+  voucher: boolean;
+  gusen: boolean;
+  kkumideun: boolean;
+  woojin: boolean;
+  subsidy: boolean;
+  prepaidEunpyeong: number;
+  prepaidUijeongbu: number;
+}
+
 /** 회원 관리 표 한 줄 — 로그인 계정 정보 + 닉네임 (닉네임을 아직 안 정했으면 nickname 이 빈 문자열) */
-export interface Member extends Profile {
+export interface Member extends Profile, MemberExtras {
   kakaoId: string;
   joinedAt: string;
   lastSignInAt?: string;

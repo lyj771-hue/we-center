@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Post, Category, CenterRoom, Subject, PaymentMethod, Profile, Member } from './types';
+import { Post, Category, CenterRoom, Subject, PaymentMethod, Profile, Member, MemberExtras } from './types';
 
 // ── Posts (thoughts / notices / etc) ─────────────────────────────────────────
 
@@ -326,6 +326,13 @@ export async function createMyProfile(userId: string, nickname: string): Promise
 }
 
 interface MemberRow extends ProfileRow {
+  voucher: boolean;
+  gusen: boolean;
+  kkumideun: boolean;
+  woojin: boolean;
+  subsidy: boolean;
+  prepaid_eunpyeong: number;
+  prepaid_uijeongbu: number;
   kakao_id: string | null;
   joined_at: string;
   last_sign_in_at: string | null;
@@ -340,12 +347,28 @@ export async function getMembers(): Promise<Member[]> {
     kakaoId: r.kakao_id ?? '',
     joinedAt: r.joined_at,
     lastSignInAt: r.last_sign_in_at ?? undefined,
+    voucher: !!r.voucher,
+    gusen: !!r.gusen,
+    kkumideun: !!r.kkumideun,
+    woojin: !!r.woojin,
+    subsidy: !!r.subsidy,
+    prepaidEunpyeong: r.prepaid_eunpyeong ?? 0,
+    prepaidUijeongbu: r.prepaid_uijeongbu ?? 0,
   }));
 }
 
 /** 관리자가 회원의 닉네임·설명·승인일자를 저장한다. 센터 닉네임이 겹치면 'taken' */
-export async function saveMemberProfile(p: Profile): Promise<'ok' | 'taken'> {
+export async function saveMemberProfile(p: Profile & Partial<MemberExtras>): Promise<'ok' | 'taken'> {
+  const extras: Record<string, unknown> = {};
+  if (p.voucher !== undefined) extras.voucher = p.voucher;
+  if (p.gusen !== undefined) extras.gusen = p.gusen;
+  if (p.kkumideun !== undefined) extras.kkumideun = p.kkumideun;
+  if (p.woojin !== undefined) extras.woojin = p.woojin;
+  if (p.subsidy !== undefined) extras.subsidy = p.subsidy;
+  if (p.prepaidEunpyeong !== undefined) extras.prepaid_eunpyeong = Math.max(0, Math.floor(p.prepaidEunpyeong) || 0);
+  if (p.prepaidUijeongbu !== undefined) extras.prepaid_uijeongbu = Math.max(0, Math.floor(p.prepaidUijeongbu) || 0);
   const { error } = await supabase.from('profiles').upsert({
+    ...extras,
     user_id: p.userId,
     nickname: p.nickname.trim(),
     center_nickname: p.centerNickname?.trim() || null,

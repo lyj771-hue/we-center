@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { deleteProfile, getMembers, saveMemberProfile } from '@/lib/store';
-import type { Member } from '@/lib/types';
+import type { Member, MemberExtras } from '@/lib/types';
 
 // 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자 표.
 // 보호자 닉네임은 보호자가 처음 입력한 것, 센터 닉네임·설명은 관리자가 정한다.
@@ -11,6 +11,15 @@ import type { Member } from '@/lib/types';
 // 메뉴에는 없고 관리자 모드 띠의 "회원 관리"로 들어온다.
 
 type Filter = 'waiting' | 'approved';
+
+// 지원 항목 — 받는지 체크(O/X). 누르면 바로 저장된다
+const SUPPORTS: { key: keyof Pick<MemberExtras, 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy'>; label: string }[] = [
+  { key: 'voucher', label: '바우처' },
+  { key: 'gusen', label: '굳센' },
+  { key: 'kkumideun', label: '꿈이든' },
+  { key: 'woojin', label: '우진학교' },
+  { key: 'subsidy', label: '지원금' },
+];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const fmtDate = (iso: string) => {
@@ -28,7 +37,8 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '' });
+  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0' });
+  const [showDates, setShowDates] = useState(false);   // 가입일자·마지막 로그인은 접어 둔다
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -47,16 +57,29 @@ export default function MembersPage() {
 
   const startEdit = (m: Member) => {
     setEditing(m.userId);
-    setForm({ nickname: m.nickname, centerNickname: m.centerNickname ?? '', memo: m.memo ?? '' });
+    setForm({
+      nickname: m.nickname, centerNickname: m.centerNickname ?? '', memo: m.memo ?? '',
+      prepaidEunpyeong: String(m.prepaidEunpyeong), prepaidUijeongbu: String(m.prepaidUijeongbu),
+    });
   };
 
   const save = async (m: Member) => {
     if (!form.nickname.trim()) { alert('보호자 닉네임을 입력해 주세요.'); return; }
     try {
-      const r = await saveMemberProfile({ userId: m.userId, ...form, approvedAt: m.approvedAt });
+      const r = await saveMemberProfile({
+        userId: m.userId, nickname: form.nickname, centerNickname: form.centerNickname, memo: form.memo, approvedAt: m.approvedAt,
+        prepaidEunpyeong: Number(form.prepaidEunpyeong) || 0, prepaidUijeongbu: Number(form.prepaidUijeongbu) || 0,
+      });
       if (r === 'taken') { alert('이미 다른 회원이 쓰는 센터 닉네임이에요.'); return; }
       setEditing(null);
       load();
+    } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
+  };
+
+  const toggleSupport = async (m: Member, key: (typeof SUPPORTS)[number]['key']) => {
+    try {
+      await saveMemberProfile({ userId: m.userId, nickname: m.nickname, centerNickname: m.centerNickname, memo: m.memo, approvedAt: m.approvedAt, [key]: !m[key] });
+      setMembers(ms => ms.map(x => (x.userId === m.userId ? { ...x, [key]: !m[key] } : x)));
     } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
 
@@ -97,7 +120,7 @@ export default function MembersPage() {
   const td = 'px-3 py-3 align-middle';
 
   return (
-    <div className="max-w-[1152px] mx-auto px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
+    <div className="max-w-[1400px] mx-auto px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
       <h1 className="display-heading mb-3">회원 관리</h1>
       <p className="text-[14px] text-[#666] leading-[1.9] mb-8">
         카카오로 로그인한 보호자예요. 승인한 회원만 수업 신청 등을 할 수 있어요.
@@ -121,12 +144,26 @@ export default function MembersPage() {
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
             <tr className="border-b border-[#e5e5e5]">
-              <th className={th}>계정번호</th>
-              <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>
-              <th className={th}>마지막 로그인</th>
+              <th className={th}>
+                <span className="inline-flex items-center gap-1">
+                  계정번호
+                  <button type="button" onClick={() => setShowDates(v => !v)}
+                    aria-label={showDates ? '가입일자·마지막 로그인 접기' : '가입일자·마지막 로그인 펼치기'} aria-expanded={showDates}
+                    title={showDates ? '날짜 접기' : '가입일자·마지막 로그인 펼치기'}
+                    className="w-5 h-5 inline-flex items-center justify-center rounded border border-[#ddd] text-[#888] hover:border-[var(--brand)] hover:text-[var(--brand)]">
+                    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className={`transition-transform ${showDates ? 'rotate-180' : ''}`}>
+                      <path d="M3.5 1.5 7 5l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </span>
+              </th>
+              {showDates && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
+              {showDates && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
               <th className={th}>센터 닉네임</th>
               <th className={th}>설명</th>
+              {SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
+              <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 / 의정부</span></th>
               <th className={th}><span className="sr-only">관리</span></th>
             </tr>
           </thead>
@@ -136,8 +173,8 @@ export default function MembersPage() {
               return (
                 <tr key={m.userId} className="border-b border-[#f0f0f0]">
                   <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>
-                  <td className={`${td} whitespace-nowrap`}>{fmtDate(m.approvedAt ?? m.joinedAt)}</td>
-                  <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>
+                  {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(m.approvedAt ?? m.joinedAt)}</td>}
+                  {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
                   <td className={td}>
                     {on ? <input className={input} value={form.nickname} maxLength={20} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} />
                       : m.nickname || <span className="text-[#ccc]">아직 안 정함</span>}
@@ -149,6 +186,27 @@ export default function MembersPage() {
                   <td className={`${td} min-w-[160px]`}>
                     {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
                       : <span className="text-[#666] whitespace-pre-line">{m.memo || ''}</span>}
+                  </td>
+                  {SUPPORTS.map(x => (
+                    <td key={x.key} className={`${td} text-center`}>
+                      <input type="checkbox" checked={m[x.key]} disabled={!m.nickname} aria-label={`${m.centerNickname || m.nickname} ${x.label}`}
+                        onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />
+                    </td>
+                  ))}
+                  <td className={`${td} whitespace-nowrap`}>
+                    {on ? (
+                      <span className="inline-flex items-center gap-1 text-[13px]">
+                        <input type="number" min={0} inputMode="numeric" value={form.prepaidEunpyeong} aria-label="선결제 은평"
+                          onChange={e => setForm(f => ({ ...f, prepaidEunpyeong: e.target.value }))}
+                          className="w-14 border-b border-[var(--brand)] py-1 text-center outline-none" />
+                        /
+                        <input type="number" min={0} inputMode="numeric" value={form.prepaidUijeongbu} aria-label="선결제 의정부"
+                          onChange={e => setForm(f => ({ ...f, prepaidUijeongbu: e.target.value }))}
+                          className="w-14 border-b border-[var(--brand)] py-1 text-center outline-none" />
+                      </span>
+                    ) : (
+                      <span className="tabular-nums">{m.prepaidEunpyeong} / {m.prepaidUijeongbu}</span>
+                    )}
                   </td>
                   <td className={`${td} text-right`}>
                     <div className="flex justify-end gap-1">

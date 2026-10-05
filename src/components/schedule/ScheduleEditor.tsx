@@ -40,7 +40,8 @@ interface Props {
   teachers: Teacher[];
   existing?: Schedule;
   onTeachersChanged: () => Promise<void> | void;
-  onClose: (saved: boolean) => void;
+  /** 저장했으면 그 스케쥴 id, 그냥 닫으면 undefined */
+  onClose: (savedId?: string) => void;
 }
 
 export default function ScheduleEditor({ teachers, existing, onTeachersChanged, onClose }: Props) {
@@ -217,7 +218,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     if (!slots.length && !confirm('넣은 시간이 하나도 없어요. 그래도 올릴까요?')) return;
     setSaving(true);
     try {
-      await saveSchedule({
+      const id = await saveSchedule({
         weekStart: mode === 'holiday' ? days[0] : weekStart,
         days: mode === 'holiday' ? days : undefined,
         title: shownTitle.trim() || autoTitle,
@@ -230,7 +231,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
         ],
         slots,
       }, existing);
-      onClose(true);
+      onClose(id);
     } catch {
       alert('저장하지 못했어요. 다시 시도해 주세요.');
     } finally {
@@ -246,7 +247,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     <div className="bg-white rounded-[18px] shadow-[0_2px_6px_rgba(0,0,0,0.05),0_10px_24px_rgba(0,0,0,0.05)] p-5 md:p-7 space-y-7">
       <div className="flex items-center justify-between">
         <h2 className="text-[22px] text-[var(--brand)]">{existing ? '스케쥴 고치기' : '새 스케쥴 올리기'}</h2>
-        <button onClick={() => onClose(false)} className="text-[13px] text-[#888] hover:text-[#333]">닫기 ✕</button>
+        <button onClick={() => onClose()} className="text-[13px] text-[#888] hover:text-[#333]">닫기 ✕</button>
       </div>
 
       {/* 스케줄 선택 */}
@@ -451,7 +452,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
           className="flex-1 bg-[var(--brand)] text-white text-[14px] py-3 tracking-widest hover:opacity-90 disabled:opacity-50">
           {saving ? '저장 중...' : existing ? '저장' : '올리기'}
         </button>
-        <button onClick={() => onClose(false)} className="flex-1 border border-[#e5e5e5] text-[14px] py-3 tracking-widest hover:bg-[#f8f8f8]">취소</button>
+        <button onClick={() => onClose()} className="flex-1 border border-[#e5e5e5] text-[14px] py-3 tracking-widest hover:bg-[#f8f8f8]">취소</button>
       </div>
     </div>
   );

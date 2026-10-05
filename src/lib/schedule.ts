@@ -153,46 +153,71 @@ export async function getTeachers(): Promise<Teacher[]> {
   return (data ?? []).map(r => ({ id: r.id, name: r.name, order: r.sort_order }));
 }
 
-/** 이번 주부터의 스케쥴 (관리자는 지난 스케쥴도 includePast 로) — 최신 주가 위 */
-export async function getSchedules(includePast = false): Promise<Schedule[]> {
-  let q = supabase.from('schedules').select('*').order('week_start', { ascending: false });
-  if (!includePast) q = q.gte('week_start', thisMonday());
-  const { data: rows, error } = await q;
+/** 목록에 쓰는 스케쥴 한 줄 (시간·신청은 빼고) */
+export interface ScheduleSummary {
+  id: string;
+  weekStart: string;
+  days?: string[];
+  title: string;
+  createdAt: string;
+}
+
+type ScheduleRow = {
+  id: string; week_start: string; days: unknown; title: string; notice: string; holidays: unknown; created_at: string;
+};
+
+/** 스케쥴 목록 — 최신 주가 위 */
+export async function listSchedules(): Promise<ScheduleSummary[]> {
+  const { data, error } = await supabase
+    .from('schedules').select('id, week_start, days, title, created_at')
+    .order('week_start', { ascending: false }).order('created_at', { ascending: false });
   if (error) throw error;
-  if (!rows?.length) return [];
-  const ids = rows.map(r => r.id);
+  return (data ?? []).map(r => ({
+    id: r.id,
+    weekStart: r.week_start,
+    days: Array.isArray(r.days) && r.days.length ? (r.days as string[]) : undefined,
+    title: r.title,
+    createdAt: r.created_at,
+  }));
+}
+
+/** 스케쥴 하나 — 시간 칸과 신청 기록까지. 없거나 볼 권한이 없으면 null */
+export async function getSchedule(id: string): Promise<Schedule | null> {
+  const { data: r, error } = await supabase.from('schedules').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!r) return null;
+  const row = r as ScheduleRow;
   const [slotsRes, bookingsRes] = await Promise.all([
-    supabase.from('slots').select('*').in('schedule_id', ids),
-    supabase.from('bookings').select('*').in('schedule_id', ids).order('created_at'),
+    supabase.from('slots').select('*').eq('schedule_id', id),
+    supabase.from('bookings').select('*').eq('schedule_id', id).order('created_at'),
   ]);
   if (slotsRes.error) throw slotsRes.error;
   if (bookingsRes.error) throw bookingsRes.error;
 
-  const bookings = (bookingsRes.data ?? []).map(b => ({
-    id: b.id, scheduleId: b.schedule_id as string, slotId: b.slot_id ?? undefined, userId: b.user_id ?? undefined,
+  const bookings: Booking[] = (bookingsRes.data ?? []).map(b => ({
+    id: b.id, slotId: b.slot_id ?? undefined, userId: b.user_id ?? undefined,
     nickname: b.nickname, label: b.label, createdAt: b.created_at, cancelledAt: b.cancelled_at ?? undefined,
   }));
   // 칸마다 살아 있는 신청 기록의 닉네임 (관리자 화면용)
   const ownerOf = new Map(bookings.filter(b => !b.cancelledAt && b.slotId).map(b => [b.slotId!, b.nickname]));
 
-  return rows.map(r => ({
-    id: r.id,
-    weekStart: r.week_start,
-    days: Array.isArray(r.days) && r.days.length ? (r.days as string[]) : undefined,
-    title: r.title,
-    notice: r.notice,
-    holidays: (r.holidays ?? []) as Holiday[],
-    createdAt: r.created_at,
+  return {
+    id: row.id,
+    weekStart: row.week_start,
+    days: Array.isArray(row.days) && row.days.length ? (row.days as string[]) : undefined,
+    title: row.title,
+    notice: row.notice,
+    holidays: (row.holidays ?? []) as Holiday[],
+    createdAt: row.created_at,
     slots: (slotsRes.data ?? [])
-      .filter(s => s.schedule_id === r.id)
       .map(s => ({
         id: s.id, teacherId: s.teacher_id, day: s.day, time: s.time,
         bookedBy: s.booked_by ?? undefined,
         owner: s.booked_by ? ownerOf.get(s.id) : undefined,
       }))
       .sort((a, b) => (a.day + a.time).localeCompare(b.day + b.time)),
-    bookings: bookings.filter(b => b.scheduleId === r.id),
-  }));
+    bookings,
+  };
 }
 
 // ── 신청 · 취소 ──────────────────────────────────────────────────────
@@ -225,7 +250,7 @@ export interface ScheduleDraft {
 const slotKey = (s: { teacherId: string; day: string; time: string }) => `${s.teacherId}|${s.day}|${s.time}`;
 
 /** 새로 올리거나(id 없음) 고친다. 고칠 땐 신청된 칸은 그대로 두고, 빈 칸만 넣고 뺀다 */
-export async function saveSchedule(draft: ScheduleDraft, existing?: Schedule): Promise<void> {
+export async function saveSchedule(draft: ScheduleDraft, existing?: Schedule): Promise<string> {
   const head = {
     week_start: draft.weekStart,
     days: draft.days?.length ? draft.days : null,
@@ -256,6 +281,7 @@ export async function saveSchedule(draft: ScheduleDraft, existing?: Schedule): P
     const { error } = await supabase.from('slots').insert(add.map(s => ({ schedule_id: id, teacher_id: s.teacherId, day: s.day, time: s.time })));
     if (error) throw error;
   }
+  return id!;
 }
 
 export async function deleteSchedule(id: string): Promise<void> {
