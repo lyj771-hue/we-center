@@ -66,12 +66,10 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     }
     return t;
   });
-  // 요일 칸마다 열린 개별 선택 — 'weekday' = 평일 시간 중에서, 'holiday' = 휴일 시간 중에서 고른다
-  // 드롭박스의 "직접 입력"을 고른 칸 — 시간 입력 칸을 보여 준다
-  const [custom, setCustom] = useState<Record<string, string | undefined>>({});
-  const [inputOpen, setInputOpen] = useState<Record<string, 'weekday' | 'holiday' | undefined>>({});
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateId, setTemplateId] = useState('');
+  // 드롭박스의 "직접 입력"을 고른 칸 — 시간 입력 칸을 보여 준다
+  const [custom, setCustom] = useState<Record<string, string | undefined>>({});
   const [saving, setSaving] = useState(false);
   const [showTeachers, setShowTeachers] = useState(false);
 
@@ -361,48 +359,34 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                           </span>
                         );
                       })}
-                      {!off && (
-                        <span className="order-first inline-flex items-center gap-1">
-                          {/* 개별입력 버튼 — 한 주 스케쥴의 월~금은 평일 시간, 토요일과 공휴일 스케쥴은 휴일 시간 */}
-                          {([['weekday', '개별입력(평일)'], ['holiday', '개별입력(휴일)']] as const)
-                            .filter(([kind]) => (mode !== 'holiday' && parseYmd(d).getDay() !== 6) === (kind === 'weekday'))
-                            .map(([kind, name]) => (
-                            <button key={kind} type="button"
-                              onClick={() => {
-                                if (inputOpen[key] === kind) { setInputOpen(o => ({ ...o, [key]: undefined })); return; }
-                                setDayTimes(t.id, d, []);
-                                setInputOpen(o => ({ ...o, [key]: kind }));
-                              }}
-                              className={`text-[12px] border px-2.5 py-1 transition-colors ${inputOpen[key] === kind ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[var(--brand)] text-[var(--brand)] hover:bg-[#e8f1fd]'}`}>
-                              {name}
+                      {!off && (() => {
+                        // 한 주 스케쥴의 월~금은 평일 시간, 토요일과 공휴일 스케쥴은 휴일 시간
+                        const weekday = mode !== 'holiday' && parseYmd(d).getDay() !== 6;
+                        const preset = weekday ? WEEKDAY_TIMES : HOLIDAY_TIMES;
+                        const btn = 'text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]';
+                        return (
+                          <span className="order-first inline-flex flex-wrap items-center gap-1">
+                            {/* 개별입력 — 그날 시간을 비우고 아래 "시간 추가"로 하나씩 고른다 */}
+                            <button type="button" onClick={() => { setDayTimes(t.id, d, []); setCustom(c => ({ ...c, [key]: undefined })); }} className={btn}>
+                              {weekday ? '개별입력(평일)' : '개별입력(휴일)'}
                             </button>
-                          ))}
-                          {/* 모두 불러오기 — 한 주 스케쥴의 월~금은 평일 기본 시간, 토요일과 공휴일 스케쥴은 휴일 기본 시간 */}
-                          {mode !== 'holiday' && parseYmd(d).getDay() !== 6 ? (
-                            <button type="button" onClick={() => { setDayTimes(t.id, d, WEEKDAY_TIMES); setInputOpen(o => ({ ...o, [key]: undefined })); }}
-                              className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]" title="평일 기본 시간을 모두 넣어요">모두 불러오기</button>
-                          ) : (
-                            <button type="button" onClick={() => { setDayTimes(t.id, d, HOLIDAY_TIMES); setInputOpen(o => ({ ...o, [key]: undefined })); }}
-                              className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]" title="휴일 기본 시간을 모두 넣어요">모두 불러오기</button>
-                          )}
-                        </span>
-                      )}
-                      {!off && inputOpen[key] && (
-                        <select value="" aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 추가`}
-                          onChange={e => {
-                            const v = e.target.value;
-                            if (v === 'custom') setCustom(c => ({ ...c, [key]: '' }));
-                            else if (v) addTime(t.id, d, v);
-                          }}
-                          className="order-first text-[13px] border border-[var(--brand)] bg-white px-2 py-1">
-                          <option value="">{inputOpen[key] === 'weekday' ? '평일' : '휴일'} 시간 추가…</option>
-                          {(inputOpen[key] === 'weekday' ? WEEKDAY_TIMES : HOLIDAY_TIMES)
-                            .filter(x => !(times[t.id]?.[d] ?? []).includes(x))
-                            .map(x => <option key={x} value={x}>{x}</option>)}
-                          <option value="custom">직접 입력…</option>
-                        </select>
-                      )}
-                      {!off && inputOpen[key] && custom[key] !== undefined && (
+                            <button type="button" onClick={() => setDayTimes(t.id, d, preset)} className={btn}
+                              title={`${weekday ? '평일' : '휴일'} 기본 시간을 모두 넣어요`}>모두 불러오기</button>
+                            <select value="" aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 추가`}
+                              onChange={e => {
+                                const v = e.target.value;
+                                if (v === 'custom') setCustom(c => ({ ...c, [key]: '' }));
+                                else if (v) addTime(t.id, d, v);
+                              }}
+                              className="text-[13px] border border-[var(--brand)] bg-white px-2 py-1">
+                              <option value="">시간 추가</option>
+                              {preset.filter(x => !(times[t.id]?.[d] ?? []).includes(x)).map(x => <option key={x} value={x}>{x}</option>)}
+                              <option value="custom">직접 입력…</option>
+                            </select>
+                          </span>
+                        );
+                      })()}
+                      {!off && custom[key] !== undefined && (
                         <span className="order-first inline-flex items-center gap-1">
                           <input type="text" inputMode="numeric" value={custom[key]} autoFocus placeholder="20:10" maxLength={5}
                             aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 직접 입력 (24시간, 예: 20:10)`}
