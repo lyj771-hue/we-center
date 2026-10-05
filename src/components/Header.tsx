@@ -84,12 +84,12 @@ export default function Header() {
             ))}
             {(() => {
               const icon = (
-                <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-                  <path fill="#ffffff" d="M12 3.5c-5.25 0-9.5 3.3-9.5 7.38 0 2.62 1.75 4.92 4.38 6.22l-.9 3.3c-.08.3.26.54.52.37l3.92-2.6c.52.07 1.05.1 1.58.1 5.25 0 9.5-3.3 9.5-7.39S17.25 3.5 12 3.5z"/>
-                  <text x="12" y="13.6" textAnchor="middle" fill="#087BEA" fontSize="7.5" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif" style={{ WebkitTextStroke: 0 }}>ch</text>
+                <svg width="32" height="32" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#087BEA" d="M12 3.5c-5.25 0-9.5 3.3-9.5 7.38 0 2.62 1.75 4.92 4.38 6.22l-.9 3.3c-.08.3.26.54.52.37l3.92-2.6c.52.07 1.05.1 1.58.1 5.25 0 9.5-3.3 9.5-7.39S17.25 3.5 12 3.5z"/>
+                  <text x="12" y="13.6" textAnchor="middle" fill="#ffffff" fontSize="7.5" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif" style={{ WebkitTextStroke: 0 }}>ch</text>
                 </svg>
               );
-              const cls = 'w-8 h-8 rounded-full bg-[var(--brand)] flex items-center justify-center';
+              const cls = 'w-8 h-8 flex items-center justify-center';
               return KAKAO_CHANNEL_URL ? (
                 <a href={KAKAO_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="카카오톡 채널" className={`${cls} transition hover:opacity-80`}>{icon}</a>
               ) : (
