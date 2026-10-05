@@ -269,7 +269,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
               const key = `${t.id}|${i}`;
               return (
                 <div key={dn} className={`flex items-start gap-2 ${off ? 'opacity-40' : ''}`}>
-                  <span className="w-[64px] shrink-0 pt-1.5 text-[13px] text-[#71717b]">{dn} <span className="text-[#bbb]">{shortDay(days[i]).split('(')[0]}</span></span>
+                  <span className="w-[80px] shrink-0 pt-1.5 text-[13px] text-[#71717b] whitespace-nowrap">{dn} <span className="text-[#bbb]">{shortDay(days[i]).split('(')[0]}</span></span>
                   <div className="flex flex-wrap items-center gap-1.5 flex-1">
                     {(times[t.id]?.[i] ?? []).map(time => {
                       const owner = locked.get(`${t.id}|${i}|${time}`);

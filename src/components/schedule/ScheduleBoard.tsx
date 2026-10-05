@@ -95,7 +95,7 @@ export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickn
               </div>
               {tDays.map(({ day, slots }) => (
                 <div key={day} className="flex items-start gap-2.5">
-                  <div className="w-[64px] shrink-0 pt-2 text-[13px] text-[#71717b]">
+                  <div className="w-[80px] shrink-0 pt-2 text-[13px] text-[#71717b] whitespace-nowrap">
                     {dowLabel(day)} <span className="text-[#b4b4bb]">{shortDay(day).split('(')[0]}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 flex-1">
