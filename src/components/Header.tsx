@@ -71,9 +71,9 @@ export default function Header() {
           {/* 보호자 로그인 + 카카오톡 채널 — PC는 오른쪽, 휴대폰은 왼쪽(오른쪽엔 메뉴 버튼) */}
           <div className="absolute left-4 md:left-auto md:right-14 top-1/2 -translate-y-1/2 flex items-center gap-2">
             {!isAdmin && (userId ? (
-              <span className="flex flex-col md:flex-row items-start md:items-center gap-0.5 md:gap-2 text-[12px] md:text-[13px] leading-tight text-[#555] whitespace-nowrap">
+              <span className="flex flex-col md:flex-row items-start md:items-center gap-0 md:gap-2 text-[12px] md:text-[13px] leading-[1.7] text-[#555] whitespace-nowrap">
                 {profile && (
-                  <span className="max-w-[130px] md:max-w-none truncate">
+                  <span className="max-w-[130px] md:max-w-none truncate py-0.5 leading-[1.7]">
                     <span className="text-[var(--brand)]">{profile.centerNickname || profile.nickname}</span>님 반갑습니다
                     {!profile.approvedAt && <span className="text-[#aaa]">(미승인)</span>}
                   </span>
