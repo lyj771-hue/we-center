@@ -7,6 +7,8 @@ export interface Teacher {
   id: string;
   name: string;
   order: number;
+  /** 연결된 구글 캘린더 ID — 있으면 신청이 그 캘린더에 일정으로 들어가고, 빈 시간을 읽어 올 수 있다 */
+  googleCalendarId?: string;
 }
 
 /** 쉬는 날 — teacherId 가 없으면 센터 공휴일, 있으면 그 선생님만 휴무(label 은 사유) */
@@ -154,7 +156,7 @@ export function slashDay(s: string): string {
 export async function getTeachers(): Promise<Teacher[]> {
   const { data, error } = await supabase.from('teachers').select('*').order('sort_order');
   if (error) throw error;
-  return (data ?? []).map(r => ({ id: r.id, name: r.name, order: r.sort_order }));
+  return (data ?? []).map(r => ({ id: r.id, name: r.name, order: r.sort_order, googleCalendarId: r.google_calendar_id ?? undefined }));
 }
 
 /** 목록에 쓰는 스케쥴 한 줄 (시간·신청은 빼고) */
@@ -232,6 +234,34 @@ export async function bookSlot(slotId: string): Promise<'ok' | 'taken' | 'not_ap
   const { data, error } = await supabase.rpc('book_slot', { p_slot: slotId });
   if (error) throw error;
   return data;
+}
+
+// ── 구글 캘린더 ──────────────────────────────────────────────────────
+
+async function authHeader(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  return data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {};
+}
+
+/** 시간 칸 하나를 선생님 구글 캘린더에 맞춘다(신청돼 있으면 일정 넣기, 아니면 지우기). 실패해도 화면은 막지 않는다 */
+export async function syncCalendar(slotId: string): Promise<void> {
+  try {
+    await fetch('/api/calendar/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+      body: JSON.stringify({ slotId }),
+    });
+  } catch {
+    // 캘린더 반영은 덤 — 실패해도 신청은 그대로
+  }
+}
+
+/** 관리자: 선생님 캘린더의 바쁜 시간들 */
+export async function getBusyTimes(teacherId: string, from: string, to: string): Promise<{ start: string; end: string }[]> {
+  const res = await fetch(`/api/calendar/busy?${new URLSearchParams({ teacherId, from, to })}`, { headers: await authHeader() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? `오류 ${res.status}`);
+  return data.busy ?? [];
 }
 
 /** 보호자: 내 신청 취소 신청 / 철회. 관리자: 취소 승인 */
@@ -333,8 +363,9 @@ export async function addTeacher(name: string, order: number): Promise<void> {
   if (error) throw error;
 }
 
-export async function updateTeacher(id: string, patch: { name?: string; order?: number }): Promise<void> {
+export async function updateTeacher(id: string, patch: { name?: string; order?: number; googleCalendarId?: string }): Promise<void> {
   const row: Record<string, unknown> = {};
+  if (patch.googleCalendarId !== undefined) row.google_calendar_id = patch.googleCalendarId.trim() || null;
   if (patch.name !== undefined) row.name = patch.name.trim();
   if (patch.order !== undefined) row.sort_order = patch.order;
   const { error } = await supabase.from('teachers').update(row).eq('id', id);

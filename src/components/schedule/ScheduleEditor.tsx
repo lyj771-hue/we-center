@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Holiday, Schedule, ScheduleDraft, Teacher, Template, TemplateData } from '@/lib/schedule';
 import {
-  addDays, addTeacher, deleteTeacher, deleteTemplate, dowLabel, getTemplates, parseDateList, parseYmd,
+  addDays, addTeacher, deleteTeacher, deleteTemplate, dowLabel, getBusyTimes, getTemplates, parseDateList, parseYmd,
   saveSchedule, saveTemplate, scheduleRange, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
 } from '@/lib/schedule';
 
@@ -137,6 +137,36 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     }));
   const removeTime = (tid: string, day: string, time: string) =>
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: (p[tid]?.[day] ?? []).filter(x => x !== time) } }));
+  // 캘린더 빈 시간 — 선생님 구글 캘린더에서 일정이 없는 기본 시간(50분 수업)만 골라 날마다 채운다
+  const [busyLoading, setBusyLoading] = useState<string | null>(null);
+  const fillFromCalendar = async (t: Teacher) => {
+    const open = days.filter(d => !closed[d] && teacherOff[`${t.id}|${d}`] === undefined);
+    if (!open.length) return;
+    if (!confirm(`${t.name} 선생님 캘린더에서 빈 시간을 불러올까요?\n(지금 넣어 둔 시간은 바뀌어요. 신청된 시간은 남아요)`)) return;
+    setBusyLoading(t.id);
+    try {
+      const busy = (await getBusyTimes(t.id, open[0], open[open.length - 1])).map(b => [new Date(b.start).getTime(), new Date(b.end).getTime()]);
+      setTimes(p => {
+        const next = { ...p, [t.id]: { ...p[t.id] } };
+        for (const d of open) {
+          const preset = mode !== 'holiday' && parseYmd(d).getDay() !== 6 ? WEEKDAY_TIMES : HOLIDAY_TIMES;
+          const free = preset.filter(time => {
+            const s0 = new Date(`${d}T${time}:00+09:00`).getTime();
+            const e0 = s0 + 50 * 60000;
+            return !busy.some(([bs, be]) => bs < e0 && be > s0);
+          });
+          const keep = (p[t.id]?.[d] ?? []).filter(x => locked.has(`${t.id}|${d}|${x}`));
+          next[t.id][d] = sortTimes([...keep, ...free]);
+        }
+        return next;
+      });
+    } catch (e) {
+      alert(`캘린더를 불러오지 못했어요.\n${(e as Error).message}`);
+    } finally {
+      setBusyLoading(null);
+    }
+  };
+
   // 평일 동일 적용 — 첫 평일 시간을 나머지 평일(월~금)에 똑같이. 토·일은 건드리지 않는다
   const copyFirstToAll = (tid: string) => {
     const open = days.filter(d => !closed[d] && teacherOff[`${tid}|${d}`] === undefined && parseYmd(d).getDay() >= 1 && parseYmd(d).getDay() <= 5);
@@ -339,7 +369,15 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
           {teachers.map(t => (
             <section key={t.id} className="border border-[#eee] rounded-xl p-4 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-[17px] text-[#27272a]">{t.name} 선생님</h3>
+                <h3 className="text-[17px] text-[#27272a] flex items-center gap-2">
+                  {t.name} 선생님
+                  {t.googleCalendarId && (
+                    <button type="button" onClick={() => fillFromCalendar(t)} disabled={busyLoading === t.id}
+                      className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd] disabled:opacity-50">
+                      {busyLoading === t.id ? '불러오는 중…' : '캘린더 빈 시간'}
+                    </button>
+                  )}
+                </h3>
                 {days.filter(d => parseYmd(d).getDay() >= 1 && parseYmd(d).getDay() <= 5).length > 1 && (
                   <button type="button" onClick={() => copyFirstToAll(t.id)} title="첫 평일 시간을 나머지 평일(월~금)에 똑같이 넣어요. 토요일은 그대로예요."
                     className="text-[12px] text-[var(--brand)] underline underline-offset-2">
@@ -460,6 +498,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
 
 function TeacherList({ teachers, onChanged }: { teachers: Teacher[]; onChanged: () => Promise<void> | void }) {
   const [names, setNames] = useState<Record<string, string>>({});
+  const [calIds, setCalIds] = useState<Record<string, string>>({});
   const [newName, setNewName] = useState('');
 
   const run = async (fn: () => Promise<void>) => {
@@ -478,7 +517,8 @@ function TeacherList({ teachers, onChanged }: { teachers: Teacher[]; onChanged: 
     <div className="mt-3 border border-[#eee] rounded-xl p-4 space-y-2">
       <p className="text-[12px] text-[#999]">선생님을 지우면 그 선생님의 시간(신청된 것 포함)이 모든 스케쥴에서 같이 지워져요.</p>
       {teachers.map((t, i) => (
-        <div key={t.id} className="flex items-center gap-1.5">
+        <div key={t.id} className="space-y-1 pb-2 border-b border-[#f5f5f5] last:border-b-0">
+          <div className="flex items-center gap-1.5">
           <input value={names[t.id] ?? t.name} onChange={e => setNames(n => ({ ...n, [t.id]: e.target.value }))}
             className="flex-1 border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]" />
           {names[t.id] !== undefined && names[t.id] !== t.name && names[t.id].trim() && (
@@ -488,6 +528,17 @@ function TeacherList({ teachers, onChanged }: { teachers: Teacher[]; onChanged: 
           <button onClick={() => move(i, 1)} disabled={i === teachers.length - 1} aria-label="아래로" className="text-[12px] border border-[#e5e5e5] w-7 h-7 disabled:opacity-30">↓</button>
           <button onClick={() => confirm(`${t.name} 선생님을 지울까요?`) && run(() => deleteTeacher(t.id))}
             className="text-[12px] border border-[#e5e5e5] text-red-400 px-2 py-1 hover:bg-red-50">삭제</button>
+          </div>
+          <div className="flex items-center gap-1.5 pl-1">
+            <span className="text-[11px] text-[#aaa] shrink-0">구글 캘린더 ID</span>
+            <input value={calIds[t.id] ?? t.googleCalendarId ?? ''} placeholder="연결 안 함"
+              onChange={e => setCalIds(c => ({ ...c, [t.id]: e.target.value }))}
+              className="flex-1 min-w-0 border-b border-[#eee] py-0.5 text-[12px] text-[#666] outline-none focus:border-[var(--brand)] placeholder:text-[#ccc]" />
+            {calIds[t.id] !== undefined && calIds[t.id] !== (t.googleCalendarId ?? '') && (
+              <button onClick={() => run(async () => { await updateTeacher(t.id, { googleCalendarId: calIds[t.id] }); setCalIds(c => { const n = { ...c }; delete n[t.id]; return n; }); })}
+                className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2 py-0.5">저장</button>
+            )}
+          </div>
         </div>
       ))}
       <div className="flex items-center gap-1.5 pt-1">

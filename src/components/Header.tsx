@@ -205,7 +205,7 @@ function Greeting({ profile, onLogout, showLogout = true }: { profile: Profile |
     <span className="flex items-center gap-2 text-[12px] md:text-[13px] leading-[1.6] text-[#555] whitespace-nowrap">
       {profile && (
         <span className="py-0.5">
-          <span className="text-[var(--brand)]">{profile.centerNickname || profile.nickname}</span>님 오셨군요
+          <span className="text-[var(--brand)]">{profile.centerNickname || profile.nickname}</span>님 오셨군요<span aria-hidden="true" className="ml-0.5 text-[#e11d48]" style={{ WebkitTextStroke: 0 }}>♥</span>
           {!profile.approvedAt && <span className="text-[#aaa]">(미승인)</span>}
         </span>
       )}
