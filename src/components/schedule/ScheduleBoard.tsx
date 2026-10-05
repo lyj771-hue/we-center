@@ -3,7 +3,8 @@
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import { dowLabel, scheduleDays, scheduleRange, shortDay } from '@/lib/schedule';
 
-// 한 주 스케쥴 카드 — 공지(제목·기간·안내·휴무) + 선생님별 요일별 시간 버튼 + 신청 댓글.
+// 한 주 스케쥴 카드 — 공지(제목·기간·안내·휴무) + 선생님별 요일별 시간 버튼.
+// (신청·취소 기록은 DB bookings 표에 계속 남지만 화면에는 보이지 않는다)
 // 보호자: 빈 시간 = 누르면 신청, 내 신청 = "✓ 신청완료"(누르면 취소 신청) → "취소중"(누르면 철회) → 회색 "취소완료",
 //         다른 분 신청 = 언제나 "마감".
 // 관리자: 신청된 칸 = "시간 + 닉네임 ✕"(누르면 시간 다시 열기), 취소 신청된 칸 = "취소요청"(누르면 승인),
@@ -30,11 +31,6 @@ interface Props {
 
 const TINTS = ['#e8f1fd', '#fdf1e3', '#e8f5ee', '#f3ecfb', '#fdecef', '#eef3f5'];
 
-const fmtTime = (iso: string) => {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-
 const pill = 'inline-flex items-center gap-1.5 text-[13px] px-3.5 min-h-[36px] rounded-full border-[1.5px] transition-colors';
 
 export default function ScheduleBoard({
@@ -58,7 +54,6 @@ export default function ScheduleBoard({
     }))
     .filter(r => r.days.length > 0);
 
-  const comments = schedule.bookings;
 
   return (
     <div className="space-y-4">
@@ -201,32 +196,6 @@ export default function ScheduleBoard({
         </div>
       </article>
 
-      {/* 신청 댓글 — 오래된 것부터, 수정 불가 */}
-      <section className="bg-white rounded-[18px] shadow-[0_2px_6px_rgba(0,0,0,0.05)] px-5 md:px-7 py-5 space-y-1.5">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[16px] text-[#27272a]">댓글 <span className="text-[var(--brand)]">{comments.length}</span></h3>
-          <span className="text-[12px] text-[#a1a1aa]">댓글은 수정할 수 없어요</span>
-        </div>
-        {comments.length === 0 && <p className="text-[13px] text-[#bbb] py-3">아직 신청이 없어요.</p>}
-        {comments.map(c => (
-          <div key={c.id} className={`flex gap-2 px-2.5 py-1.5 rounded-lg ${c.userId && c.userId === myId ? 'bg-[#f0f6fe]' : 'bg-[#fafafa]'}`}>
-            <span className="w-5 h-5 shrink-0 rounded-full bg-[var(--brand)] text-white text-[7px] flex items-center justify-center">
-              {c.nickname.slice(0, 1)}
-            </span>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1 flex-wrap leading-[1.9]">
-                <span className="text-[7px] text-[var(--brand)]">{c.nickname}</span>
-                <span className="text-[6px] text-[#a1a1aa]">{fmtTime(c.createdAt)}</span>
-                {c.cancelledAt && <span className="text-[6px] text-white bg-[#a1a1aa] px-1.5 rounded-full">취소</span>}
-                {c.kind === 'cancel_request' && <span className="text-[6px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded-full">취소 신청</span>}
-                {c.kind === 'cancel_withdraw' && <span className="text-[6px] text-[#166534] bg-[#e8f5ee] px-1.5 rounded-full">철회</span>}
-                {c.kind === 'cancel_approved' && <span className="text-[6px] text-white bg-[#71717a] px-1.5 rounded-full">취소 승인</span>}
-              </div>
-              <p className={`text-[7px] leading-[1.9] text-[#3f3f46] ${c.cancelledAt ? 'line-through text-[#a1a1aa]' : ''}`}>{c.label}</p>
-            </div>
-          </div>
-        ))}
-      </section>
     </div>
   );
 }

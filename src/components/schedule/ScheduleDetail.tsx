@@ -15,7 +15,7 @@ import {
   approveCancel, bookSlot, cancelSlot, deleteSchedule, getSchedule, getTeachers, requestCancel, shortDay, syncCalendar, withdrawCancel,
 } from '@/lib/schedule';
 
-// 수업스케쥴 하나 — 공지 + 선생님별 시간 + 신청 댓글. 승인된 보호자는 시간을 눌러 선착순으로 신청한다.
+// 수업스케쥴 하나 — 공지 + 선생님별 시간. 승인된 보호자는 시간을 눌러 선착순으로 신청한다.
 // 누를 때마다 DB가 다시 확인하고(동시에 눌러도 한 명만 성공), 끝나면 새로 불러온다.
 // 다른 분이 신청하면 실시간으로 화면이 바뀐다(Supabase Realtime). 관리자는 고치기·지우기·신청 취소.
 
@@ -80,7 +80,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
   };
 
   const handleCancel = async (slot: Slot, teacher: Teacher) => {
-    if (!confirm(`${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}\n${slot.owner ?? ''} 님의 신청을 취소할까요?\n(시간이 다시 열리고, 댓글엔 "취소"로 남아요)`)) return;
+    if (!confirm(`${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}\n${slot.owner ?? ''} 님의 신청을 취소할까요?\n(시간이 다시 열려요)`)) return;
     setBusySlot(slot.id);
     try { await cancelSlot(slot.id); syncCalendar(slot.id); }
     catch { alert('취소하지 못했어요. 다시 시도해 주세요.'); }
@@ -113,7 +113,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const handleDelete = async () => {
     if (!schedule) return;
     const booked = schedule.slots.filter(x => x.bookedBy).length;
-    if (!confirm(`"${schedule.title}"을(를) 지울까요?${booked ? `\n신청된 ${booked}건과 댓글도 모두 지워져요.` : ''}`)) return;
+    if (!confirm(`"${schedule.title}"을(를) 지울까요?${booked ? `\n신청된 ${booked}건도 모두 지워져요.` : ''}`)) return;
     try { await deleteSchedule(schedule.id); router.push('/schedule'); }
     catch { alert('지우지 못했어요. 다시 시도해 주세요.'); }
   };

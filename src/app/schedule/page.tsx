@@ -43,7 +43,7 @@ export default function ScheduleListPage() {
   useEffect(() => { if (canView) load(); }, [canView, load]);
 
   const handleDelete = async (s: ScheduleSummary) => {
-    if (!confirm(`"${s.title}"을(를) 지울까요?\n신청 기록과 댓글도 모두 지워져요.`)) return;
+    if (!confirm(`"${s.title}"을(를) 지울까요?\n신청 기록도 모두 지워져요.`)) return;
     try { await deleteSchedule(s.id); load(); }
     catch { alert('지우지 못했어요. 다시 시도해 주세요.'); }
   };
