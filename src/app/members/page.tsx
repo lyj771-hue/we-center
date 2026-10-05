@@ -12,6 +12,9 @@ import type { Member, MemberExtras } from '@/lib/types';
 
 type Filter = 'waiting' | 'approved';
 
+// 선결제 칸 — 지금은 가려 둔다(DB에는 칸이 있다). 다시 보이려면 true
+const SHOW_PREPAID = false;
+
 // 지원 항목 — 받는지 체크(O/X). 누르면 바로 저장된다
 const SUPPORTS: { key: keyof Pick<MemberExtras, 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy'>; label: string }[] = [
   { key: 'voucher', label: '바우처' },
@@ -161,7 +164,7 @@ export default function MembersPage() {
               <th className={th}>센터 닉네임</th>
               <th className={th}>설명</th>
               {SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
-              <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>
+              {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
               <th className={th}><span className="sr-only">관리</span></th>
             </tr>
           </thead>
@@ -192,6 +195,7 @@ export default function MembersPage() {
                         onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />
                     </td>
                   ))}
+                  {SHOW_PREPAID && (
                   <td className={`${td} whitespace-nowrap`}>
                     {on ? (
                       <span className="inline-flex items-center gap-1 text-[13px]">
@@ -207,6 +211,7 @@ export default function MembersPage() {
                       <span className="tabular-nums">{m.prepaidEunpyeong}<span className="mx-1.5 text-[#ccc]">|</span>{m.prepaidUijeongbu}</span>
                     )}
                   </td>
+                  )}
                   <td className={`${td} text-right`}>
                     <div className="flex justify-end gap-1">
                       {on ? (
