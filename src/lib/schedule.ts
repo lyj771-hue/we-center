@@ -9,9 +9,11 @@ export interface Teacher {
   order: number;
 }
 
+/** 쉬는 날 — teacherId 가 없으면 센터 공휴일, 있으면 그 선생님만 휴무(label 은 사유) */
 export interface Holiday {
   date: string;
   label: string;
+  teacherId?: string;
 }
 
 export interface Slot {

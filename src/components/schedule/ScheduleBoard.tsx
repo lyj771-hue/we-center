@@ -31,17 +31,20 @@ const pill = 'inline-flex items-center gap-1.5 text-[13px] px-3.5 min-h-[36px] r
 
 export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickname, busySlot, onPick, onCancel, onEdit, onDelete }: Props) {
   const days = scheduleDays(schedule);
-  const holidayOf = new Map(schedule.holidays.map(h => [h.date, h.label]));
+  const centerHolidays = schedule.holidays.filter(h => !h.teacherId);
+  const holidayOf = new Map(centerHolidays.map(h => [h.date, h.label]));
+  // 선생님별 휴무 — "선생님|날짜" → 사유
+  const offOf = new Map(schedule.holidays.filter(h => h.teacherId).map(h => [`${h.teacherId}|${h.date}`, h.label]));
   const created = new Date(schedule.createdAt);
 
-  // 슬롯이 있는 선생님만, 명단 순서대로
+  // 시간이나 휴무가 있는 선생님만, 명단 순서대로
   const rows = teachers
     .map((t, i) => ({
       teacher: t,
       tint: TINTS[i % TINTS.length],
       days: days
-        .map(day => ({ day, slots: schedule.slots.filter(s => s.teacherId === t.id && s.day === day) }))
-        .filter(d => d.slots.length > 0),
+        .map(day => ({ day, off: offOf.get(`${t.id}|${day}`), slots: schedule.slots.filter(s => s.teacherId === t.id && s.day === day) }))
+        .filter(d => d.slots.length > 0 || d.off !== undefined),
     }))
     .filter(r => r.days.length > 0);
 
@@ -68,9 +71,9 @@ export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickn
             {schedule.notice && <>{'\n'}{schedule.notice}</>}
           </p>
           <div className="flex flex-wrap gap-1.5 pt-0.5">
-            {schedule.holidays.map(h => (
+            {centerHolidays.map(h => (
               <span key={h.date} className="text-[12px] text-[#b45309] bg-[#fef3c7] px-3 py-0.5 rounded-full">
-                {shortDay(h.date)} {h.label || '휴무'}{h.label && !h.label.includes('휴무') ? ' 휴무' : ''}
+                {shortDay(h.date)} {h.label || '공휴일'}
               </span>
             ))}
             <span className="inline-flex items-center gap-1.5 text-[12px] text-[#166534] bg-[#e8f5ee] px-3 py-0.5 rounded-full">
@@ -93,14 +96,16 @@ export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickn
                 </span>
                 <h3 className="text-[17px] text-[#27272a]">{teacher.name} 선생님</h3>
               </div>
-              {tDays.map(({ day, slots }) => (
+              {tDays.map(({ day, off, slots }) => (
                 <div key={day} className="flex items-start gap-2.5">
                   <div className="w-[80px] shrink-0 pt-2 text-[13px] text-[#71717b] whitespace-nowrap">
                     {dowLabel(day)} <span className="text-[#b4b4bb]">{shortDay(day).split('(')[0]}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 flex-1">
-                    {holidayOf.has(day) && !isAdmin ? (
-                      <span className="text-[13px] text-[#b45309] pt-2">휴무</span>
+                    {off !== undefined ? (
+                      <span className="text-[13px] text-[#b45309] pt-2">휴무{off ? ` · ${off}` : ''}</span>
+                    ) : holidayOf.has(day) && !isAdmin ? (
+                      <span className="text-[13px] text-[#b45309] pt-2">공휴일</span>
                     ) : slots.map(s => {
                       const busy = busySlot === s.id;
                       if (isAdmin) {
