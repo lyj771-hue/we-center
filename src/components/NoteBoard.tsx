@@ -87,7 +87,7 @@ export default function NoteBoard({ posts, pinned, basePath, isAdmin, onDelete }
     <div className="max-w-[860px] mx-auto flex flex-col items-center md:flex-row md:flex-wrap md:justify-center md:items-start">
       {pinned && (
         <Note index={0} title={pinned.title}>
-          <p className="text-[14px] leading-[1.7] text-[var(--brand)]">{pinned.desc}</p>
+          <p className="text-[14px] leading-[2] text-[var(--brand)]">{pinned.desc}</p>
         </Note>
       )}
 
@@ -95,7 +95,7 @@ export default function NoteBoard({ posts, pinned, basePath, isAdmin, onDelete }
         const text = toText(post.content);
         return (
           <Note key={post.id} index={i + offset} title={post.title}>
-            <p className="text-[14px] leading-[1.7] text-[var(--brand)] mb-[18px]">{excerpt(text)}</p>
+            <p className="text-[14px] leading-[2] text-[var(--brand)] mb-[18px]">{excerpt(text)}</p>
             <p className="text-[13px] font-semibold text-[var(--brand)] opacity-85 mb-3.5">
               {readMinutes(text)}분 · {yearMonth(post.createdAt)}
             </p>

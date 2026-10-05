@@ -72,7 +72,7 @@ export default function WeSubjectsPage() {
               )}
             </div>
             <h2 className="text-[17px] font-medium mb-3">{s.name}</h2>
-            <p className="text-[13px] text-[#666] leading-[1.8] whitespace-pre-line">{s.description}</p>
+            <p className="text-[13px] text-[#666] leading-[2] whitespace-pre-line">{s.description}</p>
           </div>
         ))}
       </div>

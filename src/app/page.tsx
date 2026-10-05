@@ -40,7 +40,7 @@ export default function HomePage() {
             <div key={num}>
               <span className="text-[10px] text-[#ccc] tracking-widest block mb-4">{num}</span>
               <h2 className="font-serif font-bold text-[26px] text-[var(--brand)] tracking-tight mb-3 leading-snug">{title}</h2>
-              <p className="text-[13px] text-[#666] leading-[1.9]">{desc}</p>
+              <p className="text-[13px] text-[#666] leading-[2]">{desc}</p>
             </div>
           ))}
         </div>

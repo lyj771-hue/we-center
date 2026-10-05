@@ -66,7 +66,7 @@ export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickn
             )}
           </div>
           <h2 className="text-[24px] leading-[1.4] text-[var(--brand)]">{schedule.title}</h2>
-          <p className="text-[14px] leading-[1.8] text-[#52525b] whitespace-pre-line">
+          <p className="text-[14px] leading-[2] text-[#52525b] whitespace-pre-line">
             {scheduleRange(schedule)}
             {schedule.notice && <>{'\n'}{schedule.notice}</>}
           </p>

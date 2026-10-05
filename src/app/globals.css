@@ -59,6 +59,13 @@ body {
   -webkit-text-stroke: 0.035em currentColor;
 }
 
+/* 본문 줄 간격·줄바꿈 — We재활생각 본문처럼: 넉넉한 줄 간격(2), 단어 중간에서 줄이 안 바뀌게(keep-all).
+   따로 leading-* 를 준 곳은 그 값을 쓴다 */
+@layer base {
+  body { word-break: keep-all; overflow-wrap: break-word; }
+  p, li, dd, blockquote { line-height: 2; }
+}
+
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: #d8d8d8; border-radius: 2px; }
 
@@ -80,7 +87,7 @@ body {
    so what the admin sees while writing matches what visitors see. */
 .rich-content {
   font-size: 14px;
-  line-height: 1.95;
+  line-height: 2;
   color: var(--ink-2);
   white-space: pre-wrap; /* keeps line breaks in legacy plain-text posts readable */
 }

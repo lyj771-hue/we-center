@@ -174,7 +174,7 @@ export default function LocationPageView() {
           {page.sections.map((s, idx) => (
             <section key={idx}>
               <h2 className="font-serif font-bold text-[24px] md:text-[30px] leading-snug tracking-tight text-[var(--brand)] mb-4">{s.name}</h2>
-              <div className="text-[14px] leading-[1.95] text-[#444] whitespace-pre-wrap mb-6">
+              <div className="text-[14px] leading-[2] text-[#444] whitespace-pre-wrap mb-6">
                 {s.info || <span className="text-[#ccc]">정보가 없습니다</span>}
               </div>
               {s.imageUrl && (

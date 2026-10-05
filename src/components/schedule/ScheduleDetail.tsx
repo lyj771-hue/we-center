@@ -125,7 +125,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
       {popup && createPortal(
         <div role="alertdialog" aria-modal="true" className="fixed inset-0 z-[400] flex items-center justify-center bg-black/30 px-6" onClick={() => setPopup(null)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center" onClick={e => e.stopPropagation()}>
-            <p className="text-[15px] leading-[1.8] text-[#333] whitespace-pre-line mb-5">{popup}</p>
+            <p className="text-[15px] leading-[2] text-[#333] whitespace-pre-line mb-5">{popup}</p>
             <button onClick={() => setPopup(null)} className="w-full bg-[var(--brand)] text-white text-[14px] py-2.5 rounded-full">확인</button>
           </div>
         </div>,

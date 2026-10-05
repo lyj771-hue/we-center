@@ -170,7 +170,7 @@ export default function WeCenterPage() {
                 )}
               </div>
               <p className="text-[13px] font-medium text-[#0a0a0a] mb-1.5">{room.name}</p>
-              <p className="text-[12px] text-[#888] leading-[1.75]">{room.description}</p>
+              <p className="text-[12px] text-[#888] leading-[2]">{room.description}</p>
             </div>
           ))}
         </div>

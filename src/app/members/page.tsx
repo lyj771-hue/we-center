@@ -125,7 +125,7 @@ export default function MembersPage() {
   return (
     <div className="max-w-[1400px] mx-auto px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
       <h1 className="display-heading mb-3">회원 관리</h1>
-      <p className="text-[14px] text-[#666] leading-[1.9] mb-8">
+      <p className="text-[14px] text-[#666] leading-[2] mb-8">
         카카오로 로그인한 보호자예요. 승인한 회원만 수업 신청 등을 할 수 있어요.
       </p>
 

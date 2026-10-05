@@ -154,7 +154,7 @@ export default function PaymentBoard() {
                 </div>
                 <h2 className="font-serif font-bold text-[17px] md:text-[22px] leading-snug tracking-tight text-[var(--brand)] mb-2 md:mb-3">{m.name}</h2>
                 {m.description && (
-                  <p className="text-[13px] text-[#666] leading-[1.8] whitespace-pre-line">{m.description}</p>
+                  <p className="text-[13px] text-[#666] leading-[2] whitespace-pre-line">{m.description}</p>
                 )}
               </div>
             </div>

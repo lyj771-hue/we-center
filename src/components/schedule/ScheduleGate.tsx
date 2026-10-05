@@ -19,7 +19,7 @@ export default function ScheduleGate({ children }: { children: React.ReactNode }
         <p className="text-[14px] text-[#aaa]">불러오는 중…</p>
       ) : !userId ? (
         <>
-          <p className="text-[15px] leading-[1.9] text-[#555]">수업 신청은 카카오 로그인 후<br />센터 승인을 받은 보호자만 할 수 있어요.</p>
+          <p className="text-[15px] leading-[2] text-[#555]">수업 신청은 카카오 로그인 후<br />센터 승인을 받은 보호자만 할 수 있어요.</p>
           <button onClick={login} className="inline-flex items-center gap-2 bg-[var(--brand)] text-white text-[15px] px-6 py-3 rounded-full hover:opacity-90">
             카카오 로그인/회원가입
           </button>
@@ -27,7 +27,7 @@ export default function ScheduleGate({ children }: { children: React.ReactNode }
       ) : !profile ? (
         <p className="text-[15px] text-[#555]">먼저 보호자 닉네임을 정해 주세요.</p>
       ) : (
-        <p className="text-[15px] leading-[1.9] text-[#555]">
+        <p className="text-[15px] leading-[2] text-[#555]">
           <span className="text-[var(--brand)]">{profile.nickname}</span> 보호자님, 가입 신청이 접수됐어요.<br />
           센터에서 승인하면 수업을 신청할 수 있어요.
         </p>
