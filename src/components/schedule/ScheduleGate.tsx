@@ -20,7 +20,7 @@ export default function ScheduleGate({ children }: { children: React.ReactNode }
       ) : !userId ? (
         <>
           <p className="text-[15px] leading-[2] text-[#555]">수업 신청은 카카오 로그인 후<br />센터 승인을 받은 보호자만 할 수 있어요.</p>
-          <button onClick={login} className="inline-flex items-center gap-2 bg-[var(--brand)] text-white text-[15px] px-6 py-3 rounded-full hover:opacity-90">
+          <button onClick={login} className="inline-flex items-center gap-2 bg-[#e11d48] text-white text-[15px] px-6 py-3 rounded-full hover:opacity-90">
             카카오 로그인/회원가입
           </button>
         </>

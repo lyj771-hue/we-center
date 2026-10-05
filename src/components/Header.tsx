@@ -76,7 +76,7 @@ export default function Header() {
               <span className="hidden md:flex"><Greeting profile={profile} onLogout={memberLogout} /></span>
             ) : (
               <button onClick={login}
-                className="rounded-full border border-[var(--brand)] bg-[var(--brand)] px-3 py-1.5 text-[12px] tracking-[0.1em] text-white transition hover:opacity-90">
+                className="rounded-full border border-[#e11d48] bg-[#e11d48] px-3 py-1.5 text-[12px] tracking-[0.1em] text-white transition hover:opacity-90">
                 로그인
               </button>
             ))}

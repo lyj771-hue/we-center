@@ -31,7 +31,7 @@ interface Props {
 
 const TINTS = ['#e8f1fd', '#fdf1e3', '#e8f5ee', '#f3ecfb', '#fdecef', '#eef3f5'];
 
-const pill = 'inline-flex items-center gap-1.5 text-[13px] px-3.5 min-h-[36px] rounded-full border-[1.5px] transition-colors';
+const pill = 'inline-flex items-center gap-1.5 text-[11px] md:text-[12px] px-3 min-h-[32px] rounded-full border-[1.5px] transition-colors';
 
 export default function ScheduleBoard({
   schedule, teachers, isAdmin, myId, nickname, busySlot, onPick, onCancel, onApproveCancel, onRequestCancel, onWithdrawCancel, onEdit, onDelete,
@@ -96,21 +96,21 @@ export default function ScheduleBoard({
           {rows.map(({ teacher, tint, days: tDays }) => (
             <section key={teacher.id} className="py-4 border-b border-[#f1f1f3] last:border-b-0 space-y-2.5">
               <div className="flex items-center gap-2">
-                <span className="w-7 h-7 rounded-full text-[13px] text-[var(--brand)] flex items-center justify-center" style={{ background: tint }}>
+                <span className="w-6 h-6 rounded-full text-[12px] text-[var(--brand)] flex items-center justify-center" style={{ background: tint }}>
                   {teacher.name.slice(0, 1)}
                 </span>
-                <h3 className="text-[17px] text-[#27272a]">{teacher.name} 선생님</h3>
+                <h3 className="text-[14px] md:text-[16px] text-[#27272a]">{teacher.name} 선생님</h3>
               </div>
               {tDays.map(({ day, off, slots }) => (
                 <div key={day} className="flex items-start gap-2.5">
-                  <div className="w-[80px] shrink-0 pt-2 text-[13px] text-[#71717b] whitespace-nowrap">
+                  <div className="w-[68px] md:w-[76px] shrink-0 pt-2 text-[11px] md:text-[12px] text-[#71717b] whitespace-nowrap">
                     {dowLabel(day)} <span className="text-[#b4b4bb]">{shortDay(day).split('(')[0]}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 flex-1">
                     {off !== undefined ? (
-                      <span className="text-[13px] text-[#b45309] pt-2">휴무{off ? ` · ${off}` : ''}</span>
+                      <span className="text-[11px] md:text-[12px] text-[#b45309] pt-2">휴무{off ? ` · ${off}` : ''}</span>
                     ) : holidayOf.has(day) && !isAdmin ? (
-                      <span className="text-[13px] text-[#b45309] pt-2">공휴일</span>
+                      <span className="text-[11px] md:text-[12px] text-[#b45309] pt-2">공휴일</span>
                     ) : slots.map(s => {
                       const busy = busySlot === s.id;
                       if (isAdmin) {
