@@ -38,7 +38,7 @@ export default function MembersPage() {
   const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0' });
-  const [showDates, setShowDates] = useState(false);   // 가입일자·마지막 로그인은 접어 둔다
+  const [showDates, setShowDates] = useState(false);   // 계정번호·가입일자·마지막 로그인은 접어 둔다
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -144,19 +144,17 @@ export default function MembersPage() {
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
             <tr className="border-b border-[#e5e5e5]">
-              <th className={th}>
-                <span className="inline-flex items-center gap-1">
-                  계정번호
-                  <button type="button" onClick={() => setShowDates(v => !v)}
-                    aria-label={showDates ? '가입일자·마지막 로그인 접기' : '가입일자·마지막 로그인 펼치기'} aria-expanded={showDates}
-                    title={showDates ? '날짜 접기' : '가입일자·마지막 로그인 펼치기'}
-                    className="w-5 h-5 inline-flex items-center justify-center rounded border border-[#ddd] text-[#888] hover:border-[var(--brand)] hover:text-[var(--brand)]">
-                    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className={`transition-transform ${showDates ? 'rotate-180' : ''}`}>
-                      <path d="M3.5 1.5 7 5l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                </span>
+              <th className={`${th} w-8 pr-0`}>
+                <button type="button" onClick={() => setShowDates(v => !v)}
+                  aria-label={showDates ? '계정번호·가입일자·마지막 로그인 접기' : '계정번호·가입일자·마지막 로그인 펼치기'} aria-expanded={showDates}
+                  title={showDates ? '접기' : '계정번호·가입일자·마지막 로그인 펼치기'}
+                  className="w-5 h-5 inline-flex items-center justify-center rounded border border-[#ddd] text-[#888] hover:border-[var(--brand)] hover:text-[var(--brand)]">
+                  <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className={`transition-transform ${showDates ? 'rotate-180' : ''}`}>
+                    <path d="M3.5 1.5 7 5l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
               </th>
+              {showDates && <th className={th}>계정번호</th>}
               {showDates && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
               {showDates && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
@@ -172,7 +170,8 @@ export default function MembersPage() {
               const on = editing === m.userId;
               return (
                 <tr key={m.userId} className="border-b border-[#f0f0f0]">
-                  <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>
+                  <td className={`${td} w-8 pr-0`} />
+                  {showDates && <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>}
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(m.approvedAt ?? m.joinedAt)}</td>}
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
                   <td className={td}>
