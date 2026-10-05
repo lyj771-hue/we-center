@@ -36,7 +36,10 @@ export interface Booking {
 
 export interface Schedule {
   id: string;
+  /** 월~금 스케쥴이면 그 주 월요일, 공휴일 스케쥴이면 첫 날짜 */
   weekStart: string;
+  /** 공휴일 스케쥴: 관리자가 고른 날짜들. 없으면 월~금 */
+  days?: string[];
   title: string;
   notice: string;
   holidays: Holiday[];
@@ -45,7 +48,7 @@ export interface Schedule {
   bookings: Booking[];
 }
 
-/** 형식: 선생님 id → 요일(1=월 … 5=금) → 시간들 */
+/** 형식: 선생님 id → 요일(0=일, 1=월 … 6=토) → 시간들 */
 export type TemplateData = Record<string, Record<string, string[]>>;
 
 export interface Template {
@@ -97,10 +100,47 @@ export function dowLabel(s: string): string {
   return DOW[parseYmd(s).getDay()];
 }
 
+/** "10월 5일(월)" */
+export function longDay(s: string): string {
+  const d = parseYmd(s);
+  return `${d.getMonth() + 1}월 ${d.getDate()}일(${DOW[d.getDay()]})`;
+}
+
 /** "10월 5일(월) ~ 10월 9일(금)" */
 export function weekRange(weekStart: string): string {
-  const f = (s: string) => { const d = parseYmd(s); return `${d.getMonth() + 1}월 ${d.getDate()}일(${DOW[d.getDay()]})`; };
-  return `${f(weekStart)} ~ ${f(addDays(weekStart, 4))}`;
+  return `${longDay(weekStart)} ~ ${longDay(addDays(weekStart, 4))}`;
+}
+
+/** 스케쥴의 날짜들 — 공휴일 스케쥴이면 고른 날짜, 아니면 월~금 */
+export function scheduleDays(s: Pick<Schedule, 'weekStart' | 'days'>): string[] {
+  return s.days?.length ? s.days : weekDays(s.weekStart);
+}
+
+/** 공지에 쓰는 기간 — "10월 5일(월) ~ 10월 9일(금)" 또는 "10월 9일(금), 12월 25일(금)" */
+export function scheduleRange(s: Pick<Schedule, 'weekStart' | 'days'>): string {
+  return s.days?.length ? s.days.map(longDay).join(', ') : weekRange(s.weekStart);
+}
+
+/** "2026/10/9, 2026.12.25(금)" 같은 글을 날짜들로 — 잘못된 것은 bad 로 */
+export function parseDateList(text: string): { dates: string[]; bad: string[] } {
+  const dates = new Set<string>();
+  const bad: string[] = [];
+  for (const raw of text.split(/[,，\n]/)) {
+    const part = raw.replace(/\(.*?\)/g, '').trim();
+    if (!part) continue;
+    const m = part.match(/^(\d{4})\s*[./\-년]\s*(\d{1,2})\s*[./\-월]\s*(\d{1,2})\s*일?$/);
+    if (!m) { bad.push(part); continue; }
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (d.getMonth() !== Number(m[2]) - 1) { bad.push(part); continue; }
+    dates.add(toYmd(d));
+  }
+  return { dates: [...dates].sort(), bad };
+}
+
+/** "2026/10/09(금)" */
+export function slashDay(s: string): string {
+  const d = parseYmd(s);
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}(${DOW[d.getDay()]})`;
 }
 
 // ── 읽기 ─────────────────────────────────────────────────────────────
@@ -136,6 +176,7 @@ export async function getSchedules(includePast = false): Promise<Schedule[]> {
   return rows.map(r => ({
     id: r.id,
     weekStart: r.week_start,
+    days: Array.isArray(r.days) && r.days.length ? (r.days as string[]) : undefined,
     title: r.title,
     notice: r.notice,
     holidays: (r.holidays ?? []) as Holiday[],
@@ -170,6 +211,8 @@ export async function cancelSlot(slotId: string): Promise<void> {
 
 export interface ScheduleDraft {
   weekStart: string;
+  /** 공휴일 스케쥴의 날짜들 (월~금이면 비움) */
+  days?: string[];
   title: string;
   notice: string;
   holidays: Holiday[];
@@ -181,7 +224,13 @@ const slotKey = (s: { teacherId: string; day: string; time: string }) => `${s.te
 
 /** 새로 올리거나(id 없음) 고친다. 고칠 땐 신청된 칸은 그대로 두고, 빈 칸만 넣고 뺀다 */
 export async function saveSchedule(draft: ScheduleDraft, existing?: Schedule): Promise<void> {
-  const head = { week_start: draft.weekStart, title: draft.title.trim(), notice: draft.notice, holidays: draft.holidays };
+  const head = {
+    week_start: draft.weekStart,
+    days: draft.days?.length ? draft.days : null,
+    title: draft.title.trim(),
+    notice: draft.notice,
+    holidays: draft.holidays,
+  };
   let id = existing?.id;
   if (id) {
     const { error } = await supabase.from('schedules').update(head).eq('id', id);

@@ -1,7 +1,7 @@
 'use client';
 
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
-import { dowLabel, shortDay, weekDays, weekRange } from '@/lib/schedule';
+import { dowLabel, scheduleDays, scheduleRange, shortDay } from '@/lib/schedule';
 
 // 한 주 스케쥴 카드 — 공지(제목·기간·안내·휴무) + 선생님별 요일별 시간 버튼 + 신청 댓글.
 // 보호자: 빈 시간 = 누르면 신청, 내 신청 = "✓ 신청완료", 다른 분 = "마감".
@@ -30,7 +30,7 @@ const fmtTime = (iso: string) => {
 const pill = 'inline-flex items-center gap-1.5 text-[13px] px-3.5 min-h-[36px] rounded-full border-[1.5px] transition-colors';
 
 export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickname, busySlot, onPick, onCancel, onEdit, onDelete }: Props) {
-  const days = weekDays(schedule.weekStart);
+  const days = scheduleDays(schedule);
   const holidayOf = new Map(schedule.holidays.map(h => [h.date, h.label]));
   const created = new Date(schedule.createdAt);
 
@@ -64,7 +64,7 @@ export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickn
           </div>
           <h2 className="text-[24px] leading-[1.4] text-[var(--brand)]">{schedule.title}</h2>
           <p className="text-[14px] leading-[1.8] text-[#52525b] whitespace-pre-line">
-            {weekRange(schedule.weekStart)}
+            {scheduleRange(schedule)}
             {schedule.notice && <>{'\n'}{schedule.notice}</>}
           </p>
           <div className="flex flex-wrap gap-1.5 pt-0.5">

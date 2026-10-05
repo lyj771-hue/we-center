@@ -170,3 +170,6 @@ where not exists (select 1 from teachers);
 
 -- 확인: 선생님 5명이 보여야 한다
 select name, sort_order from teachers order by sort_order;
+
+-- 7. 공휴일 스케쥴 (2026-10 추가) — 월~금 한 주 대신 관리자가 고른 날짜들. 비어 있으면(null) 월~금
+alter table schedules add column if not exists days jsonb;

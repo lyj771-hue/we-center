@@ -3,22 +3,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Holiday, Schedule, ScheduleDraft, Teacher, Template, TemplateData } from '@/lib/schedule';
 import {
-  addDays, addTeacher, deleteTeacher, deleteTemplate, getTemplates, saveSchedule, saveTemplate,
-  shortDay, thisMonday, updateTeacher, weekDays, weekRange,
+  addDays, addTeacher, deleteTeacher, deleteTemplate, dowLabel, getTemplates, parseDateList, parseYmd,
+  saveSchedule, saveTemplate, scheduleRange, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
 } from '@/lib/schedule';
 
-// 관리자: 한 주 스케쥴 올리기·고치기.
-// 주 고르기 → (형식 불러오기) → 선생님별·요일별 시간 넣기, 휴무일 표시 → 올리기. 지금 상태를 새 형식으로 저장할 수도 있다.
-// 고칠 땐 이미 신청된 시간은 잠겨서 뺄 수 없다(먼저 신청 취소).
+// 관리자: 스케쥴 올리기·고치기.
+// 스케줄 선택(이번 주 / 다음 주 / 공휴일) → (형식 불러오기) → 선생님별·날짜별 시간 넣기 → 올리기.
+// 이번 주·다음 주는 월~금이고 휴무일을 표시할 수 있다. 공휴일은 날짜를 직접 적는다("2026/10/9, 2026/12/25").
+// 지금 상태를 형식으로 저장할 수 있다(요일 기준). 고칠 땐 이미 신청된 시간은 잠겨서 뺄 수 없다(먼저 신청 취소).
 
 const DEFAULT_NOTICE = '원하시는 시간을 누르면 바로 신청돼요. 선착순이에요!\n취소가 필요하면 센터로 연락해 주세요.';
-const DAY_NAMES = ['월', '화', '수', '목', '금'];
 
-/** 선생님 id → 요일 순번(0=월 … 4=금) → 시간들 */
-type Times = Record<string, string[][]>;
+type Mode = 'this' | 'next' | 'holiday';
 
-const emptyTimes = (teachers: Teacher[]): Times =>
-  Object.fromEntries(teachers.map(t => [t.id, [[], [], [], [], []]]));
+/** 선생님 id → 날짜(YYYY-MM-DD) → 시간들 */
+type Times = Record<string, Record<string, string[]>>;
 
 const sortTimes = (a: string[]) => [...new Set(a)].sort();
 
@@ -30,23 +29,25 @@ interface Props {
 }
 
 export default function ScheduleEditor({ teachers, existing, onTeachersChanged, onClose }: Props) {
-  const nextMonday = addDays(thisMonday(), 7);
-  const [weekStart, setWeekStart] = useState(existing?.weekStart ?? nextMonday);
+  const monday = thisMonday();
+  const nextMonday = addDays(monday, 7);
+  const [mode, setMode] = useState<Mode>(() =>
+    existing?.days?.length ? 'holiday' : existing?.weekStart === monday ? 'this' : existing && existing.weekStart !== nextMonday ? 'this' : 'next');
+  // 이번 주·다음 주가 아닌 지난 주를 고칠 때를 위해 주 시작일은 따로 들고 있는다
+  const [weekStart, setWeekStart] = useState(existing && !existing.days?.length ? existing.weekStart : nextMonday);
+  const [holidayText, setHolidayText] = useState(existing?.days?.map(slashDay).join(', ') ?? '');
+  const [holidayDates, setHolidayDates] = useState<string[]>(existing?.days ?? []);
+  const [holidayError, setHolidayError] = useState('');
   const [title, setTitle] = useState(existing?.title ?? '');
   const [titleTouched, setTitleTouched] = useState(!!existing);
   const [notice, setNotice] = useState(existing?.notice ?? DEFAULT_NOTICE);
-  const [holidays, setHolidays] = useState<(Holiday | null)[]>(() => {
-    const days = weekDays(existing?.weekStart ?? nextMonday);
-    return days.map(d => existing?.holidays.find(h => h.date === d) ?? null);
-  });
+  const [closed, setClosed] = useState<Record<string, Holiday>>(() =>
+    Object.fromEntries((existing?.holidays ?? []).map(h => [h.date, h])));
   const [times, setTimes] = useState<Times>(() => {
-    const t = emptyTimes(teachers);
-    if (existing) {
-      const days = weekDays(existing.weekStart);
-      for (const s of existing.slots) {
-        const i = days.indexOf(s.day);
-        if (i >= 0 && t[s.teacherId]) t[s.teacherId][i].push(s.time);
-      }
+    const t: Times = {};
+    for (const s of existing?.slots ?? []) {
+      t[s.teacherId] ??= {};
+      t[s.teacherId][s.day] = sortTimes([...(t[s.teacherId][s.day] ?? []), s.time]);
     }
     return t;
   });
@@ -58,69 +59,95 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
 
   useEffect(() => { getTemplates().then(setTemplates).catch(() => {}); }, []);
 
-  // 선생님이 추가되면 빈 칸을 만들어 둔다
-  useEffect(() => {
-    setTimes(prev => {
-      const next = { ...prev };
-      for (const t of teachers) if (!next[t.id]) next[t.id] = [[], [], [], [], []];
-      return next;
-    });
-  }, [teachers]);
+  const days = mode === 'holiday' ? holidayDates : weekDays(weekStart);
 
-  // 신청된 시간 (잠금) — "선생님|요일순번|시간" → 닉네임
+  // 신청된 시간 (잠금) — "선생님|날짜|시간" → 닉네임
   const locked = useMemo(() => {
     const m = new Map<string, string>();
-    if (!existing) return m;
-    const days = weekDays(existing.weekStart);
-    for (const s of existing.slots) if (s.bookedBy) m.set(`${s.teacherId}|${days.indexOf(s.day)}|${s.time}`, s.owner ?? '신청됨');
+    for (const s of existing?.slots ?? []) if (s.bookedBy) m.set(`${s.teacherId}|${s.day}|${s.time}`, s.owner ?? '신청됨');
     return m;
   }, [existing]);
+  const lockedDays = useMemo(() => new Set([...locked.keys()].map(k => k.split('|')[1])), [locked]);
 
-  const autoTitle = weekStart === thisMonday() ? '이번 주 빈 수업 안내' : weekStart === nextMonday ? '다음 주 빈 수업 안내' : '빈 수업 안내';
+  const autoTitle = mode === 'holiday' ? '공휴일 빈 수업 안내' : weekStart === monday ? '이번 주 빈 수업 안내' : weekStart === nextMonday ? '다음 주 빈 수업 안내' : '빈 수업 안내';
   const shownTitle = titleTouched ? title : autoTitle;
-  const days = weekDays(weekStart);
 
-  const changeWeek = (ws: string) => {
-    setWeekStart(ws);
-    const nd = weekDays(ws);
-    setHolidays(h => h.map((x, i) => (x ? { ...x, date: nd[i] } : null)));
+  // 주를 바꾸면 넣어 둔 시간을 같은 요일로 옮긴다
+  const shiftWeek = (to: string) => {
+    const diff = Math.round((parseYmd(to).getTime() - parseYmd(weekStart).getTime()) / 86400000);
+    if (!diff) return;
+    if (lockedDays.size) { alert('신청된 시간이 있어서 주를 바꿀 수 없어요.'); return; }
+    setTimes(p => Object.fromEntries(Object.entries(p).map(([tid, byDay]) =>
+      [tid, Object.fromEntries(Object.entries(byDay).map(([d, a]) => [addDays(d, diff), a]))])));
+    setClosed(c => Object.fromEntries(Object.values(c).map(h => [addDays(h.date, diff), { ...h, date: addDays(h.date, diff) }])));
+    setWeekStart(to);
   };
 
-  const addTime = (tid: string, di: number, raw: string) => {
+  const pickMode = (m: Mode) => {
+    if (m === mode) return;
+    if (lockedDays.size) { alert('신청된 시간이 있어서 바꿀 수 없어요.'); return; }
+    if (m === 'this') shiftWeek(monday);
+    if (m === 'next') shiftWeek(nextMonday);
+    setMode(m);
+  };
+
+  // 공휴일 날짜 글 → 날짜들. 다 적고 나가면(Enter·칸 밖) "2026/10/09(금)" 꼴로 다시 써 준다
+  const applyHolidayText = () => {
+    const { dates, bad } = parseDateList(holidayText);
+    const keep = [...lockedDays].filter(d => !dates.includes(d));
+    const all = [...dates, ...keep].sort();
+    setHolidayDates(all);
+    setHolidayText(all.map(slashDay).join(', ') + (bad.length ? `, ${bad.join(', ')}` : ''));
+    setHolidayError(
+      (bad.length ? `날짜를 알아볼 수 없어요: ${bad.join(', ')} (예: 2026/10/9)` : '') +
+      (keep.length ? `${bad.length ? ' · ' : ''}신청된 날짜는 뺄 수 없어요: ${keep.map(slashDay).join(', ')}` : ''),
+    );
+  };
+
+  const addTime = (tid: string, day: string, raw: string) => {
     const time = raw.slice(0, 5);
     if (!/^\d{2}:\d{2}$/.test(time)) return;
-    setTimes(p => ({ ...p, [tid]: p[tid].map((a, i) => (i === di ? sortTimes([...a, time]) : a)) }));
+    setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), time]) } }));
   };
-  const removeTime = (tid: string, di: number, time: string) =>
-    setTimes(p => ({ ...p, [tid]: p[tid].map((a, i) => (i === di ? a.filter(x => x !== time) : a)) }));
-  const copyMondayToAll = (tid: string) =>
+  const removeTime = (tid: string, day: string, time: string) =>
+    setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: (p[tid]?.[day] ?? []).filter(x => x !== time) } }));
+  const copyFirstToAll = (tid: string) => {
+    const open = days.filter(d => !closed[d]);
+    if (open.length < 2) return;
+    const first = times[tid]?.[open[0]] ?? [];
     setTimes(p => ({
       ...p,
-      [tid]: p[tid].map((a, i) => {
-        if (i === 0) return a;
-        const keep = a.filter(x => locked.has(`${tid}|${i}|${x}`));
-        return sortTimes([...keep, ...p[tid][0]]);
-      }),
+      [tid]: {
+        ...p[tid],
+        ...Object.fromEntries(open.slice(1).map(d => [d, sortTimes([...(p[tid]?.[d] ?? []).filter(x => locked.has(`${tid}|${d}|${x}`)), ...first])])),
+      },
     }));
+  };
 
+  // 형식은 요일(0=일 … 6=토) 기준으로 저장·불러오기
   const toTemplate = (): TemplateData =>
-    Object.fromEntries(Object.entries(times).map(([tid, arr]) => [tid, Object.fromEntries(arr.map((a, i) => [String(i + 1), a]))]));
+    Object.fromEntries(teachers.map(t => {
+      const byDow: Record<string, string[]> = {};
+      for (const d of days) {
+        const a = times[t.id]?.[d] ?? [];
+        if (a.length) byDow[String(parseYmd(d).getDay())] = sortTimes([...(byDow[String(parseYmd(d).getDay())] ?? []), ...a]);
+      }
+      return [t.id, byDow];
+    }));
 
   const loadTemplate = (id: string) => {
     setTemplateId(id);
     const tpl = templates.find(t => t.id === id);
     if (!tpl) return;
-    if (existing && locked.size && !confirm('형식을 불러오면 지금 넣은 시간이 바뀌어요. (신청된 시간은 그대로 남아요)')) return;
-    setTimes(() => {
-      const t = emptyTimes(teachers);
-      for (const [tid, byDow] of Object.entries(tpl.data)) {
-        if (!t[tid]) continue;
-        for (let i = 0; i < 5; i++) t[tid][i] = sortTimes(byDow[String(i + 1)] ?? []);
-      }
-      // 신청된 시간은 형식과 상관없이 남긴다
-      for (const key of locked.keys()) {
-        const [tid, di, time] = key.split('|');
-        if (t[tid]) t[tid][Number(di)] = sortTimes([...t[tid][Number(di)], time]);
+    setTimes(prev => {
+      const t: Times = {};
+      for (const teacher of teachers) {
+        t[teacher.id] = {};
+        for (const d of days) {
+          const fromTpl = tpl.data[teacher.id]?.[String(parseYmd(d).getDay())] ?? [];
+          const keep = (prev[teacher.id]?.[d] ?? []).filter(x => locked.has(`${teacher.id}|${d}|${x}`));
+          t[teacher.id][d] = sortTimes([...fromTpl, ...keep]);
+        }
       }
       return t;
     });
@@ -151,24 +178,25 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   };
 
   const handleSave = async () => {
+    if (mode === 'holiday' && !days.length) { alert('공휴일 날짜를 적어 주세요. (예: 2026/10/9, 2026/12/25)'); return; }
     const slots: ScheduleDraft['slots'] = [];
     for (const t of teachers) {
-      times[t.id]?.forEach((arr, i) => {
-        if (holidays[i] && !arr.some(x => locked.has(`${t.id}|${i}|${x}`))) return;   // 휴무일은 올리지 않는다
-        for (const time of arr) {
-          if (holidays[i] && !locked.has(`${t.id}|${i}|${time}`)) continue;
-          slots.push({ teacherId: t.id, day: days[i], time });
+      for (const d of days) {
+        for (const time of times[t.id]?.[d] ?? []) {
+          if (closed[d] && !locked.has(`${t.id}|${d}|${time}`)) continue;   // 휴무일은 올리지 않는다
+          slots.push({ teacherId: t.id, day: d, time });
         }
-      });
+      }
     }
     if (!slots.length && !confirm('넣은 시간이 하나도 없어요. 그래도 올릴까요?')) return;
     setSaving(true);
     try {
       await saveSchedule({
-        weekStart,
+        weekStart: mode === 'holiday' ? days[0] : weekStart,
+        days: mode === 'holiday' ? days : undefined,
         title: shownTitle.trim() || autoTitle,
         notice,
-        holidays: holidays.filter((h): h is Holiday => !!h),
+        holidays: mode === 'holiday' ? [] : days.filter(d => closed[d]).map(d => closed[d]),
         slots,
       }, existing);
       onClose(true);
@@ -181,6 +209,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
 
   const label = 'text-[12px] tracking-[0.15em] text-[#999] mb-2';
   const chip = 'inline-flex items-center gap-1 text-[13px] pl-3 pr-2 py-1 rounded-full border';
+  const range = days.length ? scheduleRange({ weekStart: days[0], days: mode === 'holiday' ? days : undefined }) : '';
 
   return (
     <div className="bg-white rounded-[18px] shadow-[0_2px_6px_rgba(0,0,0,0.05),0_10px_24px_rgba(0,0,0,0.05)] p-5 md:p-7 space-y-7">
@@ -189,18 +218,28 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
         <button onClick={() => onClose(false)} className="text-[13px] text-[#888] hover:text-[#333]">닫기 ✕</button>
       </div>
 
-      {/* 주 */}
+      {/* 스케줄 선택 */}
       <div>
-        <p className={label}>주 고르기</p>
+        <p className={label}>스케줄 선택</p>
         <div className="flex flex-wrap items-center gap-1.5">
-          {[{ ws: thisMonday(), name: '이번 주' }, { ws: nextMonday, name: '다음 주' }].map(o => (
-            <button key={o.ws} type="button" onClick={() => changeWeek(o.ws)}
-              className={`text-[13px] px-4 py-2 border transition-colors ${weekStart === o.ws ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>
-              {o.name}
+          {([['this', '이번 주'], ['next', '다음 주'], ['holiday', '공휴일']] as const).map(([m, name]) => (
+            <button key={m} type="button" onClick={() => pickMode(m)}
+              className={`text-[13px] px-4 py-2 border transition-colors ${mode === m ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>
+              {name}
             </button>
           ))}
-          <span className="text-[14px] text-[#555] ml-2">{weekRange(weekStart)}</span>
+          {mode !== 'holiday' && <span className="text-[14px] text-[#555] ml-2">{range}</span>}
         </div>
+        {mode === 'holiday' && (
+          <div className="mt-3 space-y-1.5">
+            <input value={holidayText} onChange={e => setHolidayText(e.target.value)} onBlur={applyHolidayText}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyHolidayText(); } }}
+              placeholder="년/월/일 — 여러 날은 쉼표로 (예: 2026/10/9, 2026/12/25)"
+              className="w-full border-b border-[#ddd] py-2 text-[15px] outline-none focus:border-[var(--brand)] placeholder:text-[#ccc]" />
+            {holidayError && <p className="text-[12px] text-red-400">{holidayError}</p>}
+            {!!days.length && <p className="text-[13px] text-[#555]">{days.length}일 · {range}</p>}
+          </div>
+        )}
       </div>
 
       {/* 공지 */}
@@ -215,30 +254,36 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
           <textarea value={notice} onChange={e => setNotice(e.target.value)} rows={3}
             className="w-full border border-[#e5e5e5] p-3 text-[14px] leading-relaxed outline-none focus:border-[var(--brand)] resize-y" />
         </div>
-        <div>
-          <p className={label}>휴무일 (휴무로 표시한 날은 시간을 올리지 않아요)</p>
-          <div className="space-y-1.5">
-            {days.map((d, i) => (
-              <div key={d} className="flex items-center gap-2">
-                <label className="flex items-center gap-1.5 text-[14px] w-[96px] cursor-pointer">
-                  <input type="checkbox" checked={!!holidays[i]}
-                    onChange={e => setHolidays(h => h.map((x, j) => (j === i ? (e.target.checked ? { date: d, label: '' } : null) : x)))} />
-                  {shortDay(d)}
-                </label>
-                {holidays[i] && (
-                  <input value={holidays[i]!.label} placeholder="이유 (예: 한글날)"
-                    onChange={e => setHolidays(h => h.map((x, j) => (j === i && x ? { ...x, label: e.target.value } : x)))}
-                    className="flex-1 max-w-[240px] border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]" />
-                )}
-              </div>
-            ))}
+        {mode !== 'holiday' && (
+          <div>
+            <p className={label}>휴무일 (휴무로 표시한 날은 시간을 올리지 않아요)</p>
+            <div className="space-y-1.5">
+              {days.map(d => (
+                <div key={d} className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 text-[14px] w-[96px] cursor-pointer whitespace-nowrap">
+                    <input type="checkbox" checked={!!closed[d]}
+                      onChange={e => setClosed(c => {
+                        const n = { ...c };
+                        if (e.target.checked) n[d] = { date: d, label: '' }; else delete n[d];
+                        return n;
+                      })} />
+                    {shortDay(d)}
+                  </label>
+                  {closed[d] && (
+                    <input value={closed[d].label} placeholder="이유 (예: 한글날)"
+                      onChange={e => setClosed(c => ({ ...c, [d]: { ...c[d], label: e.target.value } }))}
+                      className="flex-1 max-w-[240px] border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]" />
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* 형식 */}
       <div className="bg-[#f8f9fb] -mx-5 md:-mx-7 px-5 md:px-7 py-4 space-y-2">
-        <p className={label}>형식 (자주 쓰는 시간표)</p>
+        <p className={label}>형식 (자주 쓰는 시간표 — 요일 기준)</p>
         <div className="flex flex-wrap items-center gap-1.5">
           <select value={templateId} onChange={e => loadTemplate(e.target.value)}
             className="text-[14px] border border-[#ddd] bg-white px-3 py-2 min-w-[160px]">
@@ -255,53 +300,59 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
       </div>
 
       {/* 선생님별 시간 */}
-      <div className="space-y-5">
-        {teachers.map(t => (
-          <section key={t.id} className="border border-[#eee] rounded-xl p-4 space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="text-[17px] text-[#27272a]">{t.name} 선생님</h3>
-              <button type="button" onClick={() => copyMondayToAll(t.id)} className="text-[12px] text-[var(--brand)] underline underline-offset-2">
-                월요일 시간을 화~금에 똑같이
-              </button>
-            </div>
-            {DAY_NAMES.map((dn, i) => {
-              const off = !!holidays[i];
-              const key = `${t.id}|${i}`;
-              return (
-                <div key={dn} className={`flex items-start gap-2 ${off ? 'opacity-40' : ''}`}>
-                  <span className="w-[80px] shrink-0 pt-1.5 text-[13px] text-[#71717b] whitespace-nowrap">{dn} <span className="text-[#bbb]">{shortDay(days[i]).split('(')[0]}</span></span>
-                  <div className="flex flex-wrap items-center gap-1.5 flex-1">
-                    {(times[t.id]?.[i] ?? []).map(time => {
-                      const owner = locked.get(`${t.id}|${i}|${time}`);
-                      return owner ? (
-                        <span key={time} title="신청된 시간 — 먼저 신청을 취소해야 뺄 수 있어요"
-                          className={`${chip} pr-3 border-[var(--brand)] bg-[var(--brand)] text-white`}>
-                          {time} <span className="text-[11px] bg-white/20 px-1.5 rounded-full">{owner}</span>
+      {mode === 'holiday' && !days.length ? (
+        <p className="text-[14px] text-[#aaa] text-center py-6">위에 공휴일 날짜를 적으면 날짜별로 시간을 넣을 수 있어요.</p>
+      ) : (
+        <div className="space-y-5">
+          {teachers.map(t => (
+            <section key={t.id} className="border border-[#eee] rounded-xl p-4 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[17px] text-[#27272a]">{t.name} 선생님</h3>
+                {days.length > 1 && (
+                  <button type="button" onClick={() => copyFirstToAll(t.id)} className="text-[12px] text-[var(--brand)] underline underline-offset-2">
+                    첫 날 시간을 나머지 날에 똑같이
+                  </button>
+                )}
+              </div>
+              {days.map(d => {
+                const off = !!closed[d];
+                const key = `${t.id}|${d}`;
+                return (
+                  <div key={d} className={`flex items-start gap-2 ${off ? 'opacity-40' : ''}`}>
+                    <span className="w-[80px] shrink-0 pt-1.5 text-[13px] text-[#71717b] whitespace-nowrap">{dowLabel(d)} <span className="text-[#bbb]">{shortDay(d).split('(')[0]}</span></span>
+                    <div className="flex flex-wrap items-center gap-1.5 flex-1">
+                      {(times[t.id]?.[d] ?? []).map(time => {
+                        const owner = locked.get(`${t.id}|${d}|${time}`);
+                        return owner ? (
+                          <span key={time} title="신청된 시간 — 먼저 신청을 취소해야 뺄 수 있어요"
+                            className={`${chip} pr-3 border-[var(--brand)] bg-[var(--brand)] text-white`}>
+                            {time} <span className="text-[11px] bg-white/20 px-1.5 rounded-full">{owner}</span>
+                          </span>
+                        ) : (
+                          <span key={time} className={`${chip} border-[var(--brand)] text-[var(--brand)]`}>
+                            {time}
+                            <button type="button" onClick={() => removeTime(t.id, d, time)} aria-label={`${time} 빼기`} className="w-5 h-5 text-[11px] text-[#999] hover:text-red-400">✕</button>
+                          </span>
+                        );
+                      })}
+                      {!off && (
+                        <span className="inline-flex items-center gap-1">
+                          <input type="time" step={600} value={drafts[key] ?? ''} aria-label={`${t.name} 선생님 ${shortDay(d)} 시간`}
+                            onChange={e => setDrafts(x => ({ ...x, [key]: e.target.value }))}
+                            className="text-[13px] border border-[#ddd] px-2 py-1 w-[110px]" />
+                          <button type="button" disabled={!drafts[key]}
+                            onClick={() => { addTime(t.id, d, drafts[key] ?? ''); setDrafts(x => ({ ...x, [key]: '' })); }}
+                            className="text-[13px] border border-[#ddd] px-2.5 py-1 hover:bg-[#f8f8f8] disabled:opacity-40">추가</button>
                         </span>
-                      ) : (
-                        <span key={time} className={`${chip} border-[var(--brand)] text-[var(--brand)]`}>
-                          {time}
-                          <button type="button" onClick={() => removeTime(t.id, i, time)} aria-label={`${time} 빼기`} className="w-5 h-5 text-[11px] text-[#999] hover:text-red-400">✕</button>
-                        </span>
-                      );
-                    })}
-                    {!off && (
-                      <span className="inline-flex items-center gap-1">
-                        <input type="time" step={600} value={drafts[key] ?? ''} aria-label={`${t.name} 선생님 ${dn}요일 시간`}
-                          onChange={e => setDrafts(d => ({ ...d, [key]: e.target.value }))}
-                          className="text-[13px] border border-[#ddd] px-2 py-1 w-[110px]" />
-                        <button type="button" disabled={!drafts[key]}
-                          onClick={() => { addTime(t.id, i, drafts[key] ?? ''); setDrafts(d => ({ ...d, [key]: '' })); }}
-                          className="text-[13px] border border-[#ddd] px-2.5 py-1 hover:bg-[#f8f8f8] disabled:opacity-40">추가</button>
-                      </span>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </section>
-        ))}
-      </div>
+                );
+              })}
+            </section>
+          ))}
+        </div>
+      )}
 
       {/* 선생님 명단 */}
       <div>
