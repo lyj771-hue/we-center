@@ -6,7 +6,7 @@ import { useRef, useState } from 'react';
 import { useAdmin } from './AdminContext';
 import { useMember } from './MemberContext';
 
-// 카카오톡 채널 주소 (채널 홈 → 공유 → 링크 복사). 비어 있으면 아이콘을 숨긴다
+// 카카오톡 채널 주소 (채널 홈 → 공유 → 링크 복사). 비어 있으면 아이콘만 보이고 눌러도 아무 일 없다
 const KAKAO_CHANNEL_URL = '';
 
 const NAV = [
@@ -73,8 +73,8 @@ export default function Header() {
             {!isAdmin && (userId ? (
               <button onClick={() => { if (confirm('로그아웃할까요?')) memberLogout(); }}
                 title={profile && !profile.approvedAt ? '센터 승인 대기 중' : '누르면 로그아웃'}
-                className="max-w-[120px] truncate rounded-full border border-[var(--brand)] px-3 py-1.5 text-[12px] tracking-[0.05em] text-[var(--brand)] transition hover:bg-[var(--brand)] hover:text-white">
-                {profile?.centerNickname || profile?.nickname || '로그아웃'}
+                className="max-w-[140px] truncate rounded-full border border-[var(--brand)] px-3 py-1.5 text-[12px] tracking-[0.05em] text-[var(--brand)] transition hover:bg-[var(--brand)] hover:text-white">
+                {profile?.centerNickname || (profile ? `${profile.nickname}(미승인)` : '로그아웃')}
               </button>
             ) : (
               <button onClick={login}
@@ -82,14 +82,19 @@ export default function Header() {
                 로그인
               </button>
             ))}
-            {KAKAO_CHANNEL_URL && (
-              <a href={KAKAO_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="카카오톡 채널"
-                className="w-8 h-8 rounded-full bg-[#FEE500] flex items-center justify-center transition hover:opacity-80">
+            {(() => {
+              const icon = (
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                   <path fill="#191919" d="M12 3.5c-5.25 0-9.5 3.3-9.5 7.38 0 2.62 1.75 4.92 4.38 6.22l-.9 3.3c-.08.3.26.54.52.37l3.92-2.6c.52.07 1.05.1 1.58.1 5.25 0 9.5-3.3 9.5-7.39S17.25 3.5 12 3.5z"/>
                 </svg>
-              </a>
-            )}
+              );
+              const cls = 'w-8 h-8 rounded-full bg-[#FEE500] flex items-center justify-center';
+              return KAKAO_CHANNEL_URL ? (
+                <a href={KAKAO_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="카카오톡 채널" className={`${cls} transition hover:opacity-80`}>{icon}</a>
+              ) : (
+                <span role="img" aria-label="카카오톡 채널 (준비 중)" className={cls}>{icon}</span>
+              );
+            })()}
           </div>
 
           {/* Hamburger — mobile only */}
