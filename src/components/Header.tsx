@@ -95,7 +95,7 @@ export default function Header() {
 
         {!isAdmin && userId && (
           <div className="md:hidden flex justify-center pb-2 -mt-1">
-            <Greeting profile={profile} onLogout={memberLogout} />
+            <Greeting profile={profile} onLogout={memberLogout} showLogout={false} />
           </div>
         )}
 
@@ -167,9 +167,15 @@ export default function Header() {
             </ul>
           </nav>
           {/* 카카오톡 채널 — 휴대폰은 메뉴 맨 아래에 */}
-          <div className="mt-auto pt-6 border-t border-[#f0f0f0] flex items-center gap-2 text-[14px] text-[var(--brand)]">
-            <KakaoChannelIcon />
-            카카오톡 채널
+          <div className="mt-auto pt-6 border-t border-[#f0f0f0] space-y-4">
+            <div className="flex items-center gap-2 text-[14px] text-[var(--brand)]">
+              <KakaoChannelIcon />
+              카카오톡 채널
+            </div>
+            {!isAdmin && userId && (
+              <button onClick={() => { if (confirm('로그아웃할까요?')) { setMobileOpen(false); memberLogout(); } }}
+                className="text-[14px] text-[#888] underline underline-offset-2 hover:text-[#0a0a0a]">로그아웃</button>
+            )}
           </div>
         </div>
       </div>
@@ -193,18 +199,20 @@ function KakaoChannelIcon() {
   );
 }
 
-/** 로그인한 보호자 인사 + 밑줄 로그아웃 (누르면 한 번 묻는다) */
-function Greeting({ profile, onLogout }: { profile: Profile | null; onLogout: () => void }) {
+/** 로그인한 보호자 인사 + 밑줄 로그아웃 (누르면 한 번 묻는다). 휴대폰 인사엔 로그아웃을 빼고 펼친 메뉴 맨 아래에 둔다 */
+function Greeting({ profile, onLogout, showLogout = true }: { profile: Profile | null; onLogout: () => void; showLogout?: boolean }) {
   return (
     <span className="flex items-center gap-2 text-[12px] md:text-[13px] leading-[1.6] text-[#555] whitespace-nowrap">
       {profile && (
         <span className="py-0.5">
-          <span className="text-[var(--brand)]">{profile.centerNickname || profile.nickname}</span>님 반갑습니다
+          <span className="text-[var(--brand)]">{profile.centerNickname || profile.nickname}</span>님 오셨군요
           {!profile.approvedAt && <span className="text-[#aaa]">(미승인)</span>}
         </span>
       )}
-      <button onClick={() => { if (confirm('로그아웃할까요?')) onLogout(); }}
-        className="underline underline-offset-2 text-[#888] hover:text-[#0a0a0a]">로그아웃</button>
+      {showLogout && (
+        <button onClick={() => { if (confirm('로그아웃할까요?')) onLogout(); }}
+          className="underline underline-offset-2 text-[#888] hover:text-[#0a0a0a]">로그아웃</button>
+      )}
     </span>
   );
 }

@@ -64,7 +64,7 @@ export default function ScheduleBoard({
     <div className="space-y-4">
       <article className="bg-white rounded-[18px] shadow-[0_2px_6px_rgba(0,0,0,0.05),0_10px_24px_rgba(0,0,0,0.05)] overflow-hidden">
         {/* 공지 */}
-        <div className="px-5 md:px-7 pt-6 pb-5 border-b border-dashed border-[#e4e4e7] space-y-2.5">
+        <div className="px-5 md:px-7 pt-6 pb-6 border-b border-dashed border-[#e4e4e7] space-y-4">
           <div className="flex items-center gap-2">
             <span className="bg-[var(--brand)] text-white text-[12px] px-3 py-0.5 rounded-full">공지</span>
             <span className="text-[12px] text-[#a1a1aa]">{created.getFullYear()}.{created.getMonth() + 1}.{created.getDate()}</span>
@@ -80,7 +80,7 @@ export default function ScheduleBoard({
             {scheduleRange(schedule)}
             {schedule.notice && <>{'\n'}{schedule.notice}</>}
           </p>
-          <div className="flex flex-wrap gap-1.5 pt-0.5">
+          <div className="flex flex-wrap gap-1.5 pt-1">
             {centerHolidays.map(h => (
               <span key={h.date} className="text-[12px] text-[#b45309] bg-[#fef3c7] px-3 py-0.5 rounded-full">
                 {shortDay(h.date)} {h.label || '공휴일'}

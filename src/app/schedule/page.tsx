@@ -85,8 +85,8 @@ export default function ScheduleListPage() {
                   <div key={s.id} className={`group flex items-center gap-5 py-4 hover:bg-[#fafafa] -mx-5 md:-mx-8 px-5 md:px-8 transition-colors ${isPast(s) ? 'opacity-50' : ''}`}>
                     <span className="text-[11px] text-[#ccc] w-7 shrink-0 tabular-nums">{String(items.length - i).padStart(2, '0')}</span>
                     <Link href={`/schedule/${s.id}`} className="flex-1 min-w-0 block">
-                      <span className="text-[14px] group-hover:underline underline-offset-2 block truncate">{s.title}</span>
-                      <span className="text-[12px] text-[#999] block truncate">{scheduleRange(s)}</span>
+                      <span className="text-[14px] leading-[1.8] group-hover:underline underline-offset-2 block truncate">{s.title}</span>
+                      <span className="text-[12px] leading-[2] pb-0.5 text-[#999] block truncate mt-1">{scheduleRange(s)}</span>
                     </Link>
                     <span className="text-[11px] text-[#bbb] shrink-0">{fmt(s.createdAt)}</span>
                     {isAdmin && (
