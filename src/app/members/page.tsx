@@ -37,7 +37,7 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0' });
+  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '', prepaidEunpyeong: '0', prepaidEunpyeongTotal: '0', prepaidUijeongbu: '0', prepaidUijeongbuTotal: '0' });
   const [showDates, setShowDates] = useState(false);   // 계정번호·가입일자·마지막 로그인은 접어 둔다
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -59,7 +59,8 @@ export default function MembersPage() {
     setEditing(m.userId);
     setForm({
       nickname: m.nickname, centerNickname: m.centerNickname ?? '', memo: m.memo ?? '',
-      prepaidEunpyeong: String(m.prepaidEunpyeong), prepaidUijeongbu: String(m.prepaidUijeongbu),
+      prepaidEunpyeong: String(m.prepaidEunpyeong), prepaidEunpyeongTotal: String(m.prepaidEunpyeongTotal),
+      prepaidUijeongbu: String(m.prepaidUijeongbu), prepaidUijeongbuTotal: String(m.prepaidUijeongbuTotal),
     });
   };
 
@@ -68,7 +69,8 @@ export default function MembersPage() {
     try {
       const r = await saveMemberProfile({
         userId: m.userId, nickname: form.nickname, centerNickname: form.centerNickname, memo: form.memo, approvedAt: m.approvedAt,
-        prepaidEunpyeong: Number(form.prepaidEunpyeong) || 0, prepaidUijeongbu: Number(form.prepaidUijeongbu) || 0,
+        prepaidEunpyeong: Number(form.prepaidEunpyeong) || 0, prepaidEunpyeongTotal: Number(form.prepaidEunpyeongTotal) || 0,
+        prepaidUijeongbu: Number(form.prepaidUijeongbu) || 0, prepaidUijeongbuTotal: Number(form.prepaidUijeongbuTotal) || 0,
       });
       if (r === 'taken') { alert('이미 다른 회원이 쓰는 센터 닉네임이에요.'); return; }
       setEditing(null);
@@ -161,7 +163,7 @@ export default function MembersPage() {
               <th className={th}>센터 닉네임</th>
               <th className={th}>설명</th>
               {SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
-              <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 / 의정부</span></th>
+              <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>
               <th className={th}><span className="sr-only">관리</span></th>
             </tr>
           </thead>
@@ -194,17 +196,24 @@ export default function MembersPage() {
                   ))}
                   <td className={`${td} whitespace-nowrap`}>
                     {on ? (
-                      <span className="inline-flex items-center gap-1 text-[13px]">
-                        <input type="number" min={0} inputMode="numeric" value={form.prepaidEunpyeong} aria-label="선결제 은평"
-                          onChange={e => setForm(f => ({ ...f, prepaidEunpyeong: e.target.value }))}
-                          className="w-14 border-b border-[var(--brand)] py-1 text-center outline-none" />
-                        /
-                        <input type="number" min={0} inputMode="numeric" value={form.prepaidUijeongbu} aria-label="선결제 의정부"
-                          onChange={e => setForm(f => ({ ...f, prepaidUijeongbu: e.target.value }))}
-                          className="w-14 border-b border-[var(--brand)] py-1 text-center outline-none" />
+                      <span className="inline-flex items-center gap-0.5 text-[13px]">
+                        {([
+                          ['prepaidEunpyeong', '은평 앞'], ['prepaidEunpyeongTotal', '은평 뒤'], ['prepaidUijeongbu', '의정부 앞'], ['prepaidUijeongbuTotal', '의정부 뒤'],
+                        ] as const).map(([k, name], i) => (
+                          <span key={k} className="inline-flex items-center gap-0.5">
+                            {i === 1 || i === 3 ? '/' : i === 2 ? <span className="mx-1 text-[#ccc]">|</span> : null}
+                            <input type="number" min={0} inputMode="numeric" value={form[k]} aria-label={`선결제 ${name} 숫자`}
+                              onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
+                              className="w-11 border-b border-[var(--brand)] py-1 text-center outline-none" />
+                          </span>
+                        ))}
                       </span>
                     ) : (
-                      <span className="tabular-nums">{m.prepaidEunpyeong} / {m.prepaidUijeongbu}</span>
+                      <span className="tabular-nums">
+                        {m.prepaidEunpyeong}/{m.prepaidEunpyeongTotal}
+                        <span className="mx-1.5 text-[#ccc]">|</span>
+                        {m.prepaidUijeongbu}/{m.prepaidUijeongbuTotal}
+                      </span>
                     )}
                   </td>
                   <td className={`${td} text-right`}>
