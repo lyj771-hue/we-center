@@ -137,12 +137,13 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     }));
   const removeTime = (tid: string, day: string, time: string) =>
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: (p[tid]?.[day] ?? []).filter(x => x !== time) } }));
-  // 캘린더 빈 시간 — 선생님 구글 캘린더에서 일정이 없는 기본 시간(50분 수업)만 골라 날마다 채운다
+  // 캘린더 빈 시간 — 선생님 구글 캘린더에서 일정이 없는 기본 시간(50분 수업)만 골라 날마다 채운다. 이미 지난 시간은 뺀다.
+  // 새 스케쥴을 만들 땐 캘린더가 연결된 선생님을 자동으로 채우고(ask=false), 버튼으로 다시 불러올 수도 있다.
   const [busyLoading, setBusyLoading] = useState<string | null>(null);
-  const fillFromCalendar = async (t: Teacher) => {
+  const fillFromCalendar = async (t: Teacher, ask = true) => {
     const open = days.filter(d => !closed[d] && teacherOff[`${t.id}|${d}`] === undefined);
     if (!open.length) return;
-    if (!confirm(`${t.name} 선생님 캘린더에서 빈 시간을 불러올까요?\n(지금 넣어 둔 시간은 바뀌어요. 신청된 시간은 남아요)`)) return;
+    if (ask && !confirm(`${t.name} 선생님 캘린더에서 빈 시간을 불러올까요?\n(지금 넣어 둔 시간은 바뀌어요. 신청된 시간은 남아요)`)) return;
     setBusyLoading(t.id);
     try {
       const busy = (await getBusyTimes(t.id, open[0], open[open.length - 1])).map(b => [new Date(b.start).getTime(), new Date(b.end).getTime()]);
@@ -150,10 +151,11 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
         const next = { ...p, [t.id]: { ...p[t.id] } };
         for (const d of open) {
           const preset = mode !== 'holiday' && parseYmd(d).getDay() !== 6 ? WEEKDAY_TIMES : HOLIDAY_TIMES;
+          const now = Date.now();
           const free = preset.filter(time => {
             const s0 = new Date(`${d}T${time}:00+09:00`).getTime();
             const e0 = s0 + 50 * 60000;
-            return !busy.some(([bs, be]) => bs < e0 && be > s0);
+            return s0 > now && !busy.some(([bs, be]) => bs < e0 && be > s0);
           });
           const keep = (p[t.id]?.[d] ?? []).filter(x => locked.has(`${t.id}|${d}|${x}`));
           next[t.id][d] = sortTimes([...keep, ...free]);
@@ -161,11 +163,19 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
         return next;
       });
     } catch (e) {
-      alert(`캘린더를 불러오지 못했어요.\n${(e as Error).message}`);
+      if (ask) alert(`캘린더를 불러오지 못했어요.\n${(e as Error).message}`);
     } finally {
       setBusyLoading(null);
     }
   };
+
+  // 새 스케쥴: 날짜(주·공휴일)가 정해질 때마다 캘린더가 연결된 선생님의 빈 시간을 자동으로 채운다
+  const daysKey = days.join(',');
+  useEffect(() => {
+    if (existing || !daysKey) return;
+    for (const t of teachers) if (t.googleCalendarId) fillFromCalendar(t, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daysKey, existing]);
 
   // 평일 동일 적용 — 첫 평일 시간을 나머지 평일(월~금)에 똑같이. 토·일은 건드리지 않는다
   const copyFirstToAll = (tid: string) => {
