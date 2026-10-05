@@ -125,7 +125,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     if (!/^\d{2}:\d{2}$/.test(time)) return;
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), time]) } }));
   };
-  // 그날 시간을 통째로 바꾼다(신청된 시간은 남긴다) — 평일·휴일 기본 시간, 또는 비우고 개별입력
+  // 그날 시간을 통째로 바꾼다(신청된 시간은 남긴다) — 모두 불러오기
   const setDayTimes = (tid: string, day: string, list: string[]) =>
     setTimes(p => ({
       ...p,
