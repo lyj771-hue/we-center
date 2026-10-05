@@ -352,7 +352,10 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                       })}
                       {!off && (
                         <span className="order-first inline-flex items-center gap-1">
-                          {([['weekday', '개별(평일)'], ['holiday', '개별(휴일)']] as const).map(([kind, name]) => (
+                          {/* 개별 버튼 — 한 주 스케쥴의 월~금은 평일 시간, 토요일과 공휴일 스케쥴은 휴일 시간 */}
+                          {([['weekday', '개별(평일)'], ['holiday', '개별(휴일)']] as const)
+                            .filter(([kind]) => (mode !== 'holiday' && parseYmd(d).getDay() !== 6) === (kind === 'weekday'))
+                            .map(([kind, name]) => (
                             <button key={kind} type="button"
                               onClick={() => {
                                 if (inputOpen[key] === kind) { setInputOpen(o => ({ ...o, [key]: undefined })); return; }
