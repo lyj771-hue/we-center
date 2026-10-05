@@ -161,7 +161,7 @@ export default function MembersPage() {
               <th className={th}>센터 닉네임</th>
               <th className={th}>설명</th>
               {SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
-              <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 / 의정부</span></th>
+              <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>
               <th className={th}><span className="sr-only">관리</span></th>
             </tr>
           </thead>
@@ -198,13 +198,13 @@ export default function MembersPage() {
                         <input type="number" min={0} inputMode="numeric" value={form.prepaidEunpyeong} aria-label="선결제 은평"
                           onChange={e => setForm(f => ({ ...f, prepaidEunpyeong: e.target.value }))}
                           className="w-14 border-b border-[var(--brand)] py-1 text-center outline-none" />
-                        /
+                        <span className="text-[#ccc]">|</span>
                         <input type="number" min={0} inputMode="numeric" value={form.prepaidUijeongbu} aria-label="선결제 의정부"
                           onChange={e => setForm(f => ({ ...f, prepaidUijeongbu: e.target.value }))}
                           className="w-14 border-b border-[var(--brand)] py-1 text-center outline-none" />
                       </span>
                     ) : (
-                      <span className="tabular-nums">{m.prepaidEunpyeong} / {m.prepaidUijeongbu}</span>
+                      <span className="tabular-nums">{m.prepaidEunpyeong}<span className="mx-1.5 text-[#ccc]">|</span>{m.prepaidUijeongbu}</span>
                     )}
                   </td>
                   <td className={`${td} text-right`}>
