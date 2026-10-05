@@ -49,11 +49,8 @@ export interface MemberExtras {
   kkumideun: boolean;
   woojin: boolean;
   subsidy: boolean;
-  /** 선결제 — 센터마다 "앞/뒤" 숫자 두 개 (예: 은평 0/50) */
   prepaidEunpyeong: number;
-  prepaidEunpyeongTotal: number;
   prepaidUijeongbu: number;
-  prepaidUijeongbuTotal: number;
 }
 
 /** 회원 관리 표 한 줄 — 로그인 계정 정보 + 닉네임 (닉네임을 아직 안 정했으면 nickname 이 빈 문자열) */

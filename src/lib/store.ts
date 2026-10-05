@@ -332,9 +332,7 @@ interface MemberRow extends ProfileRow {
   woojin: boolean;
   subsidy: boolean;
   prepaid_eunpyeong: number;
-  prepaid_eunpyeong_total: number;
   prepaid_uijeongbu: number;
-  prepaid_uijeongbu_total: number;
   kakao_id: string | null;
   joined_at: string;
   last_sign_in_at: string | null;
@@ -356,8 +354,6 @@ export async function getMembers(): Promise<Member[]> {
     subsidy: !!r.subsidy,
     prepaidEunpyeong: r.prepaid_eunpyeong ?? 0,
     prepaidUijeongbu: r.prepaid_uijeongbu ?? 0,
-    prepaidEunpyeongTotal: r.prepaid_eunpyeong_total ?? 0,
-    prepaidUijeongbuTotal: r.prepaid_uijeongbu_total ?? 0,
   }));
 }
 
@@ -371,8 +367,6 @@ export async function saveMemberProfile(p: Profile & Partial<MemberExtras>): Pro
   if (p.subsidy !== undefined) extras.subsidy = p.subsidy;
   if (p.prepaidEunpyeong !== undefined) extras.prepaid_eunpyeong = Math.max(0, Math.floor(p.prepaidEunpyeong) || 0);
   if (p.prepaidUijeongbu !== undefined) extras.prepaid_uijeongbu = Math.max(0, Math.floor(p.prepaidUijeongbu) || 0);
-  if (p.prepaidEunpyeongTotal !== undefined) extras.prepaid_eunpyeong_total = Math.max(0, Math.floor(p.prepaidEunpyeongTotal) || 0);
-  if (p.prepaidUijeongbuTotal !== undefined) extras.prepaid_uijeongbu_total = Math.max(0, Math.floor(p.prepaidUijeongbuTotal) || 0);
   const { error } = await supabase.from('profiles').upsert({
     ...extras,
     user_id: p.userId,
