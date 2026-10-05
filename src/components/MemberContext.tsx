@@ -7,7 +7,7 @@ import type { Profile } from '@/lib/types';
 import { useAdmin } from './AdminContext';
 
 // 보호자 로그인(카카오) 상태. 관리자 계정은 여기서 다루지 않는다(AdminContext).
-// 처음 로그인해서 닉네임이 없으면 닉네임 입력 창을 띄운다. 입력 후엔 관리자 승인 전까지 'pending'.
+// 처음 로그인해서 닉네임이 없으면 보호자 닉네임 입력 창을 띄운다. 센터 닉네임은 관리자가 정한다(있으면 승인된 회원).
 
 interface MemberCtx {
   /** 로그인한 보호자의 계정 id (로그인 안 했거나 관리자면 null) */
@@ -75,8 +75,7 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
     if (!confirm(`닉네임을 "${nickname}"(으)로 정할까요?\n한 번 정하면 바꿀 때 센터에 요청해야 해요.`)) return;
     setSaving(true);
     try {
-      const r = await createMyProfile(userId, nickname);
-      if (r === 'taken') { setError('이미 쓰고 있는 닉네임이에요. 뒤에 숫자 등을 붙여 주세요.'); return; }
+      await createMyProfile(userId, nickname);
       const p = await getMyProfile(userId);
       if (p) onDone(p);
     } catch {
@@ -91,7 +90,7 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
       <div className="bg-white border border-[#e5e5e5] w-full max-w-sm p-8 shadow-2xl">
         <p className="text-[var(--brand)] text-[22px] mb-2">닉네임을 정해 주세요</p>
         <p className="text-[13px] leading-[1.8] text-[#666] mb-6">
-          아이 이름으로 적어 주세요. 센터에서 확인 후 승인해 드려요.<br />
+          보호자님을 알아볼 수 있는 이름으로 적어 주세요. (예: 민준이 엄마)<br />
           한 번 정한 닉네임은 센터에서만 바꿀 수 있어요.
         </p>
         <form onSubmit={submit} className="space-y-4">
@@ -100,7 +99,7 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
             value={name}
             maxLength={20}
             onChange={e => { setName(e.target.value); setError(''); }}
-            placeholder="예: 김민준"
+            placeholder="예: 민준이 엄마"
             autoFocus
             className="w-full border-b border-[#ccc] py-2 text-[15px] outline-none focus:border-[var(--brand)] placeholder:text-[#bbb]"
           />

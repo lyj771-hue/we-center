@@ -4,7 +4,6 @@ import { useAdmin } from './AdminContext';
 import { useMember } from './MemberContext';
 
 // 맨 아래 — 저작권 + 보호자 카카오 로그인/로그아웃. (관리자 모드일 땐 로그인 줄을 숨긴다)
-const STATUS_LABEL = { pending: '승인 대기 중', approved: '', rejected: '센터에 문의해 주세요' } as const;
 
 export default function Footer() {
   const { isAdmin } = useAdmin();
@@ -17,7 +16,7 @@ export default function Footer() {
         <div className="mt-3">
           {userId ? (
             <span>
-              {profile && <>{profile.nickname} 보호자님{STATUS_LABEL[profile.status] && ` · ${STATUS_LABEL[profile.status]}`} · </>}
+              {profile && <>{profile.nickname} 보호자님{!profile.approvedAt && ' · 센터 승인 대기 중'} · </>}
               <button onClick={logout} className="underline underline-offset-2 hover:text-[#555]">로그아웃</button>
             </span>
           ) : (

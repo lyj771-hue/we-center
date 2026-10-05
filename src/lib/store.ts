@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Post, Category, CenterRoom, Subject, PaymentMethod, Profile, ProfileStatus } from './types';
+import { Post, Category, CenterRoom, Subject, PaymentMethod, Profile, Member } from './types';
 
 // ── Posts (thoughts / notices / etc) ─────────────────────────────────────────
 
@@ -284,17 +284,24 @@ export async function savePageSetting(page: string, data: PageSetting): Promise<
 }
 
 // ── Profiles (카카오 로그인한 보호자의 닉네임) ──────────────────────────────────
-// 보호자는 자기 줄을 한 번만 만들 수 있고(승인 대기), 바꾸기·승인·삭제는 관리자만 된다 — DB 정책이 막는다.
+// 보호자는 자기 줄을 한 번만(보호자 닉네임만) 만들 수 있고, 그 뒤 바꾸기·센터 닉네임·설명은 관리자만 — DB 정책이 막는다.
 
 interface ProfileRow {
   user_id: string;
   nickname: string;
-  status: ProfileStatus;
-  created_at: string;
+  center_nickname: string | null;
+  memo: string | null;
+  approved_at: string | null;
 }
 
 function fromProfileRow(row: ProfileRow): Profile {
-  return { userId: row.user_id, nickname: row.nickname, status: row.status, createdAt: row.created_at };
+  return {
+    userId: row.user_id,
+    nickname: row.nickname,
+    centerNickname: row.center_nickname ?? undefined,
+    memo: row.memo ?? undefined,
+    approvedAt: row.approved_at ?? undefined,
+  };
 }
 
 export async function signInWithKakao(): Promise<void> {
@@ -311,28 +318,39 @@ export async function getMyProfile(userId: string): Promise<Profile | null> {
   return data ? fromProfileRow(data as ProfileRow) : null;
 }
 
-/** 닉네임이 이미 있으면 'taken' 을 돌려준다 */
-export async function createMyProfile(userId: string, nickname: string): Promise<'ok' | 'taken'> {
+/** 보호자가 처음 한 번 보호자 닉네임을 정한다 (승인 필요 없음) */
+export async function createMyProfile(userId: string, nickname: string): Promise<void> {
   const { error } = await supabase.from('profiles').insert({ user_id: userId, nickname: nickname.trim() });
-  if (error?.code === '23505' && error.message.includes('nickname')) return 'taken';
   if (error) throw error;
-  return 'ok';
 }
 
-export async function getProfiles(): Promise<Profile[]> {
-  const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data as ProfileRow[]).map(fromProfileRow);
+interface MemberRow extends ProfileRow {
+  kakao_id: string | null;
+  joined_at: string;
+  last_sign_in_at: string | null;
 }
 
-export async function updateProfile(userId: string, data: { nickname?: string; status?: ProfileStatus }): Promise<'ok' | 'taken'> {
-  const patch: Record<string, unknown> = {};
-  if (data.nickname !== undefined) patch.nickname = data.nickname.trim();
-  if (data.status !== undefined) {
-    patch.status = data.status;
-    patch.approved_at = data.status === 'approved' ? new Date().toISOString() : null;
-  }
-  const { error } = await supabase.from('profiles').update(patch).eq('user_id', userId);
+/** 회원 관리 표 (관리자 전용 DB 함수) */
+export async function getMembers(): Promise<Member[]> {
+  const { data, error } = await supabase.rpc('admin_list_members');
+  if (error) throw error;
+  return (data as MemberRow[]).map(r => ({
+    ...fromProfileRow({ ...r, nickname: r.nickname ?? '' }),
+    kakaoId: r.kakao_id ?? '',
+    joinedAt: r.joined_at,
+    lastSignInAt: r.last_sign_in_at ?? undefined,
+  }));
+}
+
+/** 관리자가 회원의 닉네임·설명·승인일자를 저장한다. 센터 닉네임이 겹치면 'taken' */
+export async function saveMemberProfile(p: Profile): Promise<'ok' | 'taken'> {
+  const { error } = await supabase.from('profiles').upsert({
+    user_id: p.userId,
+    nickname: p.nickname.trim(),
+    center_nickname: p.centerNickname?.trim() || null,
+    memo: p.memo?.trim() || null,
+    approved_at: p.approvedAt ?? null,
+  });
   if (error?.code === '23505') return 'taken';
   if (error) throw error;
   return 'ok';

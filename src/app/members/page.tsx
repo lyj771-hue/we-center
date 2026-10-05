@@ -2,33 +2,41 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
-import { deleteProfile, getProfiles, updateProfile } from '@/lib/store';
-import type { Profile, ProfileStatus } from '@/lib/types';
+import { deleteProfile, getMembers, saveMemberProfile } from '@/lib/store';
+import type { Member } from '@/lib/types';
 
-// 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자의 닉네임을 승인·거절하고, 닉네임을 바꾼다.
+// 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자 표.
+// 보호자 닉네임은 보호자가 처음 입력한 것, 센터 닉네임·설명은 관리자가 정한다.
+// "승인"을 누르면 승인일자가 찍힌다(센터 닉네임이 없으면 이때 정한다). 승인/미승인 탭으로 나눠 본다(승인 탭의 '가입일자'는 승인한 날, 미승인 탭의 '가입신청일자'는 처음 로그인한 날).
 // 메뉴에는 없고 관리자 모드 띠의 "회원 관리"로 들어온다.
 
-const TABS: { key: ProfileStatus; label: string }[] = [
-  { key: 'pending', label: '승인 대기' },
-  { key: 'approved', label: '승인됨' },
-  { key: 'rejected', label: '거절됨' },
-];
+type Filter = 'waiting' | 'approved';
 
-const fmt = (iso: string) => {
+const pad = (n: number) => String(n).padStart(2, '0');
+const fmtDate = (iso: string) => {
   const d = new Date(iso);
-  return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+  return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
+};
+const fmtDateTime = (iso?: string) => {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  return `${fmtDate(iso)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
 export default function MembersPage() {
   const { isAdmin } = useAdmin();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [tab, setTab] = useState<ProfileStatus>('pending');
+  const [members, setMembers] = useState<Member[]>([]);
+  const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
+  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '' });
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   const load = useCallback(() => {
-    getProfiles().then(setProfiles).catch(() => setProfiles([])).finally(() => setLoaded(true));
+    getMembers()
+      .then(m => { setMembers(m); setFailed(false); })
+      .catch(() => setFailed(true))
+      .finally(() => setLoaded(true));
   }, []);
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
@@ -37,92 +45,139 @@ export default function MembersPage() {
     return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
   }
 
-  const setStatus = async (p: Profile, status: ProfileStatus) => {
-    try { await updateProfile(p.userId, { status }); load(); }
-    catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
+  const startEdit = (m: Member) => {
+    setEditing(m.userId);
+    setForm({ nickname: m.nickname, centerNickname: m.centerNickname ?? '', memo: m.memo ?? '' });
   };
 
-  const saveNickname = async (p: Profile) => {
-    const nickname = draft.trim();
-    if (!nickname || nickname === p.nickname) { setEditing(null); return; }
+  const save = async (m: Member) => {
+    if (!form.nickname.trim()) { alert('보호자 닉네임을 입력해 주세요.'); return; }
     try {
-      const r = await updateProfile(p.userId, { nickname });
-      if (r === 'taken') { alert('이미 쓰고 있는 닉네임이에요.'); return; }
+      const r = await saveMemberProfile({ userId: m.userId, ...form, approvedAt: m.approvedAt });
+      if (r === 'taken') { alert('이미 다른 회원이 쓰는 센터 닉네임이에요.'); return; }
       setEditing(null);
       load();
     } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
 
-  const remove = async (p: Profile) => {
-    if (!confirm(`"${p.nickname}" 회원의 닉네임을 지울까요?\n다음에 로그인하면 닉네임을 다시 정하게 돼요.`)) return;
-    try { await deleteProfile(p.userId); load(); }
+  const setApproved = async (m: Member, approve: boolean) => {
+    let centerNickname = m.centerNickname ?? '';
+    if (approve && !centerNickname) {
+      const input = prompt('센터 닉네임을 정해 주세요. (수업 신청 등에 쓰는 이름)', m.nickname);
+      if (input === null) return;
+      centerNickname = input.trim();
+      if (!centerNickname) return;
+    }
+    if (!approve && !confirm(`"${m.centerNickname || m.nickname}" 회원의 승인을 취소할까요?`)) return;
+    try {
+      const r = await saveMemberProfile({
+        userId: m.userId,
+        nickname: m.nickname,
+        centerNickname,
+        memo: m.memo,
+        approvedAt: approve ? new Date().toISOString() : undefined,
+      });
+      if (r === 'taken') { alert('이미 다른 회원이 쓰는 센터 닉네임이에요.'); return; }
+      load();
+    } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
+  };
+
+  const remove = async (m: Member) => {
+    if (!confirm(`"${m.nickname}" 회원의 닉네임·설명을 지울까요?\n다음에 로그인하면 보호자 닉네임을 다시 정하게 돼요.`)) return;
+    try { await deleteProfile(m.userId); load(); }
     catch { alert('지우지 못했어요. 다시 시도해 주세요.'); }
   };
 
-  const list = profiles.filter(p => p.status === tab);
-  const count = (s: ProfileStatus) => profiles.filter(p => p.status === s).length;
-  const btn = 'text-[12px] border px-3 py-1.5 transition-colors shrink-0';
+  const waiting = members.filter(m => !m.approvedAt);
+  const approved = members.filter(m => m.approvedAt);
+  const list = filter === 'waiting' ? waiting : approved;
+  const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
+  const input = 'w-full min-w-[90px] border-b border-[var(--brand)] py-1 text-[14px] outline-none bg-transparent';
+  const th = 'text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
+  const td = 'px-3 py-3 align-middle';
 
   return (
-    <div className="max-w-[768px] mx-auto px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
+    <div className="max-w-[1152px] mx-auto px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
       <h1 className="display-heading mb-3">회원 관리</h1>
-      <p className="text-[14px] text-[#666] leading-[1.9] mb-10">
-        카카오로 로그인한 보호자의 닉네임이에요. 승인해야 수업 신청 등을 할 수 있어요.
+      <p className="text-[14px] text-[#666] leading-[1.9] mb-8">
+        카카오로 로그인한 보호자예요. 승인한 회원만 수업 신청 등을 할 수 있어요.
       </p>
 
-      <div role="tablist" className="flex gap-1.5 mb-6">
-        {TABS.map(t => (
-          <button key={t.key} role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}
+      <div role="tablist" className="flex gap-1.5 mb-5">
+        {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`]] as const).map(([key, label]) => (
+          <button key={key} role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}
             className={[
               'text-[13px] px-4 py-2 border transition-colors',
-              tab === t.key ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]',
+              filter === key ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]',
             ].join(' ')}>
-            {t.label} {count(t.key)}
+            {label}
           </button>
         ))}
       </div>
 
-      {loaded && list.length === 0 && (
-        <p className="text-[14px] text-[#bbb] py-16 text-center border-t border-[#eee]">아직 없어요.</p>
-      )}
+      {failed && <p className="text-[14px] text-red-400 py-6">회원 목록을 불러오지 못했어요. (DB 설정 SQL을 실행했는지 확인해 주세요)</p>}
 
-      <ul className="divide-y divide-[#eee] border-t border-[#eee]">
-        {list.map(p => (
-          <li key={p.userId} className="flex flex-wrap items-center gap-3 py-4">
-            <div className="flex-1 min-w-[160px]">
-              {editing === p.userId ? (
-                <input value={draft} onChange={e => setDraft(e.target.value)} maxLength={20} autoFocus
-                  onKeyDown={e => { if (e.key === 'Enter') saveNickname(p); if (e.key === 'Escape') setEditing(null); }}
-                  className="w-full border-b border-[var(--brand)] py-1 text-[16px] outline-none" />
-              ) : (
-                <p className="text-[16px] text-[#222]">{p.nickname}</p>
-              )}
-              <p className="text-[12px] text-[#aaa] mt-0.5">{fmt(p.createdAt)} 가입</p>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {editing === p.userId ? (
-                <>
-                  <button onClick={() => saveNickname(p)} className={`${btn} border-[var(--brand)] text-[var(--brand)] hover:bg-[var(--brand)] hover:text-white`}>저장</button>
-                  <button onClick={() => setEditing(null)} className={`${btn} border-[#e5e5e5] hover:bg-[#f8f8f8]`}>취소</button>
-                </>
-              ) : (
-                <>
-                  {p.status !== 'approved' && (
-                    <button onClick={() => setStatus(p, 'approved')} className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>승인</button>
-                  )}
-                  {p.status !== 'rejected' && (
-                    <button onClick={() => setStatus(p, 'rejected')} className={`${btn} border-[#e5e5e5] text-[#888] hover:bg-[#f8f8f8]`}>
-                      {p.status === 'approved' ? '승인 취소' : '거절'}
-                    </button>
-                  )}
-                  <button onClick={() => { setEditing(p.userId); setDraft(p.nickname); }} className={`${btn} border-[#e5e5e5] hover:bg-[#f8f8f8]`}>닉네임 수정</button>
-                  <button onClick={() => remove(p)} className={`${btn} border-[#e5e5e5] text-red-400 hover:bg-red-50`}>삭제</button>
-                </>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
+      <div className="overflow-x-auto border-t border-[#e5e5e5]">
+        <table className="w-full text-[14px] text-[#333] border-collapse">
+          <thead>
+            <tr className="border-b border-[#e5e5e5]">
+              <th className={th}>계정번호</th>
+              <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>
+              <th className={th}>마지막 로그인</th>
+              <th className={th}>보호자 닉네임</th>
+              <th className={th}>센터 닉네임</th>
+              <th className={th}>설명</th>
+              <th className={th}><span className="sr-only">관리</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map(m => {
+              const on = editing === m.userId;
+              return (
+                <tr key={m.userId} className="border-b border-[#f0f0f0]">
+                  <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>
+                  <td className={`${td} whitespace-nowrap`}>{fmtDate(m.approvedAt ?? m.joinedAt)}</td>
+                  <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>
+                  <td className={td}>
+                    {on ? <input className={input} value={form.nickname} maxLength={20} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} />
+                      : m.nickname || <span className="text-[#ccc]">아직 안 정함</span>}
+                  </td>
+                  <td className={td}>
+                    {on ? <input className={input} value={form.centerNickname} maxLength={20} placeholder="예: 김민준" onChange={e => setForm(f => ({ ...f, centerNickname: e.target.value }))} />
+                      : m.centerNickname ? <span className="text-[var(--brand)]">{m.centerNickname}</span> : <span className="text-[#ccc]">-</span>}
+                  </td>
+                  <td className={`${td} min-w-[160px]`}>
+                    {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
+                      : <span className="text-[#666] whitespace-pre-line">{m.memo || ''}</span>}
+                  </td>
+                  <td className={`${td} text-right`}>
+                    <div className="flex justify-end gap-1">
+                      {on ? (
+                        <>
+                          <button onClick={() => save(m)} className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>저장</button>
+                          <button onClick={() => setEditing(null)} className={`${btn} border-[#e5e5e5] hover:bg-[#f8f8f8]`}>취소</button>
+                        </>
+                      ) : (
+                        <>
+                          {m.nickname && (m.approvedAt
+                            ? <button onClick={() => setApproved(m, false)} className={`${btn} border-[#e5e5e5] text-[#888] hover:bg-[#f8f8f8]`}>승인 취소</button>
+                            : <button onClick={() => setApproved(m, true)} className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>승인</button>)}
+                          <button onClick={() => startEdit(m)} className={`${btn} border-[#e5e5e5] hover:bg-[#f8f8f8]`}>수정</button>
+                          {m.nickname && <button onClick={() => remove(m)} className={`${btn} border-[#e5e5e5] text-red-400 hover:bg-red-50`}>삭제</button>}
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {loaded && !failed && list.length === 0 && (
+        <p className="text-[14px] text-[#bbb] py-16 text-center">아직 없어요.</p>
+      )}
     </div>
   );
 }

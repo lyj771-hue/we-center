@@ -32,14 +32,21 @@ export interface PaymentMethod {
   order: number;
 }
 
-/** 카카오로 로그인한 보호자의 닉네임. 처음 한 번 보호자가 입력하고, 그 뒤엔 관리자만 바꾼다 */
-export type ProfileStatus = 'pending' | 'approved' | 'rejected';
-
+/** 카카오로 로그인한 보호자. 보호자 닉네임은 처음 한 번 보호자가 입력하고, 그 뒤 변경은 관리자만.
+ *  센터 닉네임은 관리자가 정하고, 승인일자가 있으면 승인된 회원이다 */
 export interface Profile {
   userId: string;
   nickname: string;
-  status: ProfileStatus;
-  createdAt: string;
+  centerNickname?: string;
+  memo?: string;
+  approvedAt?: string;
+}
+
+/** 회원 관리 표 한 줄 — 로그인 계정 정보 + 닉네임 (닉네임을 아직 안 정했으면 nickname 이 빈 문자열) */
+export interface Member extends Profile {
+  kakaoId: string;
+  joinedAt: string;
+  lastSignInAt?: string;
 }
 
 export type Category = 'thoughts' | 'notices' | 'etc';
