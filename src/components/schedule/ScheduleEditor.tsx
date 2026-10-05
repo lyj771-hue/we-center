@@ -16,8 +16,9 @@ const DEFAULT_NOTICE = '원하시는 시간을 누르면 바로 신청돼요. �
 
 type Mode = 'this' | 'next' | 'holiday';
 
-/** "모두 불러오기" 로 한 번에 넣는 센터 기본 수업 시간 */
-const ALL_TIMES = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '14:00', '14:50', '15:40', '16:30', '17:40', '18:30', '19:20'];
+/** "평일" · "휴일" 버튼으로 한 번에 넣는 센터 기본 수업 시간 */
+const WEEKDAY_TIMES = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '14:00', '14:50', '15:40', '16:30', '17:40', '18:30', '19:20'];
+const HOLIDAY_TIMES = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '13:30', '14:20', '15:10', '16:00', '16:50', '17:40', '18:30', '19:20'];
 
 /** 선생님 id → 날짜(YYYY-MM-DD) → 시간들 */
 type Times = Record<string, Record<string, string[]>>;
@@ -113,8 +114,12 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     if (!/^\d{2}:\d{2}$/.test(time)) return;
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), time]) } }));
   };
-  const addAllTimes = (tid: string, day: string) =>
-    setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), ...ALL_TIMES]) } }));
+  // 그날 시간을 통째로 바꾼다(신청된 시간은 남긴다) — 평일·휴일 기본 시간, 또는 비우고 개별입력
+  const setDayTimes = (tid: string, day: string, list: string[]) =>
+    setTimes(p => ({
+      ...p,
+      [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []).filter(x => locked.has(`${tid}|${day}|${x}`)), ...list]) },
+    }));
   const removeTime = (tid: string, day: string, time: string) =>
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: (p[tid]?.[day] ?? []).filter(x => x !== time) } }));
   const copyFirstToAll = (tid: string) => {
@@ -343,14 +348,14 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                       })}
                       {!off && (
                         <span className="order-first inline-flex items-center gap-1">
-                          <button type="button" onClick={() => setInputOpen(o => ({ ...o, [key]: !o[key] }))}
+                          <button type="button" onClick={() => { setDayTimes(t.id, d, []); setInputOpen(o => ({ ...o, [key]: true })); }}
                             className={`text-[12px] border px-2.5 py-1 transition-colors ${inputOpen[key] ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[var(--brand)] text-[var(--brand)] hover:bg-[#e8f1fd]'}`}>
                             개별입력
                           </button>
-                          <button type="button" onClick={() => addAllTimes(t.id, d)}
-                            className="text-[12px] border border-[#ddd] px-2.5 py-1 hover:bg-[#f8f8f8]">
-                            모두 불러오기
-                          </button>
+                          <button type="button" onClick={() => { setDayTimes(t.id, d, WEEKDAY_TIMES); setInputOpen(o => ({ ...o, [key]: false })); }}
+                            className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]">평일</button>
+                          <button type="button" onClick={() => { setDayTimes(t.id, d, HOLIDAY_TIMES); setInputOpen(o => ({ ...o, [key]: false })); }}
+                            className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]">휴일</button>
                         </span>
                       )}
                       {!off && inputOpen[key] && (
