@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { useAdmin } from './AdminContext';
 import { useMember } from './MemberContext';
+import type { Profile } from '@/lib/types';
 
 // 카카오톡 채널 주소 (채널 홈 → 공유 → 링크 복사). 비어 있으면 아이콘만 보이고 눌러도 아무 일 없다
 const KAKAO_CHANNEL_URL = '';
@@ -68,39 +69,20 @@ export default function Header() {
             <img src="/logo-we.jpg" alt="WE 소아재활센터" className="w-full h-full object-contain" />
           </Link>
 
-          {/* 보호자 로그인 + 카카오톡 채널 — PC는 오른쪽, 휴대폰은 왼쪽(오른쪽엔 메뉴 버튼) */}
+          {/* 보호자 로그인 + 카카오톡 채널 — PC는 둘 다 오른쪽.
+              휴대폰은 로그인 버튼을 왼쪽, 채널 아이콘을 메뉴 버튼 옆에 두고, 로그인 뒤 인사는 로고 아래 한 줄로(로고와 겹치지 않게) */}
           <div className="absolute left-4 md:left-auto md:right-14 top-1/2 -translate-y-1/2 flex items-center gap-2">
             {!isAdmin && (userId ? (
-              <span className="flex flex-col md:flex-row items-start md:items-center gap-0 md:gap-2 text-[12px] md:text-[13px] leading-[1.7] text-[#555] whitespace-nowrap">
-                {profile && (
-                  <span className="max-w-[130px] md:max-w-none truncate py-0.5 leading-[1.7]">
-                    <span className="text-[var(--brand)]">{profile.centerNickname || profile.nickname}</span>님 반갑습니다
-                    {!profile.approvedAt && <span className="text-[#aaa]">(미승인)</span>}
-                  </span>
-                )}
-                <button onClick={memberLogout} className="underline underline-offset-2 text-[#888] hover:text-[#0a0a0a]">로그아웃</button>
-              </span>
+              <span className="hidden md:flex"><Greeting profile={profile} onLogout={memberLogout} /></span>
             ) : (
               <button onClick={login}
                 className="rounded-full border border-[var(--brand)] bg-[var(--brand)] px-3 py-1.5 text-[12px] tracking-[0.1em] text-white transition hover:opacity-90">
                 로그인
               </button>
             ))}
-            {(() => {
-              const icon = (
-                <svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true">
-                  <path fill="#087BEA" d="M12 3.5c-5.25 0-9.5 3.3-9.5 7.38 0 2.62 1.75 4.92 4.38 6.22l-.9 3.3c-.08.3.26.54.52.37l3.92-2.6c.52.07 1.05.1 1.58.1 5.25 0 9.5-3.3 9.5-7.39S17.25 3.5 12 3.5z"/>
-                  <text x="12" y="13.6" textAnchor="middle" fill="#ffffff" fontSize="7.5" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif" style={{ WebkitTextStroke: 0 }}>Ch</text>
-                </svg>
-              );
-              const cls = 'w-10 h-10 flex items-center justify-center';
-              return KAKAO_CHANNEL_URL ? (
-                <a href={KAKAO_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="카카오톡 채널" className={`${cls} transition hover:opacity-80`}>{icon}</a>
-              ) : (
-                <span role="img" aria-label="카카오톡 채널 (준비 중)" className={cls}>{icon}</span>
-              );
-            })()}
+            <span className="hidden md:flex"><KakaoChannelIcon /></span>
           </div>
+          <span className="md:hidden absolute right-14 top-1/2 -translate-y-1/2 flex"><KakaoChannelIcon /></span>
 
           {/* Hamburger — mobile only */}
           <button
@@ -111,6 +93,12 @@ export default function Header() {
             ☰
           </button>
         </div>
+
+        {!isAdmin && userId && (
+          <div className="md:hidden flex justify-center pb-2 -mt-1">
+            <Greeting profile={profile} onLogout={memberLogout} />
+          </div>
+        )}
 
         {/* Desktop navigation */}
         <nav aria-label="메인 메뉴" className="hidden md:block pb-0">
@@ -182,5 +170,37 @@ export default function Header() {
         </div>
       </div>
     </>
+  );
+}
+
+/** 카카오톡 채널 아이콘 — 파란 말풍선에 흰 Ch. 채널 주소가 없으면 눌러도 반응 없음 */
+function KakaoChannelIcon() {
+  const icon = (
+    <svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#087BEA" d="M12 3.5c-5.25 0-9.5 3.3-9.5 7.38 0 2.62 1.75 4.92 4.38 6.22l-.9 3.3c-.08.3.26.54.52.37l3.92-2.6c.52.07 1.05.1 1.58.1 5.25 0 9.5-3.3 9.5-7.39S17.25 3.5 12 3.5z"/>
+      <text x="12" y="13.6" textAnchor="middle" fill="#ffffff" fontSize="7.5" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif" style={{ WebkitTextStroke: 0 }}>Ch</text>
+    </svg>
+  );
+  const cls = 'w-10 h-10 flex items-center justify-center';
+  return KAKAO_CHANNEL_URL ? (
+    <a href={KAKAO_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="카카오톡 채널" className={`${cls} transition hover:opacity-80`}>{icon}</a>
+  ) : (
+    <span role="img" aria-label="카카오톡 채널 (준비 중)" className={cls}>{icon}</span>
+  );
+}
+
+/** 로그인한 보호자 인사 + 밑줄 로그아웃 (누르면 한 번 묻는다) */
+function Greeting({ profile, onLogout }: { profile: Profile | null; onLogout: () => void }) {
+  return (
+    <span className="flex items-center gap-2 text-[12px] md:text-[13px] leading-[1.6] text-[#555] whitespace-nowrap">
+      {profile && (
+        <span className="py-0.5">
+          <span className="text-[var(--brand)]">{profile.centerNickname || profile.nickname}</span>님 반갑습니다
+          {!profile.approvedAt && <span className="text-[#aaa]">(미승인)</span>}
+        </span>
+      )}
+      <button onClick={() => { if (confirm('로그아웃할까요?')) onLogout(); }}
+        className="underline underline-offset-2 text-[#888] hover:text-[#0a0a0a]">로그아웃</button>
+    </span>
   );
 }
