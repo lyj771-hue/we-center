@@ -9,6 +9,7 @@ import ScheduleGate from '@/components/schedule/ScheduleGate';
 import ScheduleEditor from '@/components/schedule/ScheduleEditor';
 import type { ScheduleSummary, Teacher } from '@/lib/schedule';
 import { deleteSchedule, getTeachers, listSchedules, scheduleDays, scheduleRange, thisMonday } from '@/lib/schedule';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
 // 수업스케쥴 목록 — 기타 메뉴처럼 제목 목록. 누르면 /schedule/[id] 에서 시간을 보고 신청한다.
 // 관리자는 여기서 새 스케쥴을 올리고 지운다.
@@ -43,9 +44,9 @@ export default function ScheduleListPage() {
   useEffect(() => { if (canView) load(); }, [canView, load]);
 
   const handleDelete = async (s: ScheduleSummary) => {
-    if (!confirm(`"${s.title}"을(를) 지울까요?\n신청 기록도 모두 지워져요.`)) return;
+    if (!(await askConfirm(`"${s.title}"을(를) 지울까요?\n신청 기록도 모두 지워져요.`))) return;
     try { await deleteSchedule(s.id); load(); }
-    catch { alert('지우지 못했어요. 다시 시도해 주세요.'); }
+    catch { showAlert('지우지 못했어요. 다시 시도해 주세요.'); }
   };
 
   // 지난 스케쥴(마지막 날이 이번 주 월요일보다 전)은 흐리게

@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import { useAdmin } from './AdminContext';
 import { useMember } from './MemberContext';
 import type { Profile } from '@/lib/types';
+import { askConfirm } from '@/lib/dialog';
 
 // 카카오톡 채널 주소 (채널 홈 → 공유 → 링크 복사). 비어 있으면 아이콘만 보이고 눌러도 아무 일 없다
 const KAKAO_CHANNEL_URL = '';
@@ -173,7 +174,7 @@ export default function Header() {
               카카오톡 채널
             </div>
             {!isAdmin && userId && (
-              <button onClick={() => { if (confirm('로그아웃할까요?')) { setMobileOpen(false); memberLogout(); } }}
+              <button onClick={async () => { if (await askConfirm('로그아웃할까요?')) { setMobileOpen(false); memberLogout(); } }}
                 className="text-[14px] text-[#888] underline underline-offset-2 hover:text-[#0a0a0a]">로그아웃</button>
             )}
           </div>
@@ -210,7 +211,7 @@ function Greeting({ profile, onLogout, showLogout = true }: { profile: Profile |
         </span>
       )}
       {showLogout && (
-        <button onClick={() => { if (confirm('로그아웃할까요?')) onLogout(); }}
+        <button onClick={async () => { if (await askConfirm('로그아웃할까요?')) onLogout(); }}
           className="underline underline-offset-2 text-[#888] hover:text-[#0a0a0a]">로그아웃</button>
       )}
     </span>

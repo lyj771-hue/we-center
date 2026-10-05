@@ -1,0 +1,48 @@
+'use client';
+
+import { createRoot } from 'react-dom/client';
+
+// 사이트 자체 확인·알림 창 — 브라우저 기본 confirm()/alert() 대신 쓴다.
+// 카카오톡 안의 브라우저(인앱 브라우저)는 기본 창을 막아서, confirm() 이 창 없이 바로 "취소"가 돼 버린다.
+
+interface Opts {
+  message: string;
+  ok?: string;
+  cancel?: string | null;   // null 이면 확인 버튼만(알림)
+}
+
+function open({ message, ok = '확인', cancel = '취소' }: Opts): Promise<boolean> {
+  return new Promise(resolve => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const close = (v: boolean) => {
+      root.unmount();
+      host.remove();
+      resolve(v);
+    };
+    root.render(
+      <div role="alertdialog" aria-modal="true" aria-label={message}
+        className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/30 px-6"
+        onClick={() => close(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center" onClick={e => e.stopPropagation()}>
+          <p className="text-[15px] leading-[1.9] text-[#333] whitespace-pre-line mb-5">{message}</p>
+          <div className="flex gap-2">
+            {cancel !== null && (
+              <button type="button" onClick={() => close(false)}
+                className="flex-1 border border-[#e5e5e5] text-[#555] text-[14px] py-2.5 rounded-full">{cancel}</button>
+            )}
+            <button type="button" autoFocus onClick={() => close(true)}
+              className="flex-1 bg-[var(--brand)] text-white text-[14px] py-2.5 rounded-full">{ok}</button>
+          </div>
+        </div>
+      </div>,
+    );
+  });
+}
+
+/** 확인 창 — 확인을 누르면 true */
+export const askConfirm = (message: string, ok?: string) => open({ message, ok });
+
+/** 알림 창 — 확인 버튼 하나 */
+export const showAlert = (message: string) => open({ message, cancel: null }).then(() => undefined);

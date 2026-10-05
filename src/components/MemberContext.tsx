@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { createMyProfile, getMyProfile, signInWithKakao } from '@/lib/store';
 import type { Profile } from '@/lib/types';
 import { useAdmin } from './AdminContext';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
 // 보호자 로그인(카카오) 상태. 관리자 계정은 여기서 다루지 않는다(AdminContext).
 // 처음 로그인해서 닉네임이 없으면 보호자 닉네임 입력 창을 띄운다. 센터 닉네임은 관리자가 정한다(있으면 승인된 회원).
@@ -44,7 +45,7 @@ export function MemberProvider({ children }: { children: ReactNode }) {
     const err = params.get('error_description');
     if (err) {
       history.replaceState(null, '', window.location.pathname);
-      alert(`로그인하지 못했어요.\n(${err.replace(/\+/g, ' ')})`);
+      showAlert(`로그인하지 못했어요.\n(${err.replace(/\+/g, ' ')})`);
     }
     supabase.auth.getSession().then(({ data }) => apply(data.session?.user.id ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => apply(session?.user.id ?? null));
@@ -52,7 +53,7 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(() => {
-    signInWithKakao().catch(() => alert('카카오 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+    signInWithKakao().catch(() => showAlert('카카오 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'));
   }, []);
   const logout = useCallback(() => { supabase.auth.signOut(); }, []);
 
@@ -79,7 +80,7 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
     e.preventDefault();
     const nickname = name.trim();
     if (!nickname) return;
-    if (!confirm(`닉네임을 "${nickname}"(으)로 정할까요?\n한 번 정하면 바꿀 때 센터에 요청해야 해요.`)) return;
+    if (!(await askConfirm(`닉네임을 "${nickname}"(으)로 정할까요?\n한 번 정하면 바꿀 때 센터에 요청해야 해요.`))) return;
     setSaving(true);
     try {
       await createMyProfile(userId, nickname);
