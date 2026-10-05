@@ -78,7 +78,7 @@ export default function Header() {
               </button>
             ) : (
               <button onClick={login}
-                className="rounded-full border border-[#d9d9d9] px-3 py-1.5 text-[12px] tracking-[0.1em] text-[#666] transition hover:border-[#0a0a0a] hover:text-[#0a0a0a]">
+                className="rounded-full border border-[var(--brand)] bg-[var(--brand)] px-3 py-1.5 text-[12px] tracking-[0.1em] text-white transition hover:opacity-90">
                 로그인
               </button>
             ))}
