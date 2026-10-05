@@ -24,6 +24,8 @@ export interface Slot {
   bookedBy?: string;
   /** 관리자 화면에서만: 신청한 분의 닉네임 */
   owner?: string;
+  /** 보호자 취소 — requested = 취소중(관리자 승인 전), approved = 취소완료(시간은 계속 마감) */
+  cancelState?: 'requested' | 'approved';
 }
 
 export interface Booking {
@@ -34,6 +36,8 @@ export interface Booking {
   label: string;
   createdAt: string;
   cancelledAt?: string;
+  /** book = 신청, cancel_request = 취소 신청, cancel_withdraw = 취소 신청 철회, cancel_approved = 취소 승인 */
+  kind: 'book' | 'cancel_request' | 'cancel_withdraw' | 'cancel_approved';
 }
 
 export interface Schedule {
@@ -197,9 +201,10 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
   const bookings: Booking[] = (bookingsRes.data ?? []).map(b => ({
     id: b.id, slotId: b.slot_id ?? undefined, userId: b.user_id ?? undefined,
     nickname: b.nickname, label: b.label, createdAt: b.created_at, cancelledAt: b.cancelled_at ?? undefined,
+    kind: b.kind ?? 'book',
   }));
-  // 칸마다 살아 있는 신청 기록의 닉네임 (관리자 화면용)
-  const ownerOf = new Map(bookings.filter(b => !b.cancelledAt && b.slotId).map(b => [b.slotId!, b.nickname]));
+  // 칸마다 마지막 신청 기록의 닉네임 (관리자 화면용 — 취소 승인된 칸도 누구였는지 보이게)
+  const ownerOf = new Map(bookings.filter(b => b.kind === 'book' && b.slotId).map(b => [b.slotId!, b.nickname]));
 
   return {
     id: row.id,
@@ -214,6 +219,7 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
         id: s.id, teacherId: s.teacher_id, day: s.day, time: s.time,
         bookedBy: s.booked_by ?? undefined,
         owner: s.booked_by ? ownerOf.get(s.id) : undefined,
+        cancelState: s.cancel_state ?? undefined,
       }))
       .sort((a, b) => (a.day + a.time).localeCompare(b.day + b.time)),
     bookings,
@@ -228,6 +234,17 @@ export async function bookSlot(slotId: string): Promise<'ok' | 'taken' | 'not_ap
   return data;
 }
 
+/** 보호자: 내 신청 취소 신청 / 철회. 관리자: 취소 승인 */
+async function slotRpc(fn: 'request_cancel' | 'withdraw_cancel' | 'approve_cancel', slotId: string): Promise<string> {
+  const { data, error } = await supabase.rpc(fn, { p_slot: slotId });
+  if (error) throw error;
+  return data;
+}
+export const requestCancel = (slotId: string) => slotRpc('request_cancel', slotId);
+export const withdrawCancel = (slotId: string) => slotRpc('withdraw_cancel', slotId);
+export const approveCancel = (slotId: string) => slotRpc('approve_cancel', slotId);
+
+/** 관리자: 신청을 지우고 시간을 다시 연다 */
 export async function cancelSlot(slotId: string): Promise<void> {
   const { data, error } = await supabase.rpc('cancel_slot', { p_slot: slotId });
   if (error) throw error;

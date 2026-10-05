@@ -4,8 +4,10 @@ import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import { dowLabel, scheduleDays, scheduleRange, shortDay } from '@/lib/schedule';
 
 // 한 주 스케쥴 카드 — 공지(제목·기간·안내·휴무) + 선생님별 요일별 시간 버튼 + 신청 댓글.
-// 보호자: 빈 시간 = 누르면 신청, 내 신청 = "✓ 신청완료", 다른 분 = "마감".
-// 관리자: 신청된 칸 = "시간 + 닉네임 ✕"(누르면 취소), 빈 칸은 그냥 보인다.
+// 보호자: 빈 시간 = 누르면 신청, 내 신청 = "✓ 신청완료"(누르면 취소 신청) → "취소중"(누르면 철회) → 회색 "취소완료",
+//         다른 분 신청 = 언제나 "마감".
+// 관리자: 신청된 칸 = "시간 + 닉네임 ✕"(누르면 시간 다시 열기), 취소 신청된 칸 = "취소요청"(누르면 승인),
+//         취소 승인된 칸 = 회색 "취소완료 ✕"(누르면 시간 다시 열기). 빈 칸은 그냥 보인다.
 
 interface Props {
   schedule: Schedule;
@@ -15,7 +17,13 @@ interface Props {
   nickname?: string;
   busySlot: string | null;
   onPick: (slot: Slot, teacher: Teacher) => void;
+  /** 관리자: 신청을 지우고 시간을 다시 연다 */
   onCancel: (slot: Slot, teacher: Teacher) => void;
+  /** 관리자: 보호자의 취소 신청을 승인 */
+  onApproveCancel: (slot: Slot, teacher: Teacher) => void;
+  /** 보호자: 내 신청을 취소 신청 / 취소 신청 철회 */
+  onRequestCancel: (slot: Slot, teacher: Teacher) => void;
+  onWithdrawCancel: (slot: Slot, teacher: Teacher) => void;
   onEdit?: () => void;
   onDelete?: () => void;
 }
@@ -29,7 +37,9 @@ const fmtTime = (iso: string) => {
 
 const pill = 'inline-flex items-center gap-1.5 text-[13px] px-3.5 min-h-[36px] rounded-full border-[1.5px] transition-colors';
 
-export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickname, busySlot, onPick, onCancel, onEdit, onDelete }: Props) {
+export default function ScheduleBoard({
+  schedule, teachers, isAdmin, myId, nickname, busySlot, onPick, onCancel, onApproveCancel, onRequestCancel, onWithdrawCancel, onEdit, onDelete,
+}: Props) {
   const days = scheduleDays(schedule);
   const centerHolidays = schedule.holidays.filter(h => !h.teacherId);
   const holidayOf = new Map(centerHolidays.map(h => [h.date, h.label]));
@@ -66,7 +76,7 @@ export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickn
             )}
           </div>
           <h2 className="text-[24px] leading-[1.4] text-[var(--brand)]">{schedule.title}</h2>
-          <p className="text-[14px] leading-[2] text-[#52525b] whitespace-pre-line">
+          <p className="text-[12px] leading-[2] text-[#71717a] whitespace-pre-line">
             {scheduleRange(schedule)}
             {schedule.notice && <>{'\n'}{schedule.notice}</>}
           </p>
@@ -109,6 +119,29 @@ export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickn
                     ) : slots.map(s => {
                       const busy = busySlot === s.id;
                       if (isAdmin) {
+                        if (s.bookedBy && s.cancelState === 'requested') {
+                          return (
+                            <button key={s.id} type="button" disabled={busy} onClick={() => onApproveCancel(s, teacher)}
+                              aria-label={`${teacher.name} 선생님 ${shortDay(day)} ${s.time} ${s.owner ?? ''} 취소 요청 승인`}
+                              className={`${pill} pr-2.5 border-[#f59e0b] bg-[#fef3c7] text-[#b45309] hover:bg-[#fde68a]`}>
+                              {s.time}
+                              <span className="text-[12px] bg-white/60 px-2 rounded-full">{s.owner ?? '신청됨'}</span>
+                              취소요청
+                            </button>
+                          );
+                        }
+                        if (s.bookedBy && s.cancelState === 'approved') {
+                          return (
+                            <button key={s.id} type="button" disabled={busy} onClick={() => onCancel(s, teacher)}
+                              aria-label={`${teacher.name} 선생님 ${shortDay(day)} ${s.time} 취소완료 — 시간 다시 열기`}
+                              className={`${pill} pr-2.5 border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa] hover:bg-[#e4e4e7]`}>
+                              {s.time}
+                              <span className="text-[12px] bg-white px-2 rounded-full">{s.owner ?? ''}</span>
+                              취소완료
+                              <span aria-hidden="true" className="text-[11px]">✕</span>
+                            </button>
+                          );
+                        }
                         return s.bookedBy ? (
                           <button key={s.id} type="button" disabled={busy} onClick={() => onCancel(s, teacher)}
                             aria-label={`${teacher.name} 선생님 ${shortDay(day)} ${s.time} ${s.owner ?? ''} 신청 취소`}
@@ -122,8 +155,28 @@ export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickn
                         );
                       }
                       if (s.bookedBy && s.bookedBy === myId) {
+                        if (s.cancelState === 'approved') {
+                          return (
+                            <span key={s.id} className={`${pill} border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa]`}>
+                              <span className="line-through">{s.time}</span> 취소완료
+                            </span>
+                          );
+                        }
+                        if (s.cancelState === 'requested') {
+                          return (
+                            <button key={s.id} type="button" disabled={busy} onClick={() => onWithdrawCancel(s, teacher)}
+                              title="누르면 취소 신청을 철회해요"
+                              className={`${pill} border-[#f59e0b] bg-[#fef3c7] text-[#b45309] hover:bg-[#fde68a]`}>
+                              {s.time} 취소중
+                            </button>
+                          );
+                        }
                         return (
-                          <span key={s.id} className={`${pill} border-[var(--brand)] bg-[var(--brand)] text-white`}>✓ {s.time} 신청완료</span>
+                          <button key={s.id} type="button" disabled={busy} onClick={() => onRequestCancel(s, teacher)}
+                            title="누르면 취소를 신청해요"
+                            className={`${pill} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>
+                            ✓ {s.time} 신청완료
+                          </button>
                         );
                       }
                       if (s.bookedBy) {
@@ -165,6 +218,9 @@ export default function ScheduleBoard({ schedule, teachers, isAdmin, myId, nickn
                 <span className="text-[14px] text-[var(--brand)]">{c.nickname}</span>
                 <span className="text-[11px] text-[#a1a1aa]">{fmtTime(c.createdAt)}</span>
                 {c.cancelledAt && <span className="text-[11px] text-white bg-[#a1a1aa] px-2 rounded-full">취소</span>}
+                {c.kind === 'cancel_request' && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-2 rounded-full">취소 신청</span>}
+                {c.kind === 'cancel_withdraw' && <span className="text-[11px] text-[#166534] bg-[#e8f5ee] px-2 rounded-full">철회</span>}
+                {c.kind === 'cancel_approved' && <span className="text-[11px] text-white bg-[#71717a] px-2 rounded-full">취소 승인</span>}
               </div>
               <p className={`text-[14px] text-[#3f3f46] ${c.cancelledAt ? 'line-through text-[#a1a1aa]' : ''}`}>{c.label}</p>
             </div>

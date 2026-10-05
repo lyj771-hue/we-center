@@ -11,7 +11,9 @@ import ScheduleBoard from './ScheduleBoard';
 import ScheduleEditor from './ScheduleEditor';
 import ScheduleGate from './ScheduleGate';
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
-import { bookSlot, cancelSlot, deleteSchedule, getSchedule, getTeachers, shortDay } from '@/lib/schedule';
+import {
+  approveCancel, bookSlot, cancelSlot, deleteSchedule, getSchedule, getTeachers, requestCancel, shortDay, withdrawCancel,
+} from '@/lib/schedule';
 
 // 수업스케쥴 하나 — 공지 + 선생님별 시간 + 신청 댓글. 승인된 보호자는 시간을 눌러 선착순으로 신청한다.
 // 누를 때마다 DB가 다시 확인하고(동시에 눌러도 한 명만 성공), 끝나면 새로 불러온다.
@@ -62,7 +64,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
   }, [canView, id, load]);
 
   const handlePick = async (slot: Slot, teacher: Teacher) => {
-    if (!confirm(`${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}\n이 시간으로 신청할까요?\n(취소는 센터로 연락해 주세요)`)) return;
+    if (!confirm(`${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}\n이 시간으로 신청할까요?\n(취소가 필요하면 신청완료 버튼을 눌러 취소 신청할 수 있어요)`)) return;
     setBusySlot(slot.id);
     try {
       const r = await bookSlot(slot.id);
@@ -83,6 +85,28 @@ export default function ScheduleDetail({ id }: { id: string }) {
     catch { alert('취소하지 못했어요. 다시 시도해 주세요.'); }
     finally { setBusySlot(null); load(); }
   };
+
+  // 보호자 취소 신청 · 철회, 관리자 승인 — 끝나면 새로 불러온다
+  const runSlot = async (slot: Slot, ask: string, fn: (id: string) => Promise<string>, fail: string) => {
+    if (!confirm(ask)) return;
+    setBusySlot(slot.id);
+    try {
+      const r = await fn(slot.id);
+      if (r !== 'ok') setPopup(fail);
+    } catch {
+      setPopup('처리하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setBusySlot(null);
+      load();
+    }
+  };
+  const label = (slot: Slot, teacher: Teacher) => `${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}`;
+  const handleRequestCancel = (slot: Slot, teacher: Teacher) =>
+    runSlot(slot, `${label(slot, teacher)}\n취소를 신청할까요?\n(센터에서 승인하기 전까지는 다시 눌러 철회할 수 있어요)`, requestCancel, '취소 신청을 하지 못했어요.');
+  const handleWithdrawCancel = (slot: Slot, teacher: Teacher) =>
+    runSlot(slot, `${label(slot, teacher)}\n취소 신청을 철회할까요?`, withdrawCancel, '이미 센터에서 취소를 승인했어요.');
+  const handleApproveCancel = (slot: Slot, teacher: Teacher) =>
+    runSlot(slot, `${label(slot, teacher)}\n${slot.owner ?? ''} 님의 취소 신청을 승인할까요?\n(시간은 다시 열리지 않고, 다른 분에겐 계속 마감으로 보여요)`, approveCancel, '보호자가 이미 취소 신청을 철회했어요.');
 
   const handleDelete = async () => {
     if (!schedule) return;
@@ -116,6 +140,9 @@ export default function ScheduleDetail({ id }: { id: string }) {
             busySlot={busySlot}
             onPick={handlePick}
             onCancel={handleCancel}
+            onApproveCancel={handleApproveCancel}
+            onRequestCancel={handleRequestCancel}
+            onWithdrawCancel={handleWithdrawCancel}
             onEdit={() => { setEditing(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             onDelete={handleDelete}
           />

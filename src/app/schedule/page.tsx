@@ -86,7 +86,7 @@ export default function ScheduleListPage() {
                     <span className="text-[11px] text-[#ccc] w-7 shrink-0 tabular-nums">{String(items.length - i).padStart(2, '0')}</span>
                     <Link href={`/schedule/${s.id}`} className="flex-1 min-w-0 block">
                       <span className="text-[14px] group-hover:underline underline-offset-2 block truncate">{s.title}</span>
-                      <span className="text-[10px] leading-[1.6] text-[#aaa] block truncate mt-0.5">{scheduleRange(s)}</span>
+                      <span className="text-[12px] text-[#999] block truncate">{scheduleRange(s)}</span>
                     </Link>
                     <span className="text-[11px] text-[#bbb] shrink-0">{fmt(s.createdAt)}</span>
                     {isAdmin && (
