@@ -292,6 +292,8 @@ interface ProfileRow {
   center_nickname: string | null;
   memo: string | null;
   approved_at: string | null;
+  phone_last4?: string | null;
+  requested_code?: string | null;
 }
 
 function fromProfileRow(row: ProfileRow): Profile {
@@ -299,6 +301,8 @@ function fromProfileRow(row: ProfileRow): Profile {
     userId: row.user_id,
     nickname: row.nickname,
     centerNickname: row.center_nickname ?? undefined,
+    phoneLast4: row.phone_last4 ?? undefined,
+    requestedCode: row.requested_code ?? undefined,
     memo: row.memo ?? undefined,
     approvedAt: row.approved_at ?? undefined,
   };
@@ -320,9 +324,17 @@ export async function getMyProfile(userId: string): Promise<Profile | null> {
 }
 
 /** 보호자가 처음 한 번 보호자 닉네임을 정한다 (승인 필요 없음) */
-export async function createMyProfile(userId: string, nickname: string): Promise<void> {
-  const { error } = await supabase.from('profiles').insert({ user_id: userId, nickname: nickname.trim() });
+/** 처음 가입 — 아이 이름(닉네임)·대표 보호자 뒷 4자리. 회원 코드는 claimChild 로 따로 */
+export async function createMyProfile(userId: string, nickname: string, phoneLast4: string): Promise<void> {
+  const { error } = await supabase.from('profiles').insert({ user_id: userId, nickname: nickname.trim(), phone_last4: phoneLast4 });
   if (error) throw error;
+}
+
+/** 회원 코드로 아이와 잇기 — ok / no_code / taken / phone_mismatch / no_profile */
+export async function claimChild(code: string): Promise<string> {
+  const { data, error } = await supabase.rpc('claim_child', { p_code: code });
+  if (error) throw error;
+  return data;
 }
 
 interface MemberRow extends ProfileRow {
@@ -371,6 +383,7 @@ export async function saveMemberProfile(p: Profile & Partial<MemberExtras>): Pro
     ...extras,
     user_id: p.userId,
     nickname: p.nickname.trim(),
+    ...(p.phoneLast4 !== undefined ? { phone_last4: /^\d{4}$/.test(p.phoneLast4) ? p.phoneLast4 : null } : {}),
     center_nickname: p.centerNickname?.trim() || null,
     memo: p.memo?.trim() || null,
     approved_at: p.approvedAt ?? null,

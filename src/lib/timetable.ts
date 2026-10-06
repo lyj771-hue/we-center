@@ -12,6 +12,8 @@ export interface Child {
   name: string;
   /** 구강 수업 아이 (S) */
   oral?: boolean;
+  /** 대표 보호자 전화번호 뒷 4자리 */
+  phoneLast4?: string;
   number?: number;
   payment: string;
   memo?: string;
@@ -74,14 +76,17 @@ export async function getChildren(): Promise<Child[]> {
   const { data, error } = await supabase.from('children').select('*').order('name');
   if (error) throw error;
   return (data ?? []).map(r => ({
-    id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral,
+    id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral, phoneLast4: r.phone_last4 ?? undefined,
     number: r.number ?? undefined, payment: r.payment ?? '', memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
   }));
 }
 
 export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise<void> {
-  const row = { name: c.name.trim(), number: c.number ?? null, payment: c.payment.trim(), memo: c.memo?.trim() || null, oral: !!c.oral };
+  const row = {
+    name: c.name.trim(), number: c.number ?? null, payment: c.payment.trim(), memo: c.memo?.trim() || null, oral: !!c.oral,
+    phone_last4: c.phoneLast4 && /^\d{4}$/.test(c.phoneLast4) ? c.phoneLast4 : null,
+  };
   const { error } = c.id ? await supabase.from('children').update(row).eq('id', c.id) : await supabase.from('children').insert(row);
   if (error) throw error;
 }

@@ -44,7 +44,7 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '' });
+  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '', phone: '' });
   const [showDates, setShowDates] = useState(false);   // 카카오계정번호·회원 코드·가입일자·마지막 로그인은 접어 둔다
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -74,6 +74,7 @@ export default function MembersPage() {
       nickname: m.nickname, centerNickname: m.centerNickname ?? '', memo: m.memo ?? '',
       prepaidEunpyeong: String(m.prepaidEunpyeong), prepaidUijeongbu: String(m.prepaidUijeongbu),
       code: kidOf(m.userId)?.memberCode ?? '',
+      phone: m.phoneLast4 ?? '',
     });
   };
 
@@ -81,7 +82,7 @@ export default function MembersPage() {
     if (!form.nickname.trim()) { alert('보호자 닉네임을 입력해 주세요.'); return; }
     try {
       const r = await saveMemberProfile({
-        userId: m.userId, nickname: form.nickname, centerNickname: form.centerNickname, memo: form.memo, approvedAt: m.approvedAt,
+        userId: m.userId, nickname: form.nickname, centerNickname: form.centerNickname, memo: form.memo, approvedAt: m.approvedAt, phoneLast4: form.phone,
         prepaidEunpyeong: Number(form.prepaidEunpyeong) || 0, prepaidUijeongbu: Number(form.prepaidUijeongbu) || 0,
       });
       if (r === 'taken') { alert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
@@ -204,6 +205,7 @@ export default function MembersPage() {
               {showDates && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
               <th className={th}>관리자 닉네임</th>
+              <th className={th}>뒷번호</th>
               <th className={th}>설명</th>
               {SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
@@ -223,7 +225,7 @@ export default function MembersPage() {
                         onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
                     ) : kidOf(m.userId) ? (
                       <span className="text-[12px]"><span className="text-[#888] tabular-nums">{kidOf(m.userId)!.memberCode}</span> {kidOf(m.userId)!.number ?? ''}{kidOf(m.userId)!.name}</span>
-                    ) : <span className="text-[#ccc]">-</span>}
+                    ) : m.requestedCode ? <span className="text-[12px] text-[#f59e0b]" title="가입할 때 적은 회원 코드 — 아직 연결 안 됨">요청 {m.requestedCode}</span> : <span className="text-[#ccc]">-</span>}
                   </td>)}
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(m.approvedAt ?? m.joinedAt)}</td>}
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
@@ -234,6 +236,11 @@ export default function MembersPage() {
                   <td className={td}>
                     {on ? <input className={input} value={form.centerNickname} maxLength={20} placeholder="예: 김민준" onChange={e => setForm(f => ({ ...f, centerNickname: e.target.value }))} />
                       : m.centerNickname ? <span className="text-[var(--brand)]">{m.centerNickname}</span> : <span className="text-[#ccc]">-</span>}
+                  </td>
+                  <td className={`${td} whitespace-nowrap tabular-nums`}>
+                    {on ? <input className={`${input} w-14 text-center`} value={form.phone} inputMode="numeric" maxLength={4} placeholder="1234"
+                      onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 4) }))} />
+                      : m.phoneLast4 ?? <span className="text-[#ccc]">-</span>}
                   </td>
                   <td className={`${td} min-w-[160px]`}>
                     {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />

@@ -13,7 +13,7 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈이든', v: 'v' };
 
 type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean };
-const emptyForm = { name: '', number: '', payment: '', oral: false, memo: '', guardian: '' };
+const emptyForm = { name: '', number: '', payment: '', oral: false, memo: '', guardian: '', phone: '' };
 
 export default function ChildrenTab({ members, onLinked }: { members: Member[]; onLinked: () => void }) {
   const [kids, setKids] = useState<Child[]>([]);
@@ -41,13 +41,13 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
 
   const start = (k?: Child) => {
     setEditing(k ? k.id : 'new');
-    setForm(k ? { name: k.name, number: k.number?.toString() ?? '', payment: k.payment, oral: !!k.oral, memo: k.memo ?? '', guardian: k.guardianUserId ?? '' } : emptyForm);
+    setForm(k ? { name: k.name, number: k.number?.toString() ?? '', payment: k.payment, oral: !!k.oral, memo: k.memo ?? '', guardian: k.guardianUserId ?? '', phone: k.phoneLast4 ?? '' } : emptyForm);
   };
 
   const save = async (k?: Child) => {
     if (!form.name.trim()) { showAlert('이름을 적어 주세요.'); return; }
     try {
-      await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined, payment: form.payment, oral: form.oral, memo: form.memo });
+      await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined, payment: form.payment, oral: form.oral, memo: form.memo, phoneLast4: form.phone });
       if (k && form.guardian !== (k.guardianUserId ?? '')) {
         await linkChild(k.id, form.guardian || null);
         onLinked();
@@ -87,6 +87,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
               <th className={th}>카카오계정번호</th>
               <th className={th}>회원 코드</th>
               <th className={th}>이름</th>
+              <th className={th}>뒷번호</th>
               <th className={th}>기본 결제</th>
               <th className={th}>고정 수업</th>
               <th className={th}>연결된 보호자 계정</th>
@@ -107,6 +108,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                 <td className={`${td} text-[12px] text-[#999] whitespace-nowrap tabular-nums`}>{k.guardianUserId ? memberOf.get(k.guardianUserId)?.kakaoId || '-' : <span className="text-[#ddd]">-</span>}</td>
                 <td className={`${td} text-[12px] text-[#888] whitespace-nowrap tabular-nums`}>{k.memberCode}</td>
                 <td className={`${td} whitespace-nowrap`} style={{ color: paymentColor(k.payment) }}>{k.number ?? ''}{k.oral ? 'S' : ''}{k.name}</td>
+                <td className={`${td} text-[12px] whitespace-nowrap tabular-nums`}>{k.phoneLast4 ?? <span className="text-[#ccc]">-</span>}</td>
                 <td className={`${td} text-[12px] whitespace-nowrap`}>{k.payment ? `${k.payment} ${PAY_LABEL[k.payment] ?? ''}` : <span className="text-[#ccc]">없음</span>}</td>
                 <td className={`${td} text-[12px]`}><FixedList items={fixed.get(k.id) ?? []} /></td>
                 <td className={`${td} text-[12px] whitespace-nowrap`}>
@@ -160,6 +162,10 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
           <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="이름" className={`${input} w-24`} autoFocus />
         </span>
         <label className="flex items-center gap-1 text-[11px] text-[#888] mt-1"><input type="checkbox" checked={form.oral} onChange={e => setForm(f => ({ ...f, oral: e.target.checked }))} />구강(S)</label>
+      </td>
+      <td className={td}>
+        <input value={form.phone} inputMode="numeric" maxLength={4} placeholder="1234"
+          onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 4) }))} className={`${input} w-14 text-center`} />
       </td>
       <td className={td}>
         <input value={form.payment} onChange={e => setForm(f => ({ ...f, payment: e.target.value }))} placeholder="b·e·c" className={`${input} w-14 text-center`}
