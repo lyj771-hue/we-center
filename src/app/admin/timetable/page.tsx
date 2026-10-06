@@ -158,10 +158,14 @@ export default function TimetablePage() {
           dayLabel={mode === 'day' ? `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})` : `${DOW[weekday]}요일 고정`}
           kids={children}
           onClose={() => setEditing(null)}
-          onSave={async input => {
+          onSave={async (input, weekly) => {
             const { teacher, time, side } = editing;
             try {
-              if (mode === 'fixed') {
+              if (weekly && input !== 'reset' && input.status === 'child') {
+                // 날짜별 화면에서 "매주 고정으로 저장" — 요일 고정 수업으로 넣고, 그날 따로 바꿔 둔 칸은 지운다
+                await saveFixed(d.getDay(), teacher.id, time, input);
+                await resetDayCell(day, teacher.id, time, 'fixed');
+              } else if (mode === 'fixed') {
                 if (input === 'reset' || input.status !== 'child') await deleteFixed(weekday, teacher.id, time);
                 else await saveFixed(weekday, teacher.id, time, input);
               } else if (input === 'reset') {
@@ -209,7 +213,8 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
   dayLabel: string;
   kids: Child[];
   onClose: () => void;
-  onSave: (input: CellInput | 'reset') => void;
+  /** weekly = 날짜별 화면의 왼쪽 칸에서 "매주 고정으로 저장" */
+  onSave: (input: CellInput | 'reset', weekly?: boolean) => void;
 }) {
   const { teacher, time, side, cell } = editing;
   const [name, setName] = useState(cell.status === 'child' ? cell.name ?? '' : '');
@@ -224,6 +229,11 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
     setName(v);
     const c = kids.find(x => x.name === v.trim());
     if (c && !payment) setPayment(c.payment);
+  };
+
+  const saveWeekly = () => {
+    if (!name.trim()) return;
+    onSave({ status: 'child', childId: child?.id ?? null, name: name.trim(), payment, oral, absent: false, moved: false }, true);
   };
 
   const save = () => {
@@ -276,7 +286,14 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
         )}
 
         <div className="flex flex-wrap gap-1.5">
-          <button onClick={save} className={`${chip} border-[var(--brand)] bg-[var(--brand)] text-white`}>저장</button>
+          <button onClick={save} className={`${chip} border-[var(--brand)] bg-[var(--brand)] text-white`}>
+            {mode === 'day' && side === 'fixed' ? '이 날만 저장' : '저장'}
+          </button>
+          {mode === 'day' && side === 'fixed' && (
+            <button onClick={saveWeekly} disabled={!name.trim()} className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white disabled:opacity-40`}>
+              매주 고정으로 저장
+            </button>
+          )}
           {mode === 'day' && <button onClick={() => onSave({ status: 'undecided' })} className={`${chip} border-[#ddd]`}>? 미정</button>}
           {mode === 'day' && <button onClick={() => onSave({ status: 'off' })} className={`${chip} border-[#ddd]`}>x 수업 안 함</button>}
           {mode === 'day' && side === 'fixed' && cell.source !== 'none' && (
