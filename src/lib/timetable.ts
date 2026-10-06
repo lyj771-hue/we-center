@@ -7,7 +7,11 @@ import { parseYmd } from './schedule';
 
 export interface Child {
   id: string;
+  /** 회원 코드 (W0001 …) — 가입한 보호자 계정과 이을 때 쓴다 */
+  memberCode?: string;
   name: string;
+  /** 구강 수업 아이 (S) */
+  oral?: boolean;
   number?: number;
   payment: string;
   memo?: string;
@@ -70,15 +74,42 @@ export async function getChildren(): Promise<Child[]> {
   const { data, error } = await supabase.from('children').select('*').order('name');
   if (error) throw error;
   return (data ?? []).map(r => ({
-    id: r.id, name: r.name, number: r.number ?? undefined, payment: r.payment ?? '', memo: r.memo ?? undefined,
+    id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral,
+    number: r.number ?? undefined, payment: r.payment ?? '', memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
   }));
 }
 
 export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise<void> {
-  const row = { name: c.name.trim(), number: c.number ?? null, payment: c.payment.trim(), memo: c.memo?.trim() || null };
+  const row = { name: c.name.trim(), number: c.number ?? null, payment: c.payment.trim(), memo: c.memo?.trim() || null, oral: !!c.oral };
   const { error } = c.id ? await supabase.from('children').update(row).eq('id', c.id) : await supabase.from('children').insert(row);
   if (error) throw error;
+}
+
+/** 아이를 보호자 계정과 잇는다(계정 하나 = 아이 한 명). null 이면 연결을 끊는다 */
+export async function linkChild(childId: string, userId: string | null): Promise<void> {
+  if (userId) {
+    // 이 계정에 이미 이어진 다른 아이가 있으면 먼저 끊는다
+    const { error: e1 } = await supabase.from('children').update({ guardian_user_id: null }).eq('guardian_user_id', userId).neq('id', childId);
+    if (e1) throw e1;
+  }
+  const { error } = await supabase.from('children').update({ guardian_user_id: userId }).eq('id', childId);
+  if (error) throw error;
+}
+
+/** 아이별 고정 수업 — 아이 id → ["월 14:00 이정길 b", …] */
+export async function getFixedByChild(): Promise<Map<string, { weekday: number; time: string; teacher: string; payment: string; oral: boolean }[]>> {
+  const { data, error } = await supabase.from('fixed_lessons').select('child_id, weekday, time, payment, oral, teachers(name, sort_order)').order('weekday').order('time');
+  if (error) throw error;
+  const m = new Map<string, { weekday: number; time: string; teacher: string; payment: string; oral: boolean }[]>();
+  for (const r of data ?? []) {
+    if (!r.child_id) continue;
+    const t = r.teachers as unknown as { name: string } | null;
+    const list = m.get(r.child_id) ?? [];
+    list.push({ weekday: r.weekday, time: r.time, teacher: t?.name ?? '', payment: r.payment ?? '', oral: !!r.oral });
+    m.set(r.child_id, list);
+  }
+  return m;
 }
 
 export async function deleteChild(id: string): Promise<void> {

@@ -5,13 +5,16 @@ import { useAdmin } from '@/components/AdminContext';
 import { deleteProfile, getMembers, saveMemberProfile } from '@/lib/store';
 import type { Member, MemberExtras } from '@/lib/types';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
+import ChildrenTab from '@/components/ChildrenTab';
+import type { Child } from '@/lib/timetable';
+import { getChildren, linkChild } from '@/lib/timetable';
 
 // 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자 표.
 // 보호자 닉네임은 보호자가 처음 입력한 것, 관리자 닉네임(center_nickname)·설명은 관리자가 정한다. 보호자 화면엔 늘 보호자 닉네임.
 // "승인"을 누르면 승인일자가 찍힌다(같은 닉네임 회원이 있을 때만 관리자 닉네임을 정해야 한다). 승인/미승인 탭으로 나눠 본다(승인 탭의 '가입일자'는 승인한 날, 미승인 탭의 '가입신청일자'는 처음 로그인한 날).
 // 메뉴에는 없고 관리자 모드 띠의 "회원 관리"로 들어온다.
 
-type Filter = 'waiting' | 'approved';
+type Filter = 'waiting' | 'approved' | 'children';
 
 // 선결제 칸 — 지금은 가려 둔다(DB에는 칸이 있다). 다시 보이려면 true
 const SHOW_PREPAID = false;
@@ -41,10 +44,14 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0' });
+  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '' });
   const [showDates, setShowDates] = useState(false);   // 계정번호·가입일자·마지막 로그인은 접어 둔다
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+
+  const [kids, setKids] = useState<Child[]>([]);
+  const loadKids = useCallback(() => { getChildren().then(setKids).catch(() => {}); }, []);
+  useEffect(() => { if (isAdmin) loadKids(); }, [isAdmin, loadKids]);
 
   const load = useCallback(() => {
     getMembers()
@@ -59,11 +66,14 @@ export default function MembersPage() {
     return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
   }
 
+  const kidOf = (userId: string) => kids.find(k => k.guardianUserId === userId);
+
   const startEdit = (m: Member) => {
     setEditing(m.userId);
     setForm({
       nickname: m.nickname, centerNickname: m.centerNickname ?? '', memo: m.memo ?? '',
       prepaidEunpyeong: String(m.prepaidEunpyeong), prepaidUijeongbu: String(m.prepaidUijeongbu),
+      code: kidOf(m.userId)?.memberCode ?? '',
     });
   };
 
@@ -75,6 +85,20 @@ export default function MembersPage() {
         prepaidEunpyeong: Number(form.prepaidEunpyeong) || 0, prepaidUijeongbu: Number(form.prepaidUijeongbu) || 0,
       });
       if (r === 'taken') { alert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
+      // 회원 코드로 아이와 잇기 (계정 하나 = 아이 한 명)
+      const code = form.code.trim().toUpperCase();
+      const current = kidOf(m.userId);
+      if (code !== (current?.memberCode ?? '')) {
+        if (!code) {
+          if (current) await linkChild(current.id, null);
+        } else {
+          const kid = kids.find(k => k.memberCode === code);
+          if (!kid) { await showAlert(`회원 코드 ${code}인 아이가 명단에 없어요.`); return; }
+          if (kid.guardianUserId && kid.guardianUserId !== m.userId && !(await askConfirm(`${code} ${kid.name}은(는) 다른 계정에 이어져 있어요.\n이 계정으로 옮길까요?`))) return;
+          await linkChild(kid.id, m.userId);
+        }
+        loadKids();
+      }
       setEditing(null);
       load();
     } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
@@ -141,7 +165,7 @@ export default function MembersPage() {
       </p>
 
       <div role="tablist" className="flex gap-1.5 mb-5">
-        {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`]] as const).map(([key, label]) => (
+        {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`], ['children', `아이 명단 ${kids.length}`]] as const).map(([key, label]) => (
           <button key={key} role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}
             className={[
               'text-[13px] px-4 py-2 border transition-colors',
@@ -154,6 +178,12 @@ export default function MembersPage() {
 
       {failed && <p className="text-[14px] text-red-400 py-6">회원 목록을 불러오지 못했어요. (DB 설정 SQL을 실행했는지 확인해 주세요)</p>}
 
+      <datalist id="member-codes">
+        {kids.map(k => <option key={k.id} value={k.memberCode}>{`${k.number ?? ''}${k.name}`}</option>)}
+      </datalist>
+      {filter === 'children' ? (
+        <ChildrenTab members={members} onLinked={loadKids} />
+      ) : (<>
       <div className="overflow-x-auto border-t border-[#e5e5e5]">
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
@@ -173,6 +203,7 @@ export default function MembersPage() {
               {showDates && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
               <th className={th}>관리자 닉네임</th>
+              <th className={th}>회원 코드</th>
               <th className={th}>설명</th>
               {SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
@@ -195,6 +226,14 @@ export default function MembersPage() {
                   <td className={td}>
                     {on ? <input className={input} value={form.centerNickname} maxLength={20} placeholder="예: 김민준" onChange={e => setForm(f => ({ ...f, centerNickname: e.target.value }))} />
                       : m.centerNickname ? <span className="text-[var(--brand)]">{m.centerNickname}</span> : <span className="text-[#ccc]">-</span>}
+                  </td>
+                  <td className={`${td} whitespace-nowrap`}>
+                    {on ? (
+                      <input className={`${input} w-20 uppercase`} value={form.code} placeholder="W0001" list="member-codes"
+                        onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
+                    ) : kidOf(m.userId) ? (
+                      <span className="text-[12px]"><span className="text-[#888] tabular-nums">{kidOf(m.userId)!.memberCode}</span> {kidOf(m.userId)!.number ?? ''}{kidOf(m.userId)!.name}</span>
+                    ) : <span className="text-[#ccc]">-</span>}
                   </td>
                   <td className={`${td} min-w-[160px]`}>
                     {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
@@ -251,6 +290,7 @@ export default function MembersPage() {
       {loaded && !failed && list.length === 0 && (
         <p className="text-[14px] text-[#bbb] py-16 text-center">아직 없어요.</p>
       )}
+      </>)}
     </div>
   );
 }
