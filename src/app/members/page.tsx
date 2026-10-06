@@ -150,7 +150,8 @@ export default function MembersPage() {
     catch { alert('지우지 못했어요. 다시 시도해 주세요.'); }
   };
 
-  const waiting = members.filter(m => !m.approvedAt);
+  // 카카오 로그인만 하고 가입 창(아이 이름·뒷번호)을 안 채운 계정은 숨긴다
+  const waiting = members.filter(m => !m.approvedAt && m.nickname);
   const approved = members.filter(m => m.approvedAt);
   const list = filter === 'waiting' ? waiting : approved;
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
