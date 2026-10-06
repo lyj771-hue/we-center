@@ -112,7 +112,10 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm px-4">
-      <div className="bg-white border border-[#e5e5e5] w-full max-w-sm p-8 shadow-2xl">
+      <div className="relative bg-white border border-[#e5e5e5] w-full max-w-sm p-8 shadow-2xl">
+        {/* ✕ = 가입 취소(카카오 로그인 풀기) */}
+        <button type="button" onClick={onCancel} aria-label="가입 취소"
+          className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center text-[18px] text-[#999] hover:text-[#333]">✕</button>
         <p className="text-[var(--brand)] text-[22px] mb-2">처음 오셨네요</p>
         <p className="text-[13px] leading-[2] text-[#666] mb-6">
           아이 이름과 대표 보호자 전화번호 뒷자리를 적어 주세요.<br />
@@ -142,7 +145,7 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
             </button>
             <button type="button" onClick={onCancel}
               className="flex-1 border border-[#e5e5e5] text-[13px] py-3 tracking-widest hover:bg-[#f8f8f8] transition-colors">
-              로그아웃
+              가입 취소
             </button>
           </div>
         </form>
