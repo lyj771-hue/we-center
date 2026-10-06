@@ -84,7 +84,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
             <tr className="border-b border-[#e5e5e5]">
-              <th className={th}>카카오 계정번호</th>
+              <th className={th}>카카오계정번호</th>
               <th className={th}>회원 코드</th>
               <th className={th}>이름</th>
               <th className={th}>기본 결제</th>
