@@ -84,6 +84,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
             <tr className="border-b border-[#e5e5e5]">
+              <th className={th}>카카오 계정번호</th>
               <th className={th}>회원 코드</th>
               <th className={th}>이름</th>
               <th className={th}>기본 결제</th>
@@ -103,6 +104,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                 onSave={() => save(k)} onCancel={() => setEditing(null)} />
             ) : (
               <tr key={k.id} className="border-b border-[#f0f0f0]">
+                <td className={`${td} text-[12px] text-[#999] whitespace-nowrap tabular-nums`}>{k.guardianUserId ? memberOf.get(k.guardianUserId)?.kakaoId || '-' : <span className="text-[#ddd]">-</span>}</td>
                 <td className={`${td} text-[12px] text-[#888] whitespace-nowrap tabular-nums`}>{k.memberCode}</td>
                 <td className={`${td} whitespace-nowrap`} style={{ color: paymentColor(k.payment) }}>{k.number ?? ''}{k.oral ? 'S' : ''}{k.name}</td>
                 <td className={`${td} text-[12px] whitespace-nowrap`}>{k.payment ? `${k.payment} ${PAY_LABEL[k.payment] ?? ''}` : <span className="text-[#ccc]">없음</span>}</td>
@@ -150,6 +152,7 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
   const isNew = code === '새 코드';
   return (
     <tr className="border-b border-[#f0f0f0] bg-[#f8fbff]">
+      <td className={`${td} text-[12px] text-[#bbb]`}>{approved.find(m => m.userId === form.guardian)?.kakaoId ?? '-'}</td>
       <td className={`${td} text-[12px] text-[#888]`}>{code}</td>
       <td className={td}>
         <span className="inline-flex items-center gap-1">

@@ -199,11 +199,11 @@ export default function MembersPage() {
                 </button>
               </th>
               {showDates && <th className={th}>계정번호</th>}
+              <th className={th}>회원 코드</th>
               {showDates && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
               {showDates && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
               <th className={th}>관리자 닉네임</th>
-              <th className={th}>회원 코드</th>
               <th className={th}>설명</th>
               {SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
@@ -217,6 +217,14 @@ export default function MembersPage() {
                 <tr key={m.userId} className="border-b border-[#f0f0f0]">
                   <td className={`${td} w-8 pr-0`} />
                   {showDates && <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>}
+                  <td className={`${td} whitespace-nowrap`}>
+                    {on ? (
+                      <input className={`${input} w-20 uppercase`} value={form.code} placeholder="W0001" list="member-codes"
+                        onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
+                    ) : kidOf(m.userId) ? (
+                      <span className="text-[12px]"><span className="text-[#888] tabular-nums">{kidOf(m.userId)!.memberCode}</span> {kidOf(m.userId)!.number ?? ''}{kidOf(m.userId)!.name}</span>
+                    ) : <span className="text-[#ccc]">-</span>}
+                  </td>
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(m.approvedAt ?? m.joinedAt)}</td>}
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
                   <td className={td}>
@@ -226,14 +234,6 @@ export default function MembersPage() {
                   <td className={td}>
                     {on ? <input className={input} value={form.centerNickname} maxLength={20} placeholder="예: 김민준" onChange={e => setForm(f => ({ ...f, centerNickname: e.target.value }))} />
                       : m.centerNickname ? <span className="text-[var(--brand)]">{m.centerNickname}</span> : <span className="text-[#ccc]">-</span>}
-                  </td>
-                  <td className={`${td} whitespace-nowrap`}>
-                    {on ? (
-                      <input className={`${input} w-20 uppercase`} value={form.code} placeholder="W0001" list="member-codes"
-                        onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
-                    ) : kidOf(m.userId) ? (
-                      <span className="text-[12px]"><span className="text-[#888] tabular-nums">{kidOf(m.userId)!.memberCode}</span> {kidOf(m.userId)!.number ?? ''}{kidOf(m.userId)!.name}</span>
-                    ) : <span className="text-[#ccc]">-</span>}
                   </td>
                   <td className={`${td} min-w-[160px]`}>
                     {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
