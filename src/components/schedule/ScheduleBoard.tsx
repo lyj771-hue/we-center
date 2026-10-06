@@ -120,7 +120,7 @@ export default function ScheduleBoard({
                               aria-label={`${teacher.name} 선생님 ${shortDay(day)} ${s.time} ${s.owner ?? ''} 취소 요청 승인`}
                               className={`${pill} pr-2.5 border-[#f59e0b] bg-[#fef3c7] text-[#b45309] hover:bg-[#fde68a]`}>
                               {s.time}
-                              <span className="text-[12px] bg-white/60 px-2 rounded-full">{s.owner ?? '신청됨'}</span>
+                              <OwnerTag slot={s} className="bg-white/60" />
                               취소요청
                             </button>
                           );
@@ -131,7 +131,7 @@ export default function ScheduleBoard({
                               aria-label={`${teacher.name} 선생님 ${shortDay(day)} ${s.time} 취소완료 — 시간 다시 열기`}
                               className={`${pill} pr-2.5 border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa] hover:bg-[#e4e4e7]`}>
                               {s.time}
-                              <span className="text-[12px] bg-white px-2 rounded-full">{s.owner ?? ''}</span>
+                              <OwnerTag slot={s} className="bg-white" />
                               취소완료
                               <span aria-hidden="true" className="text-[11px]">✕</span>
                             </button>
@@ -142,7 +142,7 @@ export default function ScheduleBoard({
                             aria-label={`${teacher.name} 선생님 ${shortDay(day)} ${s.time} ${s.owner ?? ''} 신청 취소`}
                             className={`${pill} pr-2.5 border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>
                             {s.time}
-                            <span className="text-[12px] bg-white/20 px-2 rounded-full">{s.owner ?? '신청됨'}</span>
+                            <OwnerTag slot={s} className="bg-white/20" />
                             <span aria-hidden="true" className="text-[11px] opacity-80">✕</span>
                           </button>
                         ) : (
@@ -197,5 +197,15 @@ export default function ScheduleBoard({
       </article>
 
     </div>
+  );
+}
+
+/** 관리자 화면의 신청자 표시 — 보호자 닉네임, 관리자 닉네임이 다르면 그 아래 작게 */
+function OwnerTag({ slot, className }: { slot: Slot; className: string }) {
+  return (
+    <span className={`inline-flex flex-col items-center leading-[1.25] px-2 py-0.5 rounded-xl ${className}`}>
+      <span className="text-[11px] md:text-[12px]">{slot.owner ?? '신청됨'}</span>
+      {slot.ownerCenter && <span className="text-[9px] opacity-75">{slot.ownerCenter}</span>}
+    </span>
   );
 }

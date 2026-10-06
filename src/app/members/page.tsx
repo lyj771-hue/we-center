@@ -4,10 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { deleteProfile, getMembers, saveMemberProfile } from '@/lib/store';
 import type { Member, MemberExtras } from '@/lib/types';
+import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 
 // 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자 표.
-// 보호자 닉네임은 보호자가 처음 입력한 것, 센터 닉네임·설명은 관리자가 정한다.
-// "승인"을 누르면 승인일자가 찍힌다(센터 닉네임이 없으면 이때 정한다). 승인/미승인 탭으로 나눠 본다(승인 탭의 '가입일자'는 승인한 날, 미승인 탭의 '가입신청일자'는 처음 로그인한 날).
+// 보호자 닉네임은 보호자가 처음 입력한 것, 관리자 닉네임(center_nickname)·설명은 관리자가 정한다. 보호자 화면엔 늘 보호자 닉네임.
+// "승인"을 누르면 승인일자가 찍힌다(같은 닉네임 회원이 있을 때만 관리자 닉네임을 정해야 한다). 승인/미승인 탭으로 나눠 본다(승인 탭의 '가입일자'는 승인한 날, 미승인 탭의 '가입신청일자'는 처음 로그인한 날).
 // 메뉴에는 없고 관리자 모드 띠의 "회원 관리"로 들어온다.
 
 type Filter = 'waiting' | 'approved';
@@ -73,7 +74,7 @@ export default function MembersPage() {
         userId: m.userId, nickname: form.nickname, centerNickname: form.centerNickname, memo: form.memo, approvedAt: m.approvedAt,
         prepaidEunpyeong: Number(form.prepaidEunpyeong) || 0, prepaidUijeongbu: Number(form.prepaidUijeongbu) || 0,
       });
-      if (r === 'taken') { alert('이미 다른 회원이 쓰는 센터 닉네임이에요.'); return; }
+      if (r === 'taken') { alert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
       setEditing(null);
       load();
     } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
@@ -86,15 +87,25 @@ export default function MembersPage() {
     } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
 
+  // 승인 — 승인 버튼만 누르면 된다. 다만 같은 닉네임을 쓰는 다른 회원이 있으면 관리자 닉네임을 정해야 승인된다
   const setApproved = async (m: Member, approve: boolean) => {
     let centerNickname = m.centerNickname ?? '';
-    if (approve && !centerNickname) {
-      const input = prompt('센터 닉네임을 정해 주세요. (수업 신청 등에 쓰는 이름)', m.nickname);
-      if (input === null) return;
-      centerNickname = input.trim();
-      if (!centerNickname) return;
+    if (approve) {
+      const same = (name: string) => members.some(o => o.userId !== m.userId && (o.nickname.trim() === name.trim() || (o.centerNickname ?? '').trim() === name.trim()));
+      if (!centerNickname && same(m.nickname)) {
+        while (true) {
+          const input = await askPrompt(`"${m.nickname}" 닉네임을 쓰는 회원이 이미 있어요.\n구분할 관리자 닉네임을 정해야 승인돼요.`, '');
+          if (input === null) return;
+          const v = input.trim();
+          if (!v) continue;
+          if (same(v)) { await showAlert(`"${v}"도 이미 쓰고 있어요. 다른 이름으로 정해 주세요.`); continue; }
+          centerNickname = v;
+          break;
+        }
+      }
+    } else if (!(await askConfirm(`"${m.nickname}" 회원의 승인을 취소할까요?`))) {
+      return;
     }
-    if (!approve && !confirm(`"${m.centerNickname || m.nickname}" 회원의 승인을 취소할까요?`)) return;
     try {
       const r = await saveMemberProfile({
         userId: m.userId,
@@ -103,9 +114,9 @@ export default function MembersPage() {
         memo: m.memo,
         approvedAt: approve ? new Date().toISOString() : undefined,
       });
-      if (r === 'taken') { alert('이미 다른 회원이 쓰는 센터 닉네임이에요.'); return; }
+      if (r === 'taken') { await showAlert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
       load();
-    } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
+    } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
 
   const remove = async (m: Member) => {
@@ -161,7 +172,7 @@ export default function MembersPage() {
               {showDates && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
               {showDates && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
-              <th className={th}>센터 닉네임</th>
+              <th className={th}>관리자 닉네임</th>
               <th className={th}>설명</th>
               {SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}

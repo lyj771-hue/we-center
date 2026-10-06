@@ -24,8 +24,10 @@ export interface Slot {
   day: string;
   time: string;
   bookedBy?: string;
-  /** 관리자 화면에서만: 신청한 분의 닉네임 */
+  /** 관리자 화면에서만: 신청한 보호자의 닉네임 */
   owner?: string;
+  /** 관리자 화면에서만: 관리자 닉네임(보호자 닉네임과 다를 때만) */
+  ownerCenter?: string;
   /** 보호자 취소 — requested = 취소중(관리자 승인 전), approved = 취소완료(시간은 계속 마감) */
   cancelState?: 'requested' | 'approved';
 }
@@ -207,6 +209,13 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
   }));
   // 칸마다 마지막 신청 기록의 닉네임 (관리자 화면용 — 취소 승인된 칸도 누구였는지 보이게)
   const ownerOf = new Map(bookings.filter(b => b.kind === 'book' && b.slotId).map(b => [b.slotId!, b.nickname]));
+  // 지금 회원 정보의 보호자 닉네임·관리자 닉네임 (관리자만 다른 보호자 것을 읽을 수 있다)
+  const bookedIds = [...new Set((slotsRes.data ?? []).map(s => s.booked_by).filter(Boolean))] as string[];
+  const names = new Map<string, { nickname: string; center?: string }>();
+  if (bookedIds.length) {
+    const { data: ps } = await supabase.from('profiles').select('user_id, nickname, center_nickname').in('user_id', bookedIds);
+    for (const p of ps ?? []) names.set(p.user_id, { nickname: p.nickname, center: p.center_nickname ?? undefined });
+  }
 
   return {
     id: row.id,
@@ -220,7 +229,8 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
       .map(s => ({
         id: s.id, teacherId: s.teacher_id, day: s.day, time: s.time,
         bookedBy: s.booked_by ?? undefined,
-        owner: s.booked_by ? ownerOf.get(s.id) : undefined,
+        owner: s.booked_by ? (names.get(s.booked_by)?.nickname ?? ownerOf.get(s.id)) : undefined,
+        ownerCenter: s.booked_by && names.get(s.booked_by)?.center !== names.get(s.booked_by)?.nickname ? names.get(s.booked_by)?.center : undefined,
         cancelState: s.cancel_state ?? undefined,
       }))
       .sort((a, b) => (a.day + a.time).localeCompare(b.day + b.time)),

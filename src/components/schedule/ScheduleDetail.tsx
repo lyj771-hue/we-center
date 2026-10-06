@@ -33,7 +33,8 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const [popup, setPopup] = useState<string | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const myName = profile ? (profile.centerNickname || profile.nickname) : undefined;
+  // 보호자 화면엔 보호자가 정한 닉네임
+  const myName = profile?.nickname;
 
   const load = useCallback(async () => {
     try {

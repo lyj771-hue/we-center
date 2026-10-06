@@ -24,7 +24,9 @@ export async function POST(request: Request) {
       const { data: b } = await db
         .from('bookings').select('nickname, label')
         .eq('slot_id', slotId).eq('kind', 'book').order('created_at', { ascending: false }).limit(1).maybeSingle();
-      const who = b?.nickname ?? '보호자';
+      // 선생님 캘린더엔 관리자 닉네임(아이 이름)을 우선 — 없으면 보호자 닉네임
+      const { data: p } = await db.from('profiles').select('nickname, center_nickname').eq('user_id', slot.booked_by).maybeSingle();
+      const who = p?.center_nickname || p?.nickname || b?.nickname || '보호자';
       const state = slot.cancel_state === 'requested' ? ' (취소 신청 중)' : '';
       await upsertLesson(calendarId, slotId, slot.day, slot.time, `${who} 수업${state}`, `${b?.label ?? ''}\nWE 소아재활센터 수업스케쥴에서 신청`);
       return Response.json({ synced: 'upsert' });

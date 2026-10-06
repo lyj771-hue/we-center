@@ -197,6 +197,7 @@ function CellText({ cell, label }: { cell: CellView; label?: string }) {
       {cell.number ?? ''}{cell.oral ? 'S' : ''}{cell.name}
       <span className="text-[10px]">{cell.payment}{cell.absent && !/x/i.test(cell.payment) ? 'x' : ''}</span>
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
+      {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
       {cell.note && <span className="ml-0.5 text-[9px] text-[#f59e0b]">●</span>}
     </span>
   );

@@ -11,12 +11,16 @@ export interface Child {
   number?: number;
   payment: string;
   memo?: string;
+  /** 연결된 보호자 계정 (대시보드에서 보호자별로 묶을 때) */
+  guardianUserId?: string;
 }
 
 /** 표 한 칸에 보이는 내용 */
 export interface CellView {
   status: 'child' | 'undecided' | 'off' | 'none' | 'empty';
   name?: string;
+  /** 보호자 신청 칸: 관리자 닉네임(보호자 닉네임과 다를 때) — 이름 아래 작게 */
+  subName?: string;
   number?: number;
   payment: string;
   oral: boolean;
@@ -65,7 +69,10 @@ const key = (teacherId: string, time: string) => `${teacherId}|${time}`;
 export async function getChildren(): Promise<Child[]> {
   const { data, error } = await supabase.from('children').select('*').order('name');
   if (error) throw error;
-  return (data ?? []).map(r => ({ id: r.id, name: r.name, number: r.number ?? undefined, payment: r.payment ?? '', memo: r.memo ?? undefined }));
+  return (data ?? []).map(r => ({
+    id: r.id, name: r.name, number: r.number ?? undefined, payment: r.payment ?? '', memo: r.memo ?? undefined,
+    guardianUserId: r.guardian_user_id ?? undefined,
+  }));
 }
 
 export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise<void> {
@@ -127,17 +134,20 @@ export async function getDayBoard(day: string, children: Child[]): Promise<{ fix
   const open = new Map<string, CellView>();
   for (const r of fixedRes.data ?? []) fixed.set(key(r.teacher_id, r.time), fromRow({ ...r, status: 'child' }, 'fixed', byId));
 
-  // 보호자 신청 — 닉네임(센터 닉네임 = 아이 이름)으로 아이 명단의 결제 글자를 찾아 붙인다
-  const slotIds = (slotsRes.data ?? []).map(s => s.id);
-  if (slotIds.length) {
-    const { data: bk } = await supabase.from('bookings').select('slot_id, nickname, created_at').in('slot_id', slotIds).eq('kind', 'book').order('created_at');
-    const nameOf = new Map((bk ?? []).map(b => [b.slot_id, b.nickname as string]));
-    for (const s of slotsRes.data ?? []) {
+  // 보호자 신청 — 보호자 닉네임(관리자 닉네임이 다르면 아래 작게). 아이 명단에서 그 보호자의 아이(또는 관리자 닉네임과 같은 이름)를 찾아 결제 글자를 붙인다
+  const booked = slotsRes.data ?? [];
+  if (booked.length) {
+    const ids = [...new Set(booked.map(s => s.booked_by as string))];
+    const { data: ps } = await supabase.from('profiles').select('user_id, nickname, center_nickname').in('user_id', ids);
+    const prof = new Map((ps ?? []).map(p => [p.user_id as string, p]));
+    for (const s of booked) {
       if (s.cancel_state === 'approved') continue;
-      const name = nameOf.get(s.id) ?? '신청';
-      const child = byName.get(name);
+      const p = prof.get(s.booked_by);
+      const center = p?.center_nickname ?? undefined;
+      const child = children.find(c => c.guardianUserId === s.booked_by) ?? (center ? byName.get(center) : undefined) ?? (p ? byName.get(p.nickname) : undefined);
       open.set(key(s.teacher_id, s.time), {
-        ...blank, status: 'child', name, number: child?.number, payment: child?.payment ?? '', childId: child?.id, source: 'booking',
+        ...blank, status: 'child', name: p?.nickname ?? '신청', subName: center && center !== p?.nickname ? center : undefined,
+        number: child?.number, payment: child?.payment ?? '', childId: child?.id, source: 'booking',
         note: s.cancel_state === 'requested' ? '취소 신청 중' : undefined,
       });
     }
