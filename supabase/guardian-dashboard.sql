@@ -5,7 +5,8 @@
 -- 1) 이름: 보호자 화면·신청 기록에는 보호자가 정한 닉네임(profiles.nickname)을 쓴다.
 --    관리자 닉네임(center_nickname)은 관리자 화면에서 보호자 닉네임 아래 작게 보인다.
 -- 2) 대시보드: 아이 ↔ 보호자 계정을 잇고, 기간을 주면 날짜별 수업을 한 번에 뽑는 함수(admin_lessons)를 둔다.
---    "어떤 보호자(아이)가 언제, 어느 선생님 수업에 왔는지, 결석·취소는 몇 번인지"를 이 함수로 센다.
+--    "어떤 아이(보호자 계정)가 언제, 어느 선생님 수업에 왔는지, 결석·취소는 몇 번인지"를 이 함수로 센다.
+--    보호자 계정 하나 = 아이 한 명. 보호자 닉네임은 아이 이름으로 정한다.
 
 -- 1. 보호자 닉네임
 create or replace function public.my_nickname()
@@ -87,9 +88,10 @@ begin
 end;
 $$;
 
--- 2. 아이 ↔ 보호자 계정 (한 보호자가 아이 여럿이어도 된다)
+-- 2. 아이 ↔ 보호자 계정 — 보호자 계정 하나가 아이 한 명이다(보호자 닉네임 = 아이 이름). 계정 없는 아이도 명단엔 있을 수 있다
 alter table children add column if not exists guardian_user_id uuid references auth.users (id) on delete set null;
-create index if not exists children_guardian_idx on children (guardian_user_id);
+drop index if exists children_guardian_idx;
+create unique index if not exists children_guardian_key on children (guardian_user_id);
 create index if not exists slots_day_idx on slots (day);
 create index if not exists slots_booked_by_idx on slots (booked_by);
 create index if not exists bookings_user_idx on bookings (user_id);
@@ -103,7 +105,7 @@ drop function if exists public.admin_lessons(date, date);
 create function public.admin_lessons(p_from date, p_to date)
 returns table (
   day date,
-  time text,
+  lesson_time text,                          -- "time" 은 SQL 예약어라 이름을 바꿨다
   teacher_id uuid,
   teacher_name text,
   side text,
@@ -184,12 +186,12 @@ begin
   join teachers t on t.id = l.teacher_id
   left join children c on c.id = l.child_id
   left join profiles p on p.user_id = l.booked_user
-  -- 보호자 신청은 아이 명단에서 그 보호자의 아이(또는 센터 닉네임과 같은 이름)를 찾아 잇는다
+  -- 보호자 신청은 아이 명단에서 그 계정의 아이(없으면 관리자 닉네임·보호자 닉네임과 같은 이름)를 찾아 잇는다
   left join lateral (
     select ch.* from children ch
     where l.booked_user is not null
-      and (ch.guardian_user_id = l.booked_user or ch.name = p.center_nickname)
-    order by (ch.guardian_user_id = l.booked_user) desc nulls last
+      and (ch.guardian_user_id = l.booked_user or ch.name = p.center_nickname or ch.name = p.nickname)
+    order by (ch.guardian_user_id = l.booked_user) desc nulls last, (ch.name = p.center_nickname) desc nulls last
     limit 1
   ) c2 on true
   left join profiles gp on gp.user_id = coalesce(c.guardian_user_id, c2.guardian_user_id)

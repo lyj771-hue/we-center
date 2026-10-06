@@ -96,9 +96,9 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm px-4">
       <div className="bg-white border border-[#e5e5e5] w-full max-w-sm p-8 shadow-2xl">
-        <p className="text-[var(--brand)] text-[22px] mb-2">닉네임을 정해 주세요</p>
+        <p className="text-[var(--brand)] text-[22px] mb-2">아이 이름(닉네임)을 정해 주세요</p>
         <p className="text-[13px] leading-[2] text-[#666] mb-6">
-          보호자님을 알아볼 수 있는 이름으로 적어 주세요. (예: 민준이 엄마)<br />
+          아이 이름으로 적어 주세요.<br />
           한 번 정한 닉네임은 센터에서만 바꿀 수 있어요.
         </p>
         <form onSubmit={submit} className="space-y-4">
@@ -107,7 +107,7 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
             value={name}
             maxLength={20}
             onChange={e => { setName(e.target.value); setError(''); }}
-            placeholder="예: 민준이 엄마"
+            placeholder="예: 김민준"
             autoFocus
             className="w-full border-b border-[#ccc] py-2 text-[15px] outline-none focus:border-[var(--brand)] placeholder:text-[#bbb]"
           />

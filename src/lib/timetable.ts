@@ -11,7 +11,7 @@ export interface Child {
   number?: number;
   payment: string;
   memo?: string;
-  /** 연결된 보호자 계정 (대시보드에서 보호자별로 묶을 때) */
+  /** 연결된 보호자 계정 — 계정 하나 = 아이 한 명 (홈페이지 가입 안 한 아이는 없음) */
   guardianUserId?: string;
 }
 
