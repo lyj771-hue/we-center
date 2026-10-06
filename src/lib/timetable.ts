@@ -238,3 +238,23 @@ export async function deleteFixed(weekday: number, teacherId: string, time: stri
   const { error } = await supabase.from('fixed_lessons').delete().match({ weekday, teacher_id: teacherId, time });
   if (error) throw error;
 }
+
+// ── 구글 캘린더 ─────────────────────────────────────────────────────
+
+export type TimetableSync =
+  | { action: 'full' }
+  | { action: 'fixed'; teacherId: string; weekday: number; time: string }
+  | { action: 'cell'; day: string; teacherId: string; time: string; side: 'fixed' | 'open' };
+
+/** 시간표를 선생님 구글 캘린더에 맞춘다 (관리자). 결과를 그대로 돌려준다 */
+export async function syncTimetable(body: TimetableSync): Promise<Record<string, unknown>> {
+  const { data } = await supabase.auth.getSession();
+  const res = await fetch('/api/calendar/timetable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error ?? `오류 ${res.status}`);
+  return json;
+}

@@ -8,7 +8,7 @@ import { addDays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Child } from '@/lib/timetable';
 import {
   ROW_LABEL, cellOf, deleteFixed, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
-  rowsForDay, rowsForWeekday, saveDayCell, saveFixed,
+  rowsForDay, rowsForWeekday, saveDayCell, saveFixed, syncTimetable,
 } from '@/lib/timetable';
 
 // 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임] 두 칸.
@@ -53,6 +53,25 @@ export default function TimetablePage() {
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
 
+  // 칸을 고칠 때마다 그 칸만 구글 캘린더에 맞춘다(뒤에서). 실패하면 위에 알려 준다
+  const [syncMsg, setSyncMsg] = useState('');
+  const [fullSyncing, setFullSyncing] = useState(false);
+  const sync = (body: Parameters<typeof syncTimetable>[0]) => {
+    syncTimetable(body).then(() => setSyncMsg('')).catch(e => setSyncMsg(`캘린더 반영 실패: ${(e as Error).message}`));
+  };
+  const fullSync = async () => {
+    if (!(await askConfirm('시간표 전체를 선생님 구글 캘린더에 반영할까요?\n(고정 수업은 이번 주부터 매주 반복, 공휴일은 빼요. 1분쯤 걸릴 수 있어요)'))) return;
+    setFullSyncing(true);
+    try {
+      const r = await syncTimetable({ action: 'full' });
+      await showAlert(`캘린더에 반영했어요.\n고정 수업 ${r.fixed}개 · 그날 바꾼 칸 ${r.cells}개 · 지운 일정 ${r.removed}개${r.errorCount ? `\n실패 ${r.errorCount}건: ${(r.errors as string[]).join(' / ')}` : ''}`);
+    } catch (e) {
+      await showAlert(`반영하지 못했어요.\n${(e as Error).message}`);
+    } finally {
+      setFullSyncing(false);
+    }
+  };
+
   const rows = useMemo(() => (mode === 'day' ? rowsForDay(day) : rowsForWeekday(weekday)), [mode, day, weekday]);
   const d = parseYmd(day);
 
@@ -88,6 +107,14 @@ export default function TimetablePage() {
               ))}
             </div>
           )}
+        </div>
+        <div className="flex items-center gap-3 mb-3">
+          <button onClick={fullSync} disabled={fullSyncing}
+            className="text-[12px] border border-[#0a0a0a] px-3 py-1.5 hover:bg-[#0a0a0a] hover:text-white disabled:opacity-50">
+            {fullSyncing ? '캘린더에 반영 중…' : '구글 캘린더 전체 반영'}
+          </button>
+          <span className="text-[11px] text-[#999]">칸을 고치면 그 칸은 자동으로 반영돼요. 처음 한 번, 또는 어긋났을 때 전체 반영을 눌러 주세요.</span>
+          {syncMsg && <span className="text-[12px] text-red-400">{syncMsg}</span>}
         </div>
         {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — 시간표 SQL(supabase/timetable.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
 
@@ -165,13 +192,17 @@ export default function TimetablePage() {
                 // 날짜별 화면에서 "매주 고정으로 저장" — 요일 고정 수업으로 넣고, 그날 따로 바꿔 둔 칸은 지운다
                 await saveFixed(d.getDay(), teacher.id, time, input);
                 await resetDayCell(day, teacher.id, time, 'fixed');
+                sync({ action: 'fixed', teacherId: teacher.id, weekday: d.getDay(), time });
               } else if (mode === 'fixed') {
                 if (input === 'reset' || input.status !== 'child') await deleteFixed(weekday, teacher.id, time);
                 else await saveFixed(weekday, teacher.id, time, input);
+                sync({ action: 'fixed', teacherId: teacher.id, weekday, time });
               } else if (input === 'reset') {
                 await resetDayCell(day, teacher.id, time, side);
+                sync({ action: 'cell', day, teacherId: teacher.id, time, side });
               } else {
                 await saveDayCell(day, teacher.id, time, side, input);
+                sync({ action: 'cell', day, teacherId: teacher.id, time, side });
               }
               setEditing(null);
               load();
