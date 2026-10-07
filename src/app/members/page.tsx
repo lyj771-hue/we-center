@@ -112,6 +112,27 @@ export default function MembersPage() {
     } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
 
+  // 승인할 때 아이 명단과 자동 연결 — 이름(보호자 닉네임 또는 관리자 닉네임, 앞 숫자 포함 가능)과 뒷번호 4자리가 둘 다 같은 아이가 딱 하나면 잇는다
+  const matchChild = async (m: Member, centerNickname: string) => {
+    if (kidOf(m.userId)) return;   // 이미 연결됨
+    if (!m.phoneLast4) { await showAlert('승인했어요.\n뒷번호가 없어서 아이 명단과는 연결하지 않았어요.'); return; }
+    const names = [m.nickname, centerNickname].map(x => x.trim()).filter(Boolean);
+    const hits = kids.filter(k => k.phoneLast4 === m.phoneLast4 && names.some(n => n === k.name || n === `${k.number ?? ''}${k.name}`));
+    if (hits.length !== 1) {
+      await showAlert(hits.length
+        ? `승인했어요.\n이름·뒷번호가 같은 아이가 ${hits.length}명이라 자동 연결하지 않았어요. 회원 코드로 직접 연결해 주세요.`
+        : '승인했어요.\n이름·뒷번호가 같은 아이가 명단에 없어서 연결하지 않았어요.');
+      return;
+    }
+    const k = hits[0];
+    if (k.guardianUserId && k.guardianUserId !== m.userId) {
+      if (!(await askConfirm(`${k.memberCode} ${k.number ?? ''}${k.name}은(는) 다른 계정에 연결돼 있어요.\n이 계정으로 옮길까요?`))) return;
+    }
+    await linkChild(k.id, m.userId);
+    loadKids();
+    await showAlert(`승인하고 아이 명단과 연결했어요.\n${k.memberCode} ${k.number ?? ''}${k.name} ↔ 카카오 ${m.kakaoId}`);
+  };
+
   // 승인 — 승인 버튼만 누르면 된다. 다만 같은 닉네임을 쓰는 다른 회원이 있으면 관리자 닉네임을 정해야 승인된다
   const setApproved = async (m: Member, approve: boolean) => {
     let centerNickname = m.centerNickname ?? '';
@@ -140,6 +161,7 @@ export default function MembersPage() {
         approvedAt: approve ? new Date().toISOString() : undefined,
       });
       if (r === 'taken') { await showAlert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
+      if (approve) await matchChild(m, centerNickname);
       load();
     } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
