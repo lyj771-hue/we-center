@@ -175,7 +175,8 @@ export async function getDayBoard(day: string, children: Child[], center: Center
   const byName = new Map(children.map(c => [c.name, c]));
   const weekday = parseYmd(day).getDay();
   const [fixedRes, cellsRes, slotsRes] = await Promise.all([
-    supabase.from('fixed_lessons').select('*').eq('weekday', weekday).eq('center', center),
+    // 고정 수업은 시작일(start_date, 2026-10-01부터) 이후 날짜에만
+    supabase.from('fixed_lessons').select('*').eq('weekday', weekday).eq('center', center).lte('start_date', day),
     supabase.from('board_cells').select('*').eq('day', day).eq('center', center),
     // 수업스케쥴 신청은 지금은 은평만
     center === 'eunpyeong'

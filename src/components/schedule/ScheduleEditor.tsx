@@ -81,8 +81,11 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   useEffect(() => { getTemplates().then(setTemplates).catch(() => {}); }, []);
 
   const days = mode === 'holiday' ? holidayDates : weekDays(weekStart);
-  // 수업스케쥴은 은평 — 그 요일에 은평에 출근하지 않는 선생님(예: 설영수 월·토 의정부)은 시간을 넣지 않는다
-  const away = (t: Teacher, d: string) => !worksAt(t, 'eunpyeong', parseYmd(d).getDay());
+  // 수업스케쥴은 은평 — 그 요일에 은평에 출근하지 않는 선생님(예: 설영수 월·토 의정부)은 기본으로 빼 둔다.
+  // 공휴일 스케쥴에선 빼지 않는다. "이 날 추가"로 언제든 넣을 수 있고, 이미 시간이 올라가 있는 날은 넣은 것으로 본다.
+  const [addedAway, setAddedAway] = useState<Set<string>>(() => new Set((existing?.slots ?? []).map(sl => `${sl.teacherId}|${sl.day}`)));
+  const away = (t: Teacher, d: string) =>
+    mode !== 'holiday' && !worksAt(t, 'eunpyeong', parseYmd(d).getDay()) && !addedAway.has(`${t.id}|${d}`);
 
   // 신청된 시간 (잠금) — "선생님|날짜|시간" → 닉네임
   const locked = useMemo(() => {
@@ -405,10 +408,12 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                 const off = !!closed[d] || tOff;
                 if (away(t, d) && !(times[t.id]?.[d] ?? []).some(x => locked.has(`${t.id}|${d}|${x}`))) {
                   return (
-                    <div key={d} className="flex items-center gap-2 opacity-50">
+                    <div key={d} className="flex items-center gap-2">
                       <span className="w-[42px]" />
                       <span className="w-[80px] shrink-0 text-[13px] text-[#71717b] whitespace-nowrap">{dowLabel(d)} <span className="text-[#bbb]">{shortDay(d).split('(')[0]}</span></span>
-                      <span className="text-[12px] text-[#999]">은평 출근 안 하는 날 (시간표 관리의 출근 요일)</span>
+                      <span className="text-[12px] text-[#999]">은평 출근 안 하는 날</span>
+                      <button type="button" onClick={() => setAddedAway(a => new Set(a).add(key))}
+                        className="text-[12px] border border-[#f59e0b] text-[#b45309] px-2 py-0.5 hover:bg-[#fef3c7]">+ 이 날 추가</button>
                     </div>
                   );
                 }

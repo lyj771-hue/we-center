@@ -1,13 +1,8 @@
--- WE 소아재활센터 — 마이페이지(보호자) (2026-10)
+-- WE 소아재활센터 — 고정 수업 시작일 (2026-10)
 -- 실행 방법: Supabase 대시보드 → SQL Editor → New query → 붙여넣고 Run. 여러 번 실행해도 괜찮다.
--- (guardian-phone.sql 까지 실행한 뒤 실행한다)
---
--- 보호자는 시간표 표를 직접 못 읽는다(관리자 전용). 그래서
---   lessons_between  기간 안 모든 수업(내부용 — 아무도 직접 부르지 못한다)
---   admin_lessons    관리자: 전부
---   my_lessons       보호자: 내 계정에 이어진 아이 수업만
---   my_child         보호자: 내 아이 정보(회원 코드·결제)와 지원 현황
--- 으로 나눈다.
+-- 고정 수업은 start_date(기본 2026-10-01)부터만 적용한다 — 시간표·마이페이지·대시보드에서 그 전 날짜엔 고정 수업이 없다.
+
+alter table fixed_lessons add column if not exists start_date date not null default '2026-10-01';
 
 drop function if exists public.admin_lessons(date, date);
 drop function if exists public.my_lessons(date, date);
@@ -185,38 +180,5 @@ end;
 $$;
 revoke all on function public.my_lessons(date, date) from public, anon;
 grant execute on function public.my_lessons(date, date) to authenticated;
-
--- 보호자: 내 아이 정보와 지원 현황
-drop function if exists public.my_child();
-create function public.my_child()
-returns table (
-  member_code text,
-  child_name text,
-  child_number int,
-  payment text,
-  oral boolean,
-  voucher boolean,
-  gusen boolean,
-  kkumideun boolean,
-  woojin boolean,
-  subsidy boolean,
-  prepaid_eunpyeong int,
-  prepaid_uijeongbu int
-)
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select c.member_code, c.name, c.number, c.payment, c.oral,
-         coalesce(p.voucher, false), coalesce(p.gusen, false), coalesce(p.kkumideun, false),
-         coalesce(p.woojin, false), coalesce(p.subsidy, false),
-         coalesce(p.prepaid_eunpyeong, 0), coalesce(p.prepaid_uijeongbu, 0)
-  from profiles p
-  left join children c on c.guardian_user_id = p.user_id
-  where p.user_id = auth.uid();
-$$;
-revoke all on function public.my_child() from public, anon;
-grant execute on function public.my_child() to authenticated;
 
 select 'ok' as result;

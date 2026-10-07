@@ -8,7 +8,7 @@ import {
 //   { action: 'full' }                               전부 다시 맞추기 — 고정 수업 반복 일정 + 이번 주부터 그날 바꾼 칸
 //   { action: 'fixed', teacherId, weekday, time }    고정 수업 하나
 //   { action: 'cell', day, teacherId, time, side }   날짜별 칸 하나
-// 고정 수업은 이번 주 월요일부터 매주 반복, 대한민국 공휴일은 뺀다(앞으로 1년치 공휴일을 반영).
+// 고정 수업은 시작일(start_date, 기본 2026-10-01)부터 매주 반복, 대한민국 공휴일은 뺀다(앞으로 1년치 공휴일을 반영).
 
 export const maxDuration = 300;   // 전체 반영은 일정이 많아 오래 걸릴 수 있다
 
@@ -26,9 +26,10 @@ function thisMondayYmd(): string {
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return ymd(d);
 }
-function firstDayFor(weekday: number): string {
-  const d = new Date(`${thisMondayYmd()}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + ((weekday + 6) % 7));
+/** 반복 일정 첫 날 — 고정 수업 시작일(start_date, 기본 2026-10-01) 이후 첫 그 요일 */
+function firstDayFor(weekday: number, startDate = '2026-10-01'): string {
+  const d = new Date(`${startDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + ((weekday - d.getUTCDay() + 7) % 7));
   return ymd(d);
 }
 
@@ -96,11 +97,11 @@ export async function POST(request: Request) {
 
   try {
     if (body.action === 'full') {
-      const holidays = await koreanHolidays(monday, ymd(new Date(Date.now() + 400 * 86400000)));
+      const holidays = await koreanHolidays('2026-10-01', ymd(new Date(Date.now() + 400 * 86400000)));
       const want = fixedRows.filter(f => calOf.has(f.teacher_id as string));
       const errors = await pool(want, 2, async f => {
         await upsertFixedLesson(calOf.get(f.teacher_id as string)!, f.teacher_id as string, f.weekday as number, f.time as string,
-          firstDayFor(f.weekday as number), holidays, lessonText(f, childOf.get(f.child_id as string), '고정', false, CENTER_NAME[centerOf(f)]), centerOf(f));
+          firstDayFor(f.weekday as number, (f.start_date as string) ?? undefined), holidays, lessonText(f, childOf.get(f.child_id as string), '고정', false, CENTER_NAME[centerOf(f)]), centerOf(f));
       });
       // 시간표에서 지운 고정 수업의 반복 일정 지우기
       let removed = 0;
@@ -122,8 +123,8 @@ export async function POST(request: Request) {
       if (!cal) return Response.json({ skipped: 'no calendar' });
       const f = fixedAt(teacherId, weekday, time, center);
       if (f) {
-        const holidays = await koreanHolidays(monday, ymd(new Date(Date.now() + 400 * 86400000)));
-        await upsertFixedLesson(cal, teacherId, weekday, time, firstDayFor(weekday), holidays, lessonText(f, childOf.get(f.child_id as string), '고정', false, CENTER_NAME[center]), center);
+        const holidays = await koreanHolidays('2026-10-01', ymd(new Date(Date.now() + 400 * 86400000)));
+        await upsertFixedLesson(cal, teacherId, weekday, time, firstDayFor(weekday, (f.start_date as string) ?? undefined), holidays, lessonText(f, childOf.get(f.child_id as string), '고정', false, CENTER_NAME[center]), center);
         // 그날 바꾼 칸은 다시 씌운다
         const { data: cells } = await db.from('board_cells').select('*').eq('center', center).eq('teacher_id', teacherId).eq('time', time).eq('side', 'fixed').gte('day', monday);
         for (const c of (cells ?? []) as Row[]) if (new Date(`${c.day}T12:00:00Z`).getUTCDay() === weekday) await applyCell(c);
