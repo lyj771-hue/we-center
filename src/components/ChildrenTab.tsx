@@ -110,7 +110,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
               <th className={th}>고정 수업</th>
               <th className={th}>연결된 보호자 계정</th>
               <th className={th}>메모</th>
-              <th className={th}><span className="sr-only">관리</span></th>
+              <th className={`${th} sticky right-0 bg-white`}><span className="sr-only">관리</span></th>
             </tr>
           </thead>
           <tbody>
@@ -142,7 +142,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                   {k.guardianUserId ? <span className="text-[var(--brand)]">{memberOf.get(k.guardianUserId)?.nickname ?? '연결됨'}</span> : <span className="text-[#ccc]">-</span>}
                 </td>
                 <td className={`${td} text-[12px] text-[#666] min-w-[120px]`}>{k.memo}</td>
-                <td className={`${td} text-right whitespace-nowrap`}>
+                <td className={`${td} text-right whitespace-nowrap sticky right-0 bg-white shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.12)]`}>
                   <button onClick={() => start(k)} className={`${btn} border-[#e5e5e5] hover:bg-[#f8f8f8] mr-1`}>수정</button>
                   <button onClick={() => remove(k)} className={`${btn} border-[#e5e5e5] text-red-400 hover:bg-red-50`}>삭제</button>
                 </td>
@@ -215,7 +215,7 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
         )}
       </td>
       <td className={td}><input value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} placeholder="메모" className={`${input} w-full min-w-[120px]`} /></td>
-      <td className={`${td} text-right whitespace-nowrap`}>
+      <td className={`${td} text-right whitespace-nowrap sticky right-0 bg-[#f8fbff] shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.12)]`}>
         <button onClick={onSave} className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white mr-1`}>저장</button>
         <button onClick={onCancel} className={`${btn} border-[#e5e5e5]`}>취소</button>
       </td>
