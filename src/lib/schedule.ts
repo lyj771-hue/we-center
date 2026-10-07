@@ -11,6 +11,8 @@ export interface Teacher {
   googleCalendarId?: string;
   /** 일하는 센터 — eunpyeong(은평) / uijeongbu(의정부) */
   centers: string[];
+  /** 센터마다 출근 요일(0=일 … 6=토). 그 센터가 없으면 그 센터 모든 요일 */
+  workDays?: Record<string, number[]>;
 }
 
 /** 쉬는 날 — teacherId 가 없으면 센터 공휴일, 있으면 그 선생님만 휴무(label 은 사유) */
@@ -168,6 +170,7 @@ export async function getTeachers(): Promise<Teacher[]> {
   return (data ?? []).map(r => ({
     id: r.id, name: r.name, order: r.sort_order, googleCalendarId: r.google_calendar_id ?? undefined,
     centers: (r.centers as string[] | null) ?? ['eunpyeong'],
+    workDays: (r.work_days as Record<string, number[]> | null) ?? undefined,
   }));
 }
 

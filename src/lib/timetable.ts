@@ -327,3 +327,27 @@ export async function getPaymentCounts(monthStart: string, monthEnd: string): Pr
   for (const r of prepaid.data ?? []) get(r.child_id).prepaid++;
   return m;
 }
+
+// ── 센터별 출근 요일 · 날짜별 선생님 추가 ─────────────────────────────
+
+/** 이 선생님이 그 요일에 그 센터에서 일하는지 (출근 요일이 따로 없으면 그 센터 모든 요일) */
+export function worksAt(t: { centers: string[]; workDays?: Record<string, number[]> }, center: Center, weekday: number): boolean {
+  if (!t.centers.includes(center)) return false;
+  const days = t.workDays?.[center];
+  return !days || days.includes(weekday);
+}
+
+/** 그날 그 센터에 더한 선생님 id 들 */
+export async function getDayAssigns(day: string, center: Center): Promise<string[]> {
+  const { data, error } = await supabase.from('teacher_day_assign').select('teacher_id').eq('day', day).eq('center', center);
+  if (error) throw error;
+  return (data ?? []).map(r => r.teacher_id as string);
+}
+
+export async function setDayAssign(day: string, teacherId: string, center: Center, on: boolean): Promise<void> {
+  const q = supabase.from('teacher_day_assign');
+  const { error } = on
+    ? await q.upsert({ day, teacher_id: teacherId, center }, { onConflict: 'day,teacher_id,center' })
+    : await q.delete().match({ day, teacher_id: teacherId, center });
+  if (error) throw error;
+}

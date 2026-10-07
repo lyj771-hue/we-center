@@ -7,7 +7,7 @@ import type { Teacher } from '@/lib/schedule';
 import { addDays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, PayMethod } from '@/lib/timetable';
 import {
-  CENTERS, PAY_METHODS, ROW_LABEL, cellOf, deleteFixed, getDayPayments, setLessonPayment, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
+  CENTERS, PAY_METHODS, ROW_LABEL, cellOf, deleteFixed, getDayAssigns, getDayPayments, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
   rowsForDay, rowsForWeekday, saveDayCell, saveFixed, syncTimetable,
 } from '@/lib/timetable';
 
@@ -40,6 +40,8 @@ export default function TimetablePage() {
   const [children, setChildren] = useState<Child[]>([]);
   // 그날 결제 체크 — "아이|시간" → 결제
   const [payments, setPayments] = useState<Map<string, PayMethod>>(new Map());
+  // 그날만 이 센터에 더한 선생님 (공휴일 등)
+  const [assigns, setAssigns] = useState<string[]>([]);
   const [board, setBoard] = useState<{ fixed: Map<string, CellView>; open: Map<string, CellView> }>({ fixed: new Map(), open: new Map() });
   const [editing, setEditing] = useState<Editing | null>(null);
   const [failed, setFailed] = useState('');
@@ -52,6 +54,7 @@ export default function TimetablePage() {
       if (mode === 'day') {
         setBoard(await getDayBoard(day, c, center));
         setPayments(await getDayPayments(day).catch(() => new Map()));
+        setAssigns(await getDayAssigns(day, center).catch(() => []));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
       setFailed('');
@@ -81,8 +84,22 @@ export default function TimetablePage() {
     }
   };
 
-  // 이 센터에서 일하는 선생님
-  const shown = useMemo(() => teachers.filter(t => t.centers.includes(center)), [teachers, center]);
+  // 이 센터·요일에 일하는 선생님 + 그날만 더한 선생님 + (혹시) 칸이 채워져 있는 선생님
+  const shown = useMemo(() => {
+    const wd = mode === 'day' ? parseYmd(day).getDay() : weekday;
+    const hasCells = new Set([...board.fixed.keys(), ...board.open.keys()].map(k => k.split('|')[0]));
+    return teachers.filter(t => worksAt(t, center, wd) || (mode === 'day' && assigns.includes(t.id)) || hasCells.has(t.id));
+  }, [teachers, center, mode, day, weekday, assigns, board]);
+  const extraIds = useMemo(() => new Set(mode === 'day' ? assigns : []), [mode, assigns]);
+  const addable = useMemo(() => teachers.filter(t => !shown.some(x => x.id === t.id)), [teachers, shown]);
+  const changeAssign = async (teacherId: string, on: boolean) => {
+    try {
+      await setDayAssign(day, teacherId, center, on);
+      setAssigns(a => on ? [...a, teacherId] : a.filter(x => x !== teacherId));
+    } catch (e) {
+      showAlert(`저장하지 못했어요.\n${(e as Error).message}`);
+    }
+  };
 
   const rows = useMemo(() => (mode === 'day' ? rowsForDay(day) : rowsForWeekday(weekday)), [mode, day, weekday]);
   const d = parseYmd(day);
@@ -115,6 +132,13 @@ export default function TimetablePage() {
               <input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} className="text-[13px] border border-[#ddd] px-2 h-8" />
               <button onClick={() => setDay(x => addDays(x, 1))} className="text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]" aria-label="다음날">›</button>
               <button onClick={() => setDay(toYmd(new Date()))} className="text-[12px] text-[#888] underline underline-offset-2 ml-1">오늘</button>
+              {addable.length > 0 && (
+                <select value="" onChange={e => { if (e.target.value) changeAssign(e.target.value, true); }}
+                  className="ml-2 text-[12px] border border-[#f59e0b] text-[#b45309] bg-white px-2 h-8" title="공휴일 등 그날만 이 센터에서 일하는 선생님">
+                  <option value="">+ 이 날 선생님 추가</option>
+                  {addable.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              )}
             </>
           ) : (
             <div className="flex gap-1">
@@ -153,6 +177,10 @@ export default function TimetablePage() {
                       className="inline-flex items-center gap-1 hover:opacity-70">
                       {t.name}<span className="text-[10px] text-[#aaa]">{folded.has(t.name) ? '▸' : '◂'}</span>
                     </button>
+                    {extraIds.has(t.id) && (
+                      <button type="button" onClick={async () => { if (await askConfirm(`${t.name} 선생님을 이 날 시간표에서 뺄까요?`)) changeAssign(t.id, false); }}
+                        className="ml-1 text-[10px] text-[#f59e0b] border border-[#fcd34d] rounded px-1" title="이 날만 더한 선생님 — 누르면 빼요">이 날만 ✕</button>
+                    )}
                   </th>
                 ))}
               </tr>
