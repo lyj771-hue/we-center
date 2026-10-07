@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import type { Child } from '@/lib/timetable';
-import { deleteChild, getChildren, getFixedByChild, linkChild, paymentColor, saveChild } from '@/lib/timetable';
+import type { PayCount } from '@/lib/timetable';
+import { deleteChild, getChildren, getFixedByChild, getPaymentCounts, linkChild, paymentColor, saveChild } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 
 // 회원 관리 — "아이 명단" 탭. 센터에 다니는 아이마다 회원 코드(W0001 …)가 있고,
@@ -13,11 +14,20 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈이든', v: 'v' };
 
 type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean };
-const emptyForm = { name: '', number: '', payment: '', oral: false, memo: '', guardian: '', phone: '' };
+const emptyForm = { name: '', number: '', payment: '', oral: false, memo: '', guardian: '', phone: '', vl: '0', gl: '0', kl: '0', pt: '0' };
+
+// 결제 현황 칸 — 바우처·굳센·꿈이든은 이번 달, 차감은 지금까지 (사용/제공·충전)
+const PAY_COLS = [
+  { key: 'voucher', label: '바우처', limit: 'voucherLimit', form: 'vl' },
+  { key: 'gusen', label: '굳센', limit: 'gusenLimit', form: 'gl' },
+  { key: 'kkumideun', label: '꿈이든', limit: 'kkumideunLimit', form: 'kl' },
+  { key: 'prepaid', label: '차감', limit: 'prepaidTotal', form: 'pt' },
+] as const;
 
 export default function ChildrenTab({ members, onLinked }: { members: Member[]; onLinked: () => void }) {
   const [kids, setKids] = useState<Child[]>([]);
   const [fixed, setFixed] = useState<Map<string, Fixed[]>>(new Map());
+  const [counts, setCounts] = useState<Map<string, PayCount>>(new Map());
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<string | null>(null);   // 아이 id, 'new' = 새 아이
   const [form, setForm] = useState(emptyForm);
@@ -25,7 +35,12 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
 
   const load = useCallback(async () => {
     try {
-      const [k, f] = await Promise.all([getChildren(), getFixedByChild()]);
+      const now = new Date();
+      const ms = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const me = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      const meY = `${me.getFullYear()}-${String(me.getMonth() + 1).padStart(2, '0')}-${String(me.getDate()).padStart(2, '0')}`;
+      const [k, f, pc] = await Promise.all([getChildren(), getFixedByChild(), getPaymentCounts(ms, meY).catch(() => new Map<string, PayCount>())]);
+      setCounts(pc);
       k.sort((a, b) => (a.memberCode ?? '').localeCompare(b.memberCode ?? ''));
       setKids(k);
       setFixed(f);
@@ -41,13 +56,15 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
 
   const start = (k?: Child) => {
     setEditing(k ? k.id : 'new');
-    setForm(k ? { name: k.name, number: k.number?.toString() ?? '', payment: k.payment, oral: !!k.oral, memo: k.memo ?? '', guardian: k.guardianUserId ?? '', phone: k.phoneLast4 ?? '' } : emptyForm);
+    setForm(k ? { name: k.name, number: k.number?.toString() ?? '', payment: k.payment, oral: !!k.oral, memo: k.memo ?? '', guardian: k.guardianUserId ?? '', phone: k.phoneLast4 ?? '',
+      vl: String(k.voucherLimit ?? 0), gl: String(k.gusenLimit ?? 0), kl: String(k.kkumideunLimit ?? 0), pt: String(k.prepaidTotal ?? 0) } : emptyForm);
   };
 
   const save = async (k?: Child) => {
     if (!form.name.trim()) { showAlert('이름을 적어 주세요.'); return; }
     try {
-      await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined, payment: form.payment, oral: form.oral, memo: form.memo, phoneLast4: form.phone });
+      await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined, payment: form.payment, oral: form.oral, memo: form.memo, phoneLast4: form.phone,
+        voucherLimit: Number(form.vl) || 0, gusenLimit: Number(form.gl) || 0, kkumideunLimit: Number(form.kl) || 0, prepaidTotal: Number(form.pt) || 0 });
       if (k && form.guardian !== (k.guardianUserId ?? '')) {
         await linkChild(k.id, form.guardian || null);
         onLinked();
@@ -89,6 +106,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
               <th className={th}>이름</th>
               <th className={th}>뒷번호</th>
               <th className={th}>기본 결제</th>
+              {PAY_COLS.map(c => <th key={c.key} className={`${th} text-center`}>{c.label}<span className="block text-[10px] text-[#bbb]">{c.key === 'prepaid' ? '사용/충전' : '이번 달'}</span></th>)}
               <th className={th}>고정 수업</th>
               <th className={th}>연결된 보호자 계정</th>
               <th className={th}>메모</th>
@@ -110,6 +128,15 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                 <td className={`${td} whitespace-nowrap`} style={{ color: paymentColor(k.payment) }}>{k.number ?? ''}{k.oral ? 'S' : ''}{k.name}</td>
                 <td className={`${td} text-[12px] whitespace-nowrap tabular-nums`}>{k.phoneLast4 ?? <span className="text-[#ccc]">-</span>}</td>
                 <td className={`${td} text-[12px] whitespace-nowrap`}>{k.payment ? `${k.payment} ${PAY_LABEL[k.payment] ?? ''}` : <span className="text-[#ccc]">없음</span>}</td>
+                {PAY_COLS.map(c => {
+                  const used = counts.get(k.id)?.[c.key] ?? 0;
+                  const total = (k[c.limit] as number | undefined) ?? 0;
+                  return (
+                    <td key={c.key} className={`${td} text-[12px] text-center whitespace-nowrap tabular-nums ${total && used >= total ? 'text-[#e11d48]' : ''}`}>
+                      {total || used ? `${used}/${total}` : <span className="text-[#ddd]">-</span>}
+                    </td>
+                  );
+                })}
                 <td className={`${td} text-[12px]`}><FixedList items={fixed.get(k.id) ?? []} /></td>
                 <td className={`${td} text-[12px] whitespace-nowrap`}>
                   {k.guardianUserId ? <span className="text-[var(--brand)]">{memberOf.get(k.guardianUserId)?.nickname ?? '연결됨'}</span> : <span className="text-[#ccc]">-</span>}
@@ -171,6 +198,12 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
         <input value={form.payment} onChange={e => setForm(f => ({ ...f, payment: e.target.value }))} placeholder="b·e·c" className={`${input} w-14 text-center`}
           style={{ color: paymentColor(form.payment) }} />
       </td>
+      {PAY_COLS.map(c => (
+        <td key={c.key} className={`${td} text-center`}>
+          <input value={form[c.form]} inputMode="numeric" title={c.key === 'prepaid' ? '지금까지 충전한 횟수' : '한 달 제공 횟수'}
+            onChange={e => setForm(f => ({ ...f, [c.form]: e.target.value.replace(/\D/g, '').slice(0, 3) }))} className={`${input} w-10 text-center`} />
+        </td>
+      ))}
       <td className={`${td} text-[12px]`}><FixedList items={fixed} /><p className="text-[10px] text-[#aaa] mt-1">고정 수업은 시간표 관리에서 고쳐요</p></td>
       <td className={td}>
         {isNew ? <span className="text-[11px] text-[#aaa]">저장 후 연결</span> : (

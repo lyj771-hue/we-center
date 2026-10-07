@@ -14,6 +14,11 @@ export interface Child {
   oral?: boolean;
   /** 대표 보호자 전화번호 뒷 4자리 */
   phoneLast4?: string;
+  /** 한 달 제공 횟수(0 = 안 씀) — 바우처·굳센·꿈이든. 선결제(차감)는 지금까지 충전한 횟수 */
+  voucherLimit?: number;
+  gusenLimit?: number;
+  kkumideunLimit?: number;
+  prepaidTotal?: number;
   number?: number;
   payment: string;
   memo?: string;
@@ -77,6 +82,7 @@ export async function getChildren(): Promise<Child[]> {
   if (error) throw error;
   return (data ?? []).map(r => ({
     id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral, phoneLast4: r.phone_last4 ?? undefined,
+    voucherLimit: r.voucher_limit ?? 0, gusenLimit: r.gusen_limit ?? 0, kkumideunLimit: r.kkumideun_limit ?? 0, prepaidTotal: r.prepaid_total ?? 0,
     number: r.number ?? undefined, payment: r.payment ?? '', memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
   }));
@@ -86,6 +92,10 @@ export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise
   const row = {
     name: c.name.trim(), number: c.number ?? null, payment: c.payment.trim(), memo: c.memo?.trim() || null, oral: !!c.oral,
     phone_last4: c.phoneLast4 && /^\d{4}$/.test(c.phoneLast4) ? c.phoneLast4 : null,
+    ...(c.voucherLimit !== undefined ? { voucher_limit: Math.max(0, Math.floor(c.voucherLimit) || 0) } : {}),
+    ...(c.gusenLimit !== undefined ? { gusen_limit: Math.max(0, Math.floor(c.gusenLimit) || 0) } : {}),
+    ...(c.kkumideunLimit !== undefined ? { kkumideun_limit: Math.max(0, Math.floor(c.kkumideunLimit) || 0) } : {}),
+    ...(c.prepaidTotal !== undefined ? { prepaid_total: Math.max(0, Math.floor(c.prepaidTotal) || 0) } : {}),
   };
   const { error } = c.id ? await supabase.from('children').update(row).eq('id', c.id) : await supabase.from('children').insert(row);
   if (error) throw error;
@@ -267,4 +277,53 @@ export async function syncTimetable(body: TimetableSync): Promise<Record<string,
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error ?? `오류 ${res.status}`);
   return json;
+}
+
+// ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
+
+export type PayMethod = 'voucher' | 'gusen' | 'kkumideun' | 'prepaid' | 'other';
+export const PAY_METHODS: { key: PayMethod; label: string; short: string }[] = [
+  { key: 'voucher', label: '바우처', short: 'b' },
+  { key: 'gusen', label: '굳센', short: 'e' },
+  { key: 'kkumideun', label: '꿈이든', short: 'c' },
+  { key: 'prepaid', label: '차감', short: '차' },
+  { key: 'other', label: '기타', short: '기' },
+];
+
+/** 그날 결제 체크 — "아이|시간" → 결제 */
+export async function getDayPayments(day: string): Promise<Map<string, PayMethod>> {
+  const { data, error } = await supabase.from('lesson_payments').select('child_id, time, method').eq('day', day);
+  if (error) throw error;
+  return new Map((data ?? []).map(r => [`${r.child_id}|${r.time}`, r.method as PayMethod]));
+}
+
+/** 결제 체크 저장 / 지우기(method = null) */
+export async function setLessonPayment(childId: string, day: string, time: string, teacherId: string, center: Center, method: PayMethod | null): Promise<void> {
+  if (!method) {
+    const { error } = await supabase.from('lesson_payments').delete().match({ child_id: childId, day, time });
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from('lesson_payments').upsert(
+    { child_id: childId, day, time, teacher_id: teacherId, center, method },
+    { onConflict: 'child_id,day,time' },
+  );
+  if (error) throw error;
+}
+
+export interface PayCount { voucher: number; gusen: number; kkumideun: number; prepaid: number }
+
+/** 아이마다 사용 횟수 — 바우처·굳센·꿈이든은 이번 달, 차감은 지금까지 */
+export async function getPaymentCounts(monthStart: string, monthEnd: string): Promise<Map<string, PayCount>> {
+  const [month, prepaid] = await Promise.all([
+    supabase.from('lesson_payments').select('child_id, method').gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'kkumideun']),
+    supabase.from('lesson_payments').select('child_id').eq('method', 'prepaid'),
+  ]);
+  if (month.error) throw month.error;
+  if (prepaid.error) throw prepaid.error;
+  const m = new Map<string, PayCount>();
+  const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, kkumideun: 0, prepaid: 0 }; m.set(id, c); return c; };
+  for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'kkumideun']++;
+  for (const r of prepaid.data ?? []) get(r.child_id).prepaid++;
+  return m;
 }

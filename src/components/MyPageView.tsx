@@ -1,20 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
-import type { MyChild, MyLesson } from '@/lib/mypage';
-import { isRealLesson } from '@/lib/mypage';
+import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
 import { addDays, parseYmd, thisMonday } from '@/lib/schedule';
 
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const SUPPORTS = [
-  { key: 'voucher', label: '바우처', code: 'b' },
-  { key: 'gusen', label: '굳센', code: 'e' },
-  { key: 'kkumideun', label: '꿈이든', code: 'c' },
-  { key: 'woojin', label: '우진학교', code: '' },
-  { key: 'subsidy', label: '지원금', code: '' },
-] as const;
+const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', kkumideun: '꿈이든', prepaid: '차감(선결제)' };
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈이든' };
 const payKind = (p: string) => {
   const code = p.toLowerCase().replace(/[x~]/g, '');
@@ -30,26 +22,14 @@ export interface MyPageViewProps {
   week: string;
   setWeek: (fn: (w: string) => string) => void;
   weekLessons: MyLesson[];
-  monthLessons: MyLesson[];
+  payments: MyPayment[];
   today: string;
   failed?: string;
 }
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, monthLessons, today, failed }: MyPageViewProps) {
-  // 이번 달 결제별 — 지난 수업(차감됨)·남은 수업·결석
-  const usage = useMemo(() => {
-    const m = new Map<string, { done: number; left: number; absent: number }>();
-    for (const l of monthLessons) {
-      if (!isRealLesson(l)) continue;
-      const k = payKind(l.payment);
-      const u = m.get(k) ?? { done: 0, left: 0, absent: 0 };
-      if (l.absent) u.absent++;
-      else if (l.day < today) u.done++;
-      else u.left++;
-      m.set(k, u);
-    }
-    return [...m.entries()].sort(([a], [b]) => ['b', 'e', 'c', 'etc'].indexOf(a) - ['b', 'e', 'c', 'etc'].indexOf(b));
-  }, [monthLessons, today]);
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, today, failed }: MyPageViewProps) {
+  // 결제 현황 — 쓰는 결제(제공·충전 횟수가 있거나 이미 쓴 것)만
+  const payRows = payments.filter(p => p.total > 0 || p.used > 0);
 
   const card = MYPAGE_CARD;
 
@@ -73,39 +53,20 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         {!child?.memberCode && <p className="text-[13px] text-[#999] mt-2">아직 센터 회원 정보와 연결되지 않았어요. 연결되면 시간표가 보여요.</p>}
       </section>
 
-      {/* 지원 현황 */}
+      {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용/제공, 차감(선결제)은 지금까지 사용/충전 */}
       <section className={card}>
-        <h2 className="text-[17px] text-[#27272a] mb-3">지원 현황</h2>
-        <div className="flex flex-wrap gap-2">
-          {SUPPORTS.map(s => {
-            const on = child?.supports[s.key] || (s.code && child?.payment.includes(s.code));
-            return (
-              <span key={s.key} className={`text-[13px] px-3 py-1.5 rounded-full border ${on ? 'border-[var(--brand)] bg-[#e8f1fd] text-[var(--brand)]' : 'border-[#e5e5e5] text-[#c4c4cc]'}`}>
-                {on ? '✓ ' : ''}{s.label}
-              </span>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* 이번 달 차감 현황 */}
-      <section className={card}>
-        <h2 className="text-[17px] text-[#27272a] mb-1">{monthNo}월 차감 현황</h2>
-        <p className="text-[12px] text-[#999] mb-4">센터 시간표 기준이에요. 차감 = 이미 지난 수업, 결석은 따로 셌어요.</p>
-        {usage.length === 0 ? <p className="text-[13px] text-[#bbb]">이번 달 수업이 없어요.</p> : (
-          <table className="w-full text-[14px]">
-            <thead>
-              <tr className="text-[12px] text-[#999] text-left">
-                <th className="font-normal py-1.5">결제</th><th className="font-normal whitespace-nowrap">차감</th><th className="font-normal whitespace-nowrap">남은 수업</th><th className="font-normal whitespace-nowrap">결석</th>
-              </tr>
-            </thead>
+        <h2 className="text-[17px] text-[#27272a] mb-1">결제 현황</h2>
+        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든은 {monthNo}월 기준, 차감은 충전한 횟수 기준이에요.</p>
+        {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
+          <table className="w-full text-[15px]">
             <tbody>
-              {usage.map(([k, u]) => (
-                <tr key={k} className="border-t border-[#f0f0f0]">
-                  <td className="py-2 whitespace-nowrap">{payName(k)}</td>
-                  <td className="tabular-nums">{u.done}회</td>
-                  <td className="tabular-nums">{u.left}회</td>
-                  <td className="tabular-nums text-[#999]">{u.absent}회</td>
+              {payRows.map(p => (
+                <tr key={p.method} className="border-t border-[#f0f0f0] first:border-t-0">
+                  <td className="py-2.5">{PAY_ROW_LABEL[p.method]}</td>
+                  <td className={`py-2.5 text-right tabular-nums ${p.total && p.used >= p.total ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
+                    {p.used} <span className="text-[#bbb]">/</span> {p.total}
+                    <span className="text-[12px] text-[#999] ml-1">회</span>
+                  </td>
                 </tr>
               ))}
             </tbody>

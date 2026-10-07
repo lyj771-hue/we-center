@@ -5,9 +5,9 @@ import { useAdmin } from '@/components/AdminContext';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
-import type { CellInput, CellView, Center, Child } from '@/lib/timetable';
+import type { CellInput, CellView, Center, Child, PayMethod } from '@/lib/timetable';
 import {
-  CENTERS, ROW_LABEL, cellOf, deleteFixed, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
+  CENTERS, PAY_METHODS, ROW_LABEL, cellOf, deleteFixed, getDayPayments, setLessonPayment, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
   rowsForDay, rowsForWeekday, saveDayCell, saveFixed, syncTimetable,
 } from '@/lib/timetable';
 
@@ -38,6 +38,8 @@ export default function TimetablePage() {
   const [weekday, setWeekday] = useState(() => new Date().getDay() || 1);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [children, setChildren] = useState<Child[]>([]);
+  // 그날 결제 체크 — "아이|시간" → 결제
+  const [payments, setPayments] = useState<Map<string, PayMethod>>(new Map());
   const [board, setBoard] = useState<{ fixed: Map<string, CellView>; open: Map<string, CellView> }>({ fixed: new Map(), open: new Map() });
   const [editing, setEditing] = useState<Editing | null>(null);
   const [failed, setFailed] = useState('');
@@ -47,7 +49,10 @@ export default function TimetablePage() {
       const [t, c] = await Promise.all([getTeachers(), getChildren()]);
       setTeachers(t);
       setChildren(c);
-      if (mode === 'day') setBoard(await getDayBoard(day, c, center));
+      if (mode === 'day') {
+        setBoard(await getDayBoard(day, c, center));
+        setPayments(await getDayPayments(day).catch(() => new Map()));
+      }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
       setFailed('');
     } catch (e) {
@@ -172,12 +177,12 @@ export default function TimetablePage() {
                       <FragmentPair key={t.id}
                         left={
                           <td className={`${td} min-w-[84px]`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
-                            <CellText cell={left} label={ROW_LABEL[time]} />
+                            <CellText cell={left} label={ROW_LABEL[time]} paid={mode === 'day' && left.childId ? payments.get(`${left.childId}|${time}`) : undefined} />
                           </td>
                         }
                         right={mode === 'day' ? (
                           <td className={`${td} min-w-[84px] bg-[#fcfcfd]`} onClick={() => setEditing({ teacher: t, time, side: 'open', cell: right })}>
-                            <CellText cell={right} label={ROW_LABEL[time]} />
+                            <CellText cell={right} label={ROW_LABEL[time]} paid={right.childId ? payments.get(`${right.childId}|${time}`) : undefined} />
                           </td>
                         ) : null}
                       />
@@ -202,6 +207,15 @@ export default function TimetablePage() {
           mode={mode}
           dayLabel={mode === 'day' ? `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})` : `${DOW[weekday]}요일 고정`}
           kids={children}
+          paid={mode === 'day' && editing.cell.childId ? payments.get(`${editing.cell.childId}|${editing.time}`) : undefined}
+          onPay={mode === 'day' && editing.cell.childId && editing.cell.status === 'child' ? async method => {
+            try {
+              await setLessonPayment(editing.cell.childId!, day, editing.time, editing.teacher.id, center, method);
+              setPayments(p => { const n = new Map(p); const k = `${editing.cell.childId}|${editing.time}`; if (method) n.set(k, method); else n.delete(k); return n; });
+            } catch (e) {
+              showAlert(`결제 체크를 저장하지 못했어요.\n${(e as Error).message}`);
+            }
+          } : undefined}
           onClose={() => setEditing(null)}
           onSave={async (input, weekly) => {
             const { teacher, time, side } = editing;
@@ -239,7 +253,7 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
 }
 
 /** 칸 글자 — 3S김채현bx 처럼 */
-function CellText({ cell, label }: { cell: CellView; label?: string }) {
+function CellText({ cell, label, paid }: { cell: CellView; label?: string; paid?: PayMethod }) {
   if (cell.status === 'empty' || cell.status === 'none') {
     return label ? <span className="text-[#c4c4cc]">{label}</span> : null;
   }
@@ -252,15 +266,19 @@ function CellText({ cell, label }: { cell: CellView; label?: string }) {
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
       {cell.note && <span className="ml-0.5 text-[9px] text-[#f59e0b]">●</span>}
+      {paid && <span className="ml-0.5 text-[9px] text-white bg-[#16a34a] px-1 rounded" title="결제 체크됨">✓{PAY_METHODS.find(m => m.key === paid)?.label}</span>}
     </span>
   );
 }
 
-function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
+function CellEditor({ editing, mode, dayLabel, kids, paid, onPay, onClose, onSave }: {
   editing: Editing;
   mode: Mode;
   dayLabel: string;
   kids: Child[];
+  /** 수업 후 결제 체크 (날짜별 화면, 아이가 명단에 있는 칸만) */
+  paid?: PayMethod;
+  onPay?: (method: PayMethod | null) => void;
   onClose: () => void;
   /** weekly = 날짜별 화면의 왼쪽 칸에서 "매주 고정으로 저장" */
   onSave: (input: CellInput | 'reset', weekly?: boolean) => void;
@@ -333,6 +351,22 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="메모 (선택)"
             className="w-full border-b border-[#eee] py-1 text-[13px] outline-none focus:border-[var(--brand)]" />
         )}
+
+        {onPay ? (
+          <div className="rounded-xl bg-[#f6fbf7] px-3 py-2.5">
+            <p className="text-[11px] text-[#16a34a] mb-1.5">수업 후 결제 체크 {paid ? `· ${PAY_METHODS.find(m => m.key === paid)?.label}` : ''}</p>
+            <div className="flex flex-wrap gap-1">
+              {PAY_METHODS.map(m => (
+                <button key={m.key} type="button" onClick={() => onPay(paid === m.key ? null : m.key)}
+                  className={`text-[12px] px-2.5 py-1 rounded-full border ${paid === m.key ? 'border-[#16a34a] bg-[#16a34a] text-white' : 'border-[#d4d4d8] hover:bg-white'}`}>
+                  {paid === m.key ? '✓ ' : ''}{m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : mode === 'day' && cell.status === 'child' ? (
+          <p className="text-[11px] text-[#aaa]">아이 명단에 없는 이름이라 결제 체크를 할 수 없어요. 명단에서 고르면 체크할 수 있어요.</p>
+        ) : null}
 
         <div className="flex flex-wrap gap-1.5">
           <button onClick={save} className={`${chip} border-[var(--brand)] bg-[var(--brand)] text-white`}>
