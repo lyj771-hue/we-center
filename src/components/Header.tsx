@@ -164,7 +164,7 @@ export default function Header() {
                     href={href}
                     onClick={() => setMobileOpen(false)}
                     className={[
-                      'block py-2.5 text-[15px] tracking-wide transition-colors',
+                      'block py-2 text-[13px] tracking-wide transition-colors',
                       isActive(href) ? 'text-[var(--brand)] font-medium' : 'text-[var(--brand)]',
                     ].join(' ')}
                   >
@@ -175,14 +175,14 @@ export default function Header() {
             </ul>
           </nav>
           {/* 카카오톡 채널 — 휴대폰은 메뉴 맨 아래에 */}
-          <div className="mt-auto pt-6 border-t border-[#f0f0f0] space-y-4">
-            <div className="flex items-center gap-2 text-[14px] text-[var(--brand)]">
+          <div className="mt-auto pt-6 border-t border-[#f0f0f0] space-y-3">
+            <div className="flex items-center gap-2 text-[13px] text-[var(--brand)]">
               <KakaoChannelIcon />
               카카오톡 채널
             </div>
             {!isAdmin && userId && (
               <button onClick={async () => { if (await askConfirm('로그아웃할까요?')) { setMobileOpen(false); memberLogout(); } }}
-                className="text-[14px] text-[#888] underline underline-offset-2 hover:text-[#0a0a0a]">로그아웃</button>
+                className="text-[13px] text-[#888] underline underline-offset-2 hover:text-[#0a0a0a]">로그아웃</button>
             )}
           </div>
         </div>
