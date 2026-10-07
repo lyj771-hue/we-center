@@ -117,7 +117,10 @@ export default function MembersPage() {
     if (kidOf(m.userId)) return;   // 이미 연결됨
     if (!m.phoneLast4) { await showAlert('승인했어요.\n뒷번호가 없어서 아이 명단과는 연결하지 않았어요.'); return; }
     const names = [m.nickname, centerNickname].map(x => x.trim()).filter(Boolean);
-    const hits = kids.filter(k => k.phoneLast4 === m.phoneLast4 && names.some(n => n === k.name || n === `${k.number ?? ''}${k.name}`));
+    // 화면을 연 뒤에 명단(뒷번호 등)이 바뀌었을 수 있으니 새로 읽어서 맞춘다
+    const fresh = await getChildren().catch(() => kids);
+    if (fresh.some(k => k.guardianUserId === m.userId)) { setKids(fresh); return; }
+    const hits = fresh.filter(k => k.phoneLast4 === m.phoneLast4 && names.some(n => n === k.name || n === `${k.number ?? ''}${k.name}`));
     if (hits.length !== 1) {
       await showAlert(hits.length
         ? `승인했어요.\n이름·뒷번호가 같은 아이가 ${hits.length}명이라 자동 연결하지 않았어요. 회원 코드로 직접 연결해 주세요.`
