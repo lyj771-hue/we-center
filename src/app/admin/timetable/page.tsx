@@ -5,9 +5,9 @@ import { useAdmin } from '@/components/AdminContext';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
-import type { CellInput, CellView, Child } from '@/lib/timetable';
+import type { CellInput, CellView, Center, Child } from '@/lib/timetable';
 import {
-  ROW_LABEL, cellOf, deleteFixed, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
+  CENTERS, ROW_LABEL, cellOf, deleteFixed, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
   rowsForDay, rowsForWeekday, saveDayCell, saveFixed, syncTimetable,
 } from '@/lib/timetable';
 
@@ -30,6 +30,10 @@ interface Editing {
 export default function TimetablePage() {
   const { isAdmin } = useAdmin();
   const [mode, setMode] = useState<Mode>('day');
+  const [center, setCenter] = useState<Center>('eunpyeong');
+  // 접어 둔 선생님(이름만 보이고 칸은 숨김) — 이원재 선생님은 병가라 처음부터 접어 둔다
+  const [folded, setFolded] = useState<Set<string>>(() => new Set(['이원재']));
+  const toggleFold = (name: string) => setFolded(f => { const n = new Set(f); if (n.has(name)) n.delete(name); else n.add(name); return n; });
   const [day, setDay] = useState(() => toYmd(new Date()));
   const [weekday, setWeekday] = useState(() => new Date().getDay() || 1);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -43,13 +47,13 @@ export default function TimetablePage() {
       const [t, c] = await Promise.all([getTeachers(), getChildren()]);
       setTeachers(t);
       setChildren(c);
-      if (mode === 'day') setBoard(await getDayBoard(day, c));
-      else setBoard({ fixed: await getFixedBoard(weekday, c), open: new Map() });
+      if (mode === 'day') setBoard(await getDayBoard(day, c, center));
+      else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
       setFailed('');
     } catch (e) {
       setFailed((e as Error).message);
     }
-  }, [mode, day, weekday]);
+  }, [mode, day, weekday, center]);
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
 
@@ -72,6 +76,9 @@ export default function TimetablePage() {
     }
   };
 
+  // 이 센터에서 일하는 선생님
+  const shown = useMemo(() => teachers.filter(t => t.centers.includes(center)), [teachers, center]);
+
   const rows = useMemo(() => (mode === 'day' ? rowsForDay(day) : rowsForWeekday(weekday)), [mode, day, weekday]);
   const d = parseYmd(day);
 
@@ -87,6 +94,11 @@ export default function TimetablePage() {
 
         {/* 보기 고르기 */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
+          {CENTERS.map(cn => (
+            <button key={cn.key} onClick={() => setCenter(cn.key)}
+              className={`text-[14px] px-4 py-2 border-b-2 ${center === cn.key ? 'border-[var(--brand)] text-[var(--brand)]' : 'border-transparent text-[#999] hover:text-[#333]'}`}>{cn.label}</button>
+          ))}
+          <span className="w-4" />
           {([['day', '날짜별'], ['fixed', '고정 시간표']] as const).map(([m, n]) => (
             <button key={m} onClick={() => setMode(m)}
               className={`text-[13px] px-4 py-2 border ${mode === m ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>{n}</button>
@@ -118,26 +130,31 @@ export default function TimetablePage() {
         </div>
         {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — 시간표 SQL(supabase/timetable.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
 
-        {/* 표 */}
+        {/* 표 — 이 센터 선생님만. 접은 선생님은 이름 칸만 좁게 */}
         <div className="overflow-x-auto bg-white">
           <table className="border-collapse text-[12px] min-w-full">
             <thead>
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white w-16`}>시간</th>
-                <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={teachers.length * (mode === 'day' ? 2 : 1)}>
+                <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : mode === 'day' ? 2 : 1), 0) || 1}>
                   {mode === 'day' ? `${DOW[d.getDay()]} / ${d.getMonth() + 1}월 ${d.getDate()}일` : `${DOW[weekday]}요일 고정 시간표`}
                 </th>
               </tr>
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white`} />
-                {teachers.map(t => (
-                  <th key={t.id} colSpan={mode === 'day' ? 2 : 1} className={`${th} text-[14px] text-[#16a34a]`}>{t.name}</th>
+                {shown.map(t => (
+                  <th key={t.id} colSpan={folded.has(t.name) ? 1 : mode === 'day' ? 2 : 1} className={`${th} text-[14px] text-[#16a34a] whitespace-nowrap`}>
+                    <button type="button" onClick={() => toggleFold(t.name)} title={folded.has(t.name) ? '펼치기' : '접기'}
+                      className="inline-flex items-center gap-1 hover:opacity-70">
+                      {t.name}<span className="text-[10px] text-[#aaa]">{folded.has(t.name) ? '▸' : '◂'}</span>
+                    </button>
+                  </th>
                 ))}
               </tr>
               {mode === 'day' && (
                 <tr>
                   <th className={`${th} sticky left-0 z-10 bg-white`} />
-                  {teachers.map(t => (
+                  {shown.map(t => folded.has(t.name) ? <th key={t.id} className={`${th} text-[10px] text-[#ccc] w-6`}>접음</th> : (
                     <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>} />
                   ))}
                 </tr>
@@ -147,7 +164,8 @@ export default function TimetablePage() {
               {rows.map(time => (
                 <tr key={time}>
                   <td className={`border border-[#d4d4d8] px-2 text-center sticky left-0 z-10 bg-white ${ROW_LABEL[time] ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
-                  {teachers.map(t => {
+                  {shown.map(t => {
+                    if (folded.has(t.name)) return <td key={t.id} className="border border-[#e4e4e7] bg-[#f4f4f5] w-6" />;
                     const left = cellOf(board.fixed, t.id, time);
                     const right = cellOf(board.open, t.id, time);
                     return (
@@ -190,19 +208,19 @@ export default function TimetablePage() {
             try {
               if (weekly && input !== 'reset' && input.status === 'child') {
                 // 날짜별 화면에서 "매주 고정으로 저장" — 요일 고정 수업으로 넣고, 그날 따로 바꿔 둔 칸은 지운다
-                await saveFixed(d.getDay(), teacher.id, time, input);
-                await resetDayCell(day, teacher.id, time, 'fixed');
-                sync({ action: 'fixed', teacherId: teacher.id, weekday: d.getDay(), time });
+                await saveFixed(d.getDay(), teacher.id, time, input, center);
+                await resetDayCell(day, teacher.id, time, 'fixed', center);
+                sync({ action: 'fixed', teacherId: teacher.id, weekday: d.getDay(), time, center });
               } else if (mode === 'fixed') {
-                if (input === 'reset' || input.status !== 'child') await deleteFixed(weekday, teacher.id, time);
-                else await saveFixed(weekday, teacher.id, time, input);
-                sync({ action: 'fixed', teacherId: teacher.id, weekday, time });
+                if (input === 'reset' || input.status !== 'child') await deleteFixed(weekday, teacher.id, time, center);
+                else await saveFixed(weekday, teacher.id, time, input, center);
+                sync({ action: 'fixed', teacherId: teacher.id, weekday, time, center });
               } else if (input === 'reset') {
-                await resetDayCell(day, teacher.id, time, side);
-                sync({ action: 'cell', day, teacherId: teacher.id, time, side });
+                await resetDayCell(day, teacher.id, time, side, center);
+                sync({ action: 'cell', day, teacherId: teacher.id, time, side, center });
               } else {
-                await saveDayCell(day, teacher.id, time, side, input);
-                sync({ action: 'cell', day, teacherId: teacher.id, time, side });
+                await saveDayCell(day, teacher.id, time, side, input, center);
+                sync({ action: 'cell', day, teacherId: teacher.id, time, side, center });
               }
               setEditing(null);
               load();

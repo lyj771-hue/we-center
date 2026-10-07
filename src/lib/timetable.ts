@@ -144,23 +144,33 @@ function fromRow(r: Row, source: CellView['source'], children: Map<string, Child
   };
 }
 
+/** 센터 — 은평(수색) / 의정부. 시간표는 센터마다 따로다(설영수 선생님은 두 센터 모두) */
+export type Center = 'eunpyeong' | 'uijeongbu';
+export const CENTERS: { key: Center; label: string }[] = [
+  { key: 'eunpyeong', label: '은평' },
+  { key: 'uijeongbu', label: '의정부' },
+];
+
 /** 요일 고정 시간표 — "선생님|시간" → 칸 */
-export async function getFixedBoard(weekday: number, children: Child[]): Promise<Map<string, CellView>> {
+export async function getFixedBoard(weekday: number, children: Child[], center: Center = 'eunpyeong'): Promise<Map<string, CellView>> {
   const byId = new Map(children.map(c => [c.id, c]));
-  const { data, error } = await supabase.from('fixed_lessons').select('*').eq('weekday', weekday);
+  const { data, error } = await supabase.from('fixed_lessons').select('*').eq('weekday', weekday).eq('center', center);
   if (error) throw error;
   return new Map((data ?? []).map(r => [key(r.teacher_id, r.time), fromRow({ ...r, status: 'child' }, 'fixed', byId)]));
 }
 
 /** 날짜별 표 — { fixed, open } 각각 "선생님|시간" → 칸 */
-export async function getDayBoard(day: string, children: Child[]): Promise<{ fixed: Map<string, CellView>; open: Map<string, CellView> }> {
+export async function getDayBoard(day: string, children: Child[], center: Center = 'eunpyeong'): Promise<{ fixed: Map<string, CellView>; open: Map<string, CellView> }> {
   const byId = new Map(children.map(c => [c.id, c]));
   const byName = new Map(children.map(c => [c.name, c]));
   const weekday = parseYmd(day).getDay();
   const [fixedRes, cellsRes, slotsRes] = await Promise.all([
-    supabase.from('fixed_lessons').select('*').eq('weekday', weekday),
-    supabase.from('board_cells').select('*').eq('day', day),
-    supabase.from('slots').select('id, teacher_id, time, booked_by, cancel_state').eq('day', day).not('booked_by', 'is', null),
+    supabase.from('fixed_lessons').select('*').eq('weekday', weekday).eq('center', center),
+    supabase.from('board_cells').select('*').eq('day', day).eq('center', center),
+    // 수업스케쥴 신청은 지금은 은평만
+    center === 'eunpyeong'
+      ? supabase.from('slots').select('id, teacher_id, time, booked_by, cancel_state').eq('day', day).not('booked_by', 'is', null)
+      : Promise.resolve({ data: [] as { id: string; teacher_id: string; time: string; booked_by: string; cancel_state: string | null }[], error: null }),
   ]);
   if (fixedRes.error) throw fixedRes.error;
   if (cellsRes.error) throw cellsRes.error;
@@ -211,31 +221,31 @@ const toRow = (c: CellInput) => ({
 });
 
 /** 날짜별 칸 저장 (그날만) */
-export async function saveDayCell(day: string, teacherId: string, time: string, side: 'fixed' | 'open', c: CellInput): Promise<void> {
+export async function saveDayCell(day: string, teacherId: string, time: string, side: 'fixed' | 'open', c: CellInput, center: Center = 'eunpyeong'): Promise<void> {
   const { error } = await supabase.from('board_cells').upsert(
-    { day, teacher_id: teacherId, time, side, ...toRow(c), updated_at: new Date().toISOString() },
-    { onConflict: 'day,teacher_id,time,side' },
+    { center, day, teacher_id: teacherId, time, side, ...toRow(c), updated_at: new Date().toISOString() },
+    { onConflict: 'center,day,teacher_id,time,side' },
   );
   if (error) throw error;
 }
 
 /** 날짜별 칸 되돌리기 — 고정 칸은 요일 고정 수업대로, 빈타임 칸은 비거나 보호자 신청대로 */
-export async function resetDayCell(day: string, teacherId: string, time: string, side: 'fixed' | 'open'): Promise<void> {
-  const { error } = await supabase.from('board_cells').delete().match({ day, teacher_id: teacherId, time, side });
+export async function resetDayCell(day: string, teacherId: string, time: string, side: 'fixed' | 'open', center: Center = 'eunpyeong'): Promise<void> {
+  const { error } = await supabase.from('board_cells').delete().match({ center, day, teacher_id: teacherId, time, side });
   if (error) throw error;
 }
 
 /** 요일 고정 수업 저장 */
-export async function saveFixed(weekday: number, teacherId: string, time: string, c: CellInput): Promise<void> {
+export async function saveFixed(weekday: number, teacherId: string, time: string, c: CellInput, center: Center = 'eunpyeong'): Promise<void> {
   const { error } = await supabase.from('fixed_lessons').upsert(
-    { weekday, teacher_id: teacherId, time, child_id: c.childId ?? null, name: c.name?.trim() ?? '', payment: c.payment?.trim() ?? '', oral: !!c.oral },
-    { onConflict: 'teacher_id,weekday,time' },
+    { center, weekday, teacher_id: teacherId, time, child_id: c.childId ?? null, name: c.name?.trim() ?? '', payment: c.payment?.trim() ?? '', oral: !!c.oral },
+    { onConflict: 'center,teacher_id,weekday,time' },
   );
   if (error) throw error;
 }
 
-export async function deleteFixed(weekday: number, teacherId: string, time: string): Promise<void> {
-  const { error } = await supabase.from('fixed_lessons').delete().match({ weekday, teacher_id: teacherId, time });
+export async function deleteFixed(weekday: number, teacherId: string, time: string, center: Center = 'eunpyeong'): Promise<void> {
+  const { error } = await supabase.from('fixed_lessons').delete().match({ center, weekday, teacher_id: teacherId, time });
   if (error) throw error;
 }
 
@@ -243,8 +253,8 @@ export async function deleteFixed(weekday: number, teacherId: string, time: stri
 
 export type TimetableSync =
   | { action: 'full' }
-  | { action: 'fixed'; teacherId: string; weekday: number; time: string }
-  | { action: 'cell'; day: string; teacherId: string; time: string; side: 'fixed' | 'open' };
+  | { action: 'fixed'; teacherId: string; weekday: number; time: string; center?: Center }
+  | { action: 'cell'; day: string; teacherId: string; time: string; side: 'fixed' | 'open'; center?: Center };
 
 /** 시간표를 선생님 구글 캘린더에 맞춘다 (관리자). 결과를 그대로 돌려준다 */
 export async function syncTimetable(body: TimetableSync): Promise<Record<string, unknown>> {

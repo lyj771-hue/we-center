@@ -33,12 +33,12 @@ function firstDayFor(weekday: number): string {
 }
 
 /** 캘린더 일정 글 — 시간표 칸과 같은 모양(3S김채현b), 결석이면 뒤에 "결석" */
-function lessonText(r: Row, child: Row | undefined, kind: '고정' | '빈타임', absent = false): LessonText {
+function lessonText(r: Row, child: Row | undefined, kind: '고정' | '빈타임', absent = false, centerName?: string): LessonText {
   const name = (r.name as string) || (child?.name as string) || '';
   const pay = (r.payment as string) || '';
   const code = (child?.member_code as string) || undefined;
   const summary = `${child?.number ?? ''}${r.oral ? 'S' : ''}${name}${pay}${absent ? ' 결석' : ''}`;
-  const lines = [`WE 소아재활센터 ${kind} 수업`];
+  const lines = [`WE 소아재활센터${centerName && centerName !== '은평' ? ` ${centerName}` : ''} ${kind} 수업`];
   if (code) lines.push(`회원 코드 ${code}`);
   if (pay) lines.push(`결제 ${pay.split('').map(c => PAY[c] ?? c).join('/')}`);
   if (r.note) lines.push(`메모 ${r.note}`);
@@ -71,8 +71,10 @@ export async function POST(request: Request) {
   const calOf = new Map((tRes.data ?? []).filter(t => t.google_calendar_id).map(t => [t.id as string, t.google_calendar_id as string]));
   const childOf = new Map((cRes.data ?? []).map(c => [c.id as string, c as Row]));
   const fixedRows = (fRes.data ?? []) as Row[];
-  const fixedAt = (teacherId: string, weekday: number, time: string) =>
-    fixedRows.find(f => f.teacher_id === teacherId && f.weekday === weekday && f.time === time);
+  const fixedAt = (teacherId: string, weekday: number, time: string, center: string) =>
+    fixedRows.find(f => f.teacher_id === teacherId && f.weekday === weekday && f.time === time && (f.center ?? 'eunpyeong') === center);
+  const centerOf = (r: Row) => ((r.center as string) ?? 'eunpyeong');
+  const CENTER_NAME: Record<string, string> = { eunpyeong: '은평', uijeongbu: '의정부' };
   const monday = thisMondayYmd();
 
   // 그날 바꾼 칸 하나 반영
@@ -84,11 +86,11 @@ export async function POST(request: Request) {
     if (c.side === 'fixed') {
       const off = c.status !== 'child' || c.moved;
       await setFixedOccurrence(cal, c.teacher_id as string, weekday, c.time as string, day,
-        off ? null : lessonText(c, childOf.get(c.child_id as string), '고정', !!c.absent));
+        off ? null : lessonText(c, childOf.get(c.child_id as string), '고정', !!c.absent), centerOf(c));
     } else if (c.status === 'child' && !c.moved) {
-      await upsertOpenCell(cal, day, c.teacher_id as string, c.time as string, lessonText(c, childOf.get(c.child_id as string), '빈타임', !!c.absent));
+      await upsertOpenCell(cal, day, c.teacher_id as string, c.time as string, lessonText(c, childOf.get(c.child_id as string), '빈타임', !!c.absent), centerOf(c));
     } else {
-      await removeEvent(cal, openCellEventId(day, c.teacher_id as string, c.time as string));
+      await removeEvent(cal, openCellEventId(day, c.teacher_id as string, c.time as string, centerOf(c)));
     }
   };
 
@@ -98,12 +100,12 @@ export async function POST(request: Request) {
       const want = fixedRows.filter(f => calOf.has(f.teacher_id as string));
       const errors = await pool(want, 2, async f => {
         await upsertFixedLesson(calOf.get(f.teacher_id as string)!, f.teacher_id as string, f.weekday as number, f.time as string,
-          firstDayFor(f.weekday as number), holidays, lessonText(f, childOf.get(f.child_id as string), '고정'));
+          firstDayFor(f.weekday as number), holidays, lessonText(f, childOf.get(f.child_id as string), '고정', false, CENTER_NAME[centerOf(f)]), centerOf(f));
       });
       // 시간표에서 지운 고정 수업의 반복 일정 지우기
       let removed = 0;
       for (const [teacherId, cal] of calOf) {
-        const keep = new Set(want.filter(f => f.teacher_id === teacherId).map(f => fixedEventId(teacherId, f.weekday as number, f.time as string)));
+        const keep = new Set(want.filter(f => f.teacher_id === teacherId).map(f => fixedEventId(teacherId, f.weekday as number, f.time as string, centerOf(f))));
         const extra = (await listFixedEventIds(cal)).filter(id => !keep.has(id));
         errors.push(...await pool(extra, 2, async id => { await removeEvent(cal, id); removed++; }));
       }
@@ -115,34 +117,36 @@ export async function POST(request: Request) {
 
     if (body.action === 'fixed') {
       const { teacherId, weekday, time } = body as { teacherId: string; weekday: number; time: string };
+      const center = (body.center as string) ?? 'eunpyeong';
       const cal = calOf.get(teacherId);
       if (!cal) return Response.json({ skipped: 'no calendar' });
-      const f = fixedAt(teacherId, weekday, time);
+      const f = fixedAt(teacherId, weekday, time, center);
       if (f) {
         const holidays = await koreanHolidays(monday, ymd(new Date(Date.now() + 400 * 86400000)));
-        await upsertFixedLesson(cal, teacherId, weekday, time, firstDayFor(weekday), holidays, lessonText(f, childOf.get(f.child_id as string), '고정'));
+        await upsertFixedLesson(cal, teacherId, weekday, time, firstDayFor(weekday), holidays, lessonText(f, childOf.get(f.child_id as string), '고정', false, CENTER_NAME[center]), center);
         // 그날 바꾼 칸은 다시 씌운다
-        const { data: cells } = await db.from('board_cells').select('*').eq('teacher_id', teacherId).eq('time', time).eq('side', 'fixed').gte('day', monday);
+        const { data: cells } = await db.from('board_cells').select('*').eq('center', center).eq('teacher_id', teacherId).eq('time', time).eq('side', 'fixed').gte('day', monday);
         for (const c of (cells ?? []) as Row[]) if (new Date(`${c.day}T12:00:00Z`).getUTCDay() === weekday) await applyCell(c);
       } else {
-        await removeEvent(cal, fixedEventId(teacherId, weekday, time));
+        await removeEvent(cal, fixedEventId(teacherId, weekday, time, center));
       }
       return Response.json({ synced: f ? 'upsert' : 'remove' });
     }
 
     if (body.action === 'cell') {
       const { day, teacherId, time, side } = body as { day: string; teacherId: string; time: string; side: 'fixed' | 'open' };
+      const center = (body.center as string) ?? 'eunpyeong';
       const cal = calOf.get(teacherId);
       if (!cal) return Response.json({ skipped: 'no calendar' });
-      const { data: c } = await db.from('board_cells').select('*').match({ day, teacher_id: teacherId, time, side }).maybeSingle();
+      const { data: c } = await db.from('board_cells').select('*').match({ center, day, teacher_id: teacherId, time, side }).maybeSingle();
       if (c) await applyCell(c as Row);
       else if (side === 'fixed') {
         // 그날 바꾼 것을 지웠다 — 고정 수업대로 되돌린다
         const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
-        const f = fixedAt(teacherId, weekday, time);
-        if (f) await setFixedOccurrence(cal, teacherId, weekday, time, day, lessonText(f, childOf.get(f.child_id as string), '고정'));
+        const f = fixedAt(teacherId, weekday, time, center);
+        if (f) await setFixedOccurrence(cal, teacherId, weekday, time, day, lessonText(f, childOf.get(f.child_id as string), '고정', false, CENTER_NAME[center]), center);
       } else {
-        await removeEvent(cal, openCellEventId(day, teacherId, time));
+        await removeEvent(cal, openCellEventId(day, teacherId, time, center));
       }
       return Response.json({ synced: 'cell', at: `${DOW[new Date(`${day}T12:00:00Z`).getUTCDay()]} ${time}` });
     }

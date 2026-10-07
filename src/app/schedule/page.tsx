@@ -8,7 +8,7 @@ import { useMember } from '@/components/MemberContext';
 import ScheduleGate from '@/components/schedule/ScheduleGate';
 import ScheduleEditor from '@/components/schedule/ScheduleEditor';
 import type { ScheduleSummary, Teacher } from '@/lib/schedule';
-import { deleteSchedule, getTeachers, listSchedules, scheduleDays, scheduleRange, thisMonday } from '@/lib/schedule';
+import { deleteSchedule, getScheduleTeachers, listSchedules, scheduleDays, scheduleRange, thisMonday } from '@/lib/schedule';
 import { askConfirm, showAlert } from '@/lib/dialog';
 
 // 수업스케쥴 목록 — 기타 메뉴처럼 제목 목록. 누르면 /schedule/[id] 에서 시간을 보고 신청한다.
@@ -31,7 +31,7 @@ export default function ScheduleListPage() {
 
   const load = useCallback(async () => {
     try {
-      const [list, t] = await Promise.all([listSchedules(), getTeachers()]);
+      const [list, t] = await Promise.all([listSchedules(), getScheduleTeachers()]);
       setItems(list);
       setTeachers(t);
     } catch {
@@ -63,7 +63,7 @@ export default function ScheduleListPage() {
         {creating ? (
           <ScheduleEditor
             teachers={teachers}
-            onTeachersChanged={async () => setTeachers(await getTeachers())}
+            onTeachersChanged={async () => setTeachers(await getScheduleTeachers())}
             onClose={id => { setCreating(false); if (id) router.push(`/schedule/${id}`); }}
           />
         ) : (

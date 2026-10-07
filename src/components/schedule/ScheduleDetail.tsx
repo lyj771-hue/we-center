@@ -12,7 +12,7 @@ import ScheduleEditor from './ScheduleEditor';
 import ScheduleGate from './ScheduleGate';
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import {
-  approveCancel, bookSlot, cancelSlot, deleteSchedule, getSchedule, getTeachers, requestCancel, shortDay, syncCalendar, withdrawCancel,
+  approveCancel, bookSlot, cancelSlot, deleteSchedule, getSchedule, getScheduleTeachers, requestCancel, shortDay, syncCalendar, withdrawCancel,
 } from '@/lib/schedule';
 import { askConfirm, showAlert } from '@/lib/dialog';
 
@@ -38,7 +38,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
 
   const load = useCallback(async () => {
     try {
-      const [t, s] = await Promise.all([getTeachers(), getSchedule(id)]);
+      const [t, s] = await Promise.all([getScheduleTeachers(), getSchedule(id)]);
       setTeachers(t);
       setSchedule(s);
     } catch {
@@ -129,7 +129,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
           <ScheduleEditor
             teachers={teachers}
             existing={schedule}
-            onTeachersChanged={async () => setTeachers(await getTeachers())}
+            onTeachersChanged={async () => setTeachers(await getScheduleTeachers())}
             onClose={savedId => { setEditing(false); if (savedId) load(); }}
           />
         ) : loaded && !schedule ? (

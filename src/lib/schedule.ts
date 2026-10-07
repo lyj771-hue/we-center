@@ -9,6 +9,8 @@ export interface Teacher {
   order: number;
   /** 연결된 구글 캘린더 ID — 있으면 신청이 그 캘린더에 일정으로 들어가고, 빈 시간을 읽어 올 수 있다 */
   googleCalendarId?: string;
+  /** 일하는 센터 — eunpyeong(은평) / uijeongbu(의정부) */
+  centers: string[];
 }
 
 /** 쉬는 날 — teacherId 가 없으면 센터 공휴일, 있으면 그 선생님만 휴무(label 은 사유) */
@@ -155,10 +157,18 @@ export function slashDay(s: string): string {
 
 // ── 읽기 ─────────────────────────────────────────────────────────────
 
+/** 수업스케쥴용 선생님 — 지금은 은평 선생님만 */
+export async function getScheduleTeachers(): Promise<Teacher[]> {
+  return (await getTeachers()).filter(t => t.centers.includes('eunpyeong'));
+}
+
 export async function getTeachers(): Promise<Teacher[]> {
   const { data, error } = await supabase.from('teachers').select('*').order('sort_order');
   if (error) throw error;
-  return (data ?? []).map(r => ({ id: r.id, name: r.name, order: r.sort_order, googleCalendarId: r.google_calendar_id ?? undefined }));
+  return (data ?? []).map(r => ({
+    id: r.id, name: r.name, order: r.sort_order, googleCalendarId: r.google_calendar_id ?? undefined,
+    centers: (r.centers as string[] | null) ?? ['eunpyeong'],
+  }));
 }
 
 /** 목록에 쓰는 스케쥴 한 줄 (시간·신청은 빼고) */

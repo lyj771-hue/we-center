@@ -111,9 +111,11 @@ export async function busyTimes(calendarId: string, from: string, to: string): P
 const HOLIDAY_CAL = 'ko.south_korea#holiday@group.v.calendar.google.com';
 const hex = (s: string) => createHash('sha1').update(s).digest('hex').slice(0, 30);
 /** 고정 수업 반복 일정 id — "vf" + 칸 위치 (구글 일정 id 는 a~v·숫자만 된다) */
-export const fixedEventId = (teacherId: string, weekday: number, time: string) => `vf${hex(`${teacherId}|${weekday}|${time}`)}`;
+// 은평은 예전 id 그대로, 의정부는 센터를 붙여서 (설영수 선생님 캘린더 하나에 두 센터 수업이 같이 들어간다)
+const withCenter = (s: string, center = 'eunpyeong') => (center === 'eunpyeong' ? s : `${center}|${s}`);
+export const fixedEventId = (teacherId: string, weekday: number, time: string, center = 'eunpyeong') => `vf${hex(withCenter(`${teacherId}|${weekday}|${time}`, center))}`;
 /** 빈타임 칸(관리자가 넣은 아이) 일정 id — "vc" + 날짜·칸 위치 */
-export const openCellEventId = (day: string, teacherId: string, time: string) => `vc${hex(`${day}|${teacherId}|${time}`)}`;
+export const openCellEventId = (day: string, teacherId: string, time: string, center = 'eunpyeong') => `vc${hex(withCenter(`${day}|${teacherId}|${time}`, center))}`;
 
 export interface LessonText {
   summary: string;
@@ -137,8 +139,8 @@ export async function koreanHolidays(from: string, to: string): Promise<string[]
 }
 
 /** 고정 수업 반복 일정 넣기/고치기 — firstDay = 첫 수업 날짜, holidays = 빼는 날짜들 */
-export async function upsertFixedLesson(calendarId: string, teacherId: string, weekday: number, time: string, firstDay: string, holidays: string[], text: LessonText) {
-  const id = fixedEventId(teacherId, weekday, time);
+export async function upsertFixedLesson(calendarId: string, teacherId: string, weekday: number, time: string, firstDay: string, holidays: string[], text: LessonText, center = 'eunpyeong') {
+  const id = fixedEventId(teacherId, weekday, time, center);
   const start = seoul(firstDay, time);
   const end = new Date(start.getTime() + LESSON_MINUTES * 60000);
   const byday = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][weekday];
@@ -178,8 +180,8 @@ export async function listFixedEventIds(calendarId: string): Promise<string[]> {
 }
 
 /** 반복 일정의 그날 하나 — text 로 고치기(원래대로 돌릴 때도 고정 수업 글을 넘긴다) / null 이면 그날만 빼기 */
-export async function setFixedOccurrence(calendarId: string, teacherId: string, weekday: number, time: string, day: string, change: LessonText | null) {
-  const id = fixedEventId(teacherId, weekday, time);
+export async function setFixedOccurrence(calendarId: string, teacherId: string, weekday: number, time: string, day: string, change: LessonText | null, center = 'eunpyeong') {
+  const id = fixedEventId(teacherId, weekday, time, center);
   const cal = encodeURIComponent(calendarId);
   const start = seoul(day, time);
   const q = new URLSearchParams({ timeMin: new Date(start.getTime() - 60000).toISOString(), timeMax: new Date(start.getTime() + 60000).toISOString(), showDeleted: 'true' });
@@ -197,8 +199,8 @@ export async function setFixedOccurrence(calendarId: string, teacherId: string, 
 }
 
 /** 빈타임 칸 한 번짜리 일정 넣기/고치기 */
-export async function upsertOpenCell(calendarId: string, day: string, teacherId: string, time: string, text: LessonText) {
-  const id = openCellEventId(day, teacherId, time);
+export async function upsertOpenCell(calendarId: string, day: string, teacherId: string, time: string, text: LessonText, center = 'eunpyeong') {
+  const id = openCellEventId(day, teacherId, time, center);
   const start = seoul(day, time);
   const end = new Date(start.getTime() + LESSON_MINUTES * 60000);
   const event = {
