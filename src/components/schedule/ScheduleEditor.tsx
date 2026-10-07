@@ -87,6 +87,21 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   const away = (t: Teacher, d: string) =>
     mode !== 'holiday' && !worksAt(t, 'eunpyeong', parseYmd(d).getDay()) && !addedAway.has(`${t.id}|${d}`);
 
+  // 선생님 줄 — 이번 주·다음 주는 은평 선생님, 공휴일은 두 센터 선생님 모두(✕로 이 스케쥴에서 뺄 수 있다)
+  const [removed, setRemoved] = useState<Set<string>>(() => {
+    if (!existing?.days?.length) return new Set();
+    const has = new Set(existing.slots.map(sl => sl.teacherId));
+    return new Set(teachers.filter(t => !has.has(t.id)).map(t => t.id));
+  });
+  const active = mode === 'holiday'
+    ? teachers.filter(t => !removed.has(t.id))
+    : teachers.filter(t => t.centers.includes('eunpyeong'));
+  const removedList = mode === 'holiday' ? teachers.filter(t => removed.has(t.id)) : [];
+  const removeTeacher = (t: Teacher) => {
+    if ([...locked.keys()].some(k => k.startsWith(`${t.id}|`))) { alert('신청된 시간이 있는 선생님은 뺄 수 없어요. 먼저 신청을 취소해 주세요.'); return; }
+    setRemoved(r => new Set(r).add(t.id));
+  };
+
   // 신청된 시간 (잠금) — "선생님|날짜|시간" → 닉네임
   const locked = useMemo(() => {
     const m = new Map<string, string>();
@@ -179,7 +194,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   const daysKey = days.join(',');
   useEffect(() => {
     if (existing || !daysKey) return;
-    for (const t of teachers) if (t.googleCalendarId) fillFromCalendar(t, false);
+    for (const t of active) if (t.googleCalendarId) fillFromCalendar(t, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [daysKey, existing]);
 
@@ -200,7 +215,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
 
   // 형식은 요일(0=일 … 6=토) 기준으로 저장·불러오기
   const toTemplate = (): TemplateData =>
-    Object.fromEntries(teachers.map(t => {
+    Object.fromEntries(active.map(t => {
       const byDow: Record<string, string[]> = {};
       for (const d of days) {
         const a = times[t.id]?.[d] ?? [];
@@ -215,7 +230,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     if (!tpl) return;
     setTimes(prev => {
       const t: Times = {};
-      for (const teacher of teachers) {
+      for (const teacher of active) {
         t[teacher.id] = {};
         for (const d of days) {
           const fromTpl = tpl.data[teacher.id]?.[String(parseYmd(d).getDay())] ?? [];
@@ -254,7 +269,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   const handleSave = async () => {
     if (mode === 'holiday' && !days.length) { alert('공휴일 날짜를 적어 주세요. (예: 2026/10/9, 2026/12/25)'); return; }
     const slots: ScheduleDraft['slots'] = [];
-    for (const t of teachers) {
+    for (const t of active) {
       for (const d of days) {
         for (const time of times[t.id]?.[d] ?? []) {
           if ((closed[d] || teacherOff[`${t.id}|${d}`] !== undefined || away(t, d)) && !locked.has(`${t.id}|${d}|${time}`)) continue;   // 공휴일·선생님 휴무·다른 센터 출근일은 올리지 않는다
@@ -274,7 +289,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
           ...(mode === 'holiday' ? [] : days.filter(d => closed[d]).map(d => closed[d])),
           ...Object.entries(teacherOff)
             .map(([k, label]) => { const [teacherId, date] = k.split('|'); return { teacherId, date, label: label.trim() }; })
-            .filter(h => days.includes(h.date) && teachers.some(t => t.id === h.teacherId)),
+            .filter(h => days.includes(h.date) && active.some(t => t.id === h.teacherId)),
         ],
         slots,
       }, existing);
@@ -383,11 +398,15 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
         <p className="text-[14px] text-[#aaa] text-center py-6">위에 공휴일 날짜를 적으면 날짜별로 시간을 넣을 수 있어요.</p>
       ) : (
         <div className="space-y-5">
-          {teachers.map(t => (
+          {active.map(t => (
             <section key={t.id} className="border border-[#eee] rounded-xl p-4 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-[17px] text-[#27272a] flex items-center gap-2">
                   {t.name} 선생님
+                  {mode === 'holiday' && (
+                    <button type="button" onClick={() => removeTeacher(t)} title="이 공휴일 스케쥴에서 빼기"
+                      className="text-[12px] text-[#999] border border-[#e5e5e5] px-2 py-0.5 hover:text-red-400 hover:border-red-200">✕ 빼기</button>
+                  )}
                   {t.googleCalendarId && (
                     <button type="button" onClick={() => fillFromCalendar(t)} disabled={busyLoading === t.id}
                       className="text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd] disabled:opacity-50">
@@ -501,6 +520,16 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                 );
               })}
             </section>
+          ))}
+        </div>
+      )}
+
+      {removedList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 -mt-3">
+          <span className="text-[12px] text-[#999]">뺀 선생님:</span>
+          {removedList.map(t => (
+            <button key={t.id} type="button" onClick={() => setRemoved(r => { const n = new Set(r); n.delete(t.id); return n; })}
+              className="text-[12px] border border-[#ddd] rounded-full px-2.5 py-0.5 hover:bg-[#f8f8f8]">+ {t.name}</button>
           ))}
         </div>
       )}

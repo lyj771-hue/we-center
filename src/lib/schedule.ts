@@ -160,8 +160,9 @@ export function slashDay(s: string): string {
 // ── 읽기 ─────────────────────────────────────────────────────────────
 
 /** 수업스케쥴용 선생님 — 지금은 은평 선생님만 */
+// 수업스케쥴 선생님 — 두 센터 모두 (이번 주·다음 주 편집기는 은평 선생님만, 공휴일은 모두 보여 준다)
 export async function getScheduleTeachers(): Promise<Teacher[]> {
-  return (await getTeachers()).filter(t => t.centers.includes('eunpyeong'));
+  return getTeachers();
 }
 
 export async function getTeachers(): Promise<Teacher[]> {
