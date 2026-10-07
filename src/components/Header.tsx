@@ -43,8 +43,10 @@ export default function Header() {
     }
   };
 
-  // 관리자에게만 보이는 메뉴 — 시간표 관리
-  const nav = isAdmin ? [...NAV, { href: '/admin/timetable', label: '시간표 관리' }] : NAV;
+  // 관리자에게만 보이는 메뉴 — 시간표 관리 / 로그인한 보호자 — 마이페이지
+  const nav = isAdmin
+    ? [...NAV, { href: '/admin/timetable', label: '시간표 관리' }]
+    : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : NAV;
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
@@ -210,10 +212,10 @@ function Greeting({ profile, onLogout, showLogout = true }: { profile: Profile |
   return (
     <span className="flex items-center gap-2 text-[12px] md:text-[13px] leading-[1.6] text-[#555] whitespace-nowrap">
       {profile && (
-        <span className="py-0.5">
+        <Link href="/mypage" className="py-0.5 hover:opacity-70" title="마이페이지">
           <span className="text-[var(--brand)]">{profile.nickname}</span>님 오셨군요<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span>
           {!profile.approvedAt && <span className="text-[#aaa]">(미승인)</span>}
-        </span>
+        </Link>
       )}
       {showLogout && (
         <button onClick={async () => { if (await askConfirm('로그아웃할까요?')) onLogout(); }}
