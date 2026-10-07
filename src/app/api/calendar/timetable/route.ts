@@ -10,7 +10,7 @@ import {
 //   { action: 'cell', day, teacherId, time, side }   날짜별 칸 하나
 // 고정 수업은 이번 주 월요일부터 매주 반복, 대한민국 공휴일은 뺀다(앞으로 1년치 공휴일을 반영).
 
-export const maxDuration = 60;
+export const maxDuration = 300;   // 전체 반영은 일정이 많아 오래 걸릴 수 있다
 
 type Row = Record<string, unknown>;
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     if (body.action === 'full') {
       const holidays = await koreanHolidays(monday, ymd(new Date(Date.now() + 400 * 86400000)));
       const want = fixedRows.filter(f => calOf.has(f.teacher_id as string));
-      const errors = await pool(want, 6, async f => {
+      const errors = await pool(want, 2, async f => {
         await upsertFixedLesson(calOf.get(f.teacher_id as string)!, f.teacher_id as string, f.weekday as number, f.time as string,
           firstDayFor(f.weekday as number), holidays, lessonText(f, childOf.get(f.child_id as string), '고정'));
       });
@@ -105,11 +105,11 @@ export async function POST(request: Request) {
       for (const [teacherId, cal] of calOf) {
         const keep = new Set(want.filter(f => f.teacher_id === teacherId).map(f => fixedEventId(teacherId, f.weekday as number, f.time as string)));
         const extra = (await listFixedEventIds(cal)).filter(id => !keep.has(id));
-        errors.push(...await pool(extra, 6, async id => { await removeEvent(cal, id); removed++; }));
+        errors.push(...await pool(extra, 2, async id => { await removeEvent(cal, id); removed++; }));
       }
       // 이번 주부터 그날 바꾼 칸
       const { data: cells } = await db.from('board_cells').select('*').gte('day', monday);
-      errors.push(...await pool((cells ?? []) as Row[], 6, applyCell));
+      errors.push(...await pool((cells ?? []) as Row[], 2, applyCell));
       return Response.json({ fixed: want.length, removed, cells: cells?.length ?? 0, holidays: holidays.length, errors: errors.slice(0, 5), errorCount: errors.length });
     }
 

@@ -46,11 +46,20 @@ async function accessToken(): Promise<string> {
 }
 
 async function call(method: string, path: string, body?: unknown): Promise<Response> {
-  return fetch(`${API}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${await accessToken()}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  // 구글이 "너무 빨라요"(403 rateLimitExceeded / 429)라고 하면 조금씩 더 쉬었다가 다시 보낸다
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${API}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${await accessToken()}`, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (attempt >= 6 || (res.status !== 429 && res.status !== 403)) return res;
+    if (res.status === 403) {
+      const text = await res.clone().text();
+      if (!/rateLimitExceeded|userRateLimitExceeded/.test(text)) return res;
+    }
+    await new Promise(r => setTimeout(r, 1000 * 2 ** attempt + Math.random() * 500));
+  }
 }
 
 /** 시간 칸 id(uuid) → 구글 일정 id (영문 소문자 a~v·숫자만 허용 — uuid 의 16진수는 그대로 쓸 수 있다) */
