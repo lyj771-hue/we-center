@@ -17,6 +17,8 @@ interface Props {
   myId: string | null;
   nickname?: string;
   busySlot: string | null;
+  /** 보호자: 우리 아이 수업과 시간이 겹쳐 신청할 수 없는 칸 */
+  conflicts?: Set<string>;
   onPick: (slot: Slot, teacher: Teacher) => void;
   /** 관리자: 신청을 지우고 시간을 다시 연다 */
   onCancel: (slot: Slot, teacher: Teacher) => void;
@@ -34,7 +36,7 @@ const TINTS = ['#e8f1fd', '#fdf1e3', '#e8f5ee', '#f3ecfb', '#fdecef', '#eef3f5']
 const pill = 'inline-flex items-center gap-1.5 text-[11px] md:text-[12px] px-3 min-h-[32px] rounded-full border-[1.5px] transition-colors';
 
 export default function ScheduleBoard({
-  schedule, teachers, isAdmin, myId, nickname, busySlot, onPick, onCancel, onApproveCancel, onRequestCancel, onWithdrawCancel, onEdit, onDelete,
+  schedule, teachers, isAdmin, myId, nickname, busySlot, conflicts, onPick, onCancel, onApproveCancel, onRequestCancel, onWithdrawCancel, onEdit, onDelete,
 }: Props) {
   const days = scheduleDays(schedule);
   const centerHolidays = schedule.holidays.filter(h => !h.teacherId);
@@ -178,6 +180,13 @@ export default function ScheduleBoard({
                         return (
                           <span key={s.id} className={`${pill} border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa]`}>
                             <span className="line-through">{s.time}</span> 마감
+                          </span>
+                        );
+                      }
+                      if (conflicts?.has(s.id)) {
+                        return (
+                          <span key={s.id} title="이 시간엔 이미 우리 아이 수업이 있어요" className={`${pill} border-[#e4e4e7] bg-[#fafafa] text-[#a1a1aa]`}>
+                            {s.time} 수업 있음
                           </span>
                         );
                       }

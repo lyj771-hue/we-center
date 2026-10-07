@@ -12,8 +12,9 @@ import ScheduleEditor from './ScheduleEditor';
 import ScheduleGate from './ScheduleGate';
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import {
-  approveCancel, bookSlot, cancelSlot, deleteSchedule, getSchedule, getScheduleTeachers, requestCancel, shortDay, syncCalendar, withdrawCancel,
+  approveCancel, bookSlot, cancelSlot, deleteSchedule, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, syncCalendar, withdrawCancel,
 } from '@/lib/schedule';
+import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
 
 // 수업스케쥴 하나 — 공지 + 선생님별 시간. 승인된 보호자는 시간을 눌러 선착순으로 신청한다.
@@ -29,6 +30,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busySlot, setBusySlot] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
   const [popup, setPopup] = useState<string | null>(null);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,12 +43,20 @@ export default function ScheduleDetail({ id }: { id: string }) {
       const [t, s] = await Promise.all([getScheduleTeachers(), getSchedule(id)]);
       setTeachers(t);
       setSchedule(s);
+      // 보호자: 이 스케쥴 기간의 우리 아이 수업 — 겹치는 시간은 미리 "수업 있음"으로
+      if (s && !isAdmin && userId) {
+        const days = scheduleDays(s);
+        const mine = await getMyLessons(days[0], days[days.length - 1]).catch(() => []);
+        const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+        const busy = mine.filter(l => isRealLesson(l));
+        setConflicts(new Set(s.slots.filter(sl => !sl.bookedBy && busy.some(l => l.day === sl.day && Math.abs(toMin(l.time) - toMin(sl.time)) < 50)).map(sl => sl.id)));
+      }
     } catch {
       setSchedule(null);
     } finally {
       setLoaded(true);
     }
-  }, [id]);
+  }, [id, isAdmin, userId]);
 
   useEffect(() => { if (canView) load(); }, [canView, load]);
 
@@ -73,6 +83,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
       if (r === 'ok') syncCalendar(slot.id);
       if (r === 'taken') setPopup('방금 다른 분이 먼저 신청했어요.\n다른 시간을 골라 주세요.');
       if (r === 'not_approved') setPopup('센터 승인 후 신청할 수 있어요.');
+      if (r === 'conflict') setPopup('그 시간에는 이미 우리 아이 수업이 있어요.\n다른 시간을 골라 주세요.');
     } catch {
       setPopup('신청하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
@@ -142,6 +153,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
             myId={userId}
             nickname={myName}
             busySlot={busySlot}
+            conflicts={conflicts}
             onPick={handlePick}
             onCancel={handleCancel}
             onApproveCancel={handleApproveCancel}

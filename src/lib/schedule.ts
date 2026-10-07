@@ -253,7 +253,8 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
 
 // ── 신청 · 취소 ──────────────────────────────────────────────────────
 
-export async function bookSlot(slotId: string): Promise<'ok' | 'taken' | 'not_approved'> {
+/** 신청 — ok / taken(다른 분이 먼저) / not_approved / conflict(같은 시간에 이미 우리 아이 수업) */
+export async function bookSlot(slotId: string): Promise<'ok' | 'taken' | 'not_approved' | 'conflict'> {
   const { data, error } = await supabase.rpc('book_slot', { p_slot: slotId });
   if (error) throw error;
   return data;
