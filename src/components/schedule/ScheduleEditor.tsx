@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { Holiday, Schedule, ScheduleDraft, Teacher, Template, TemplateData } from '@/lib/schedule';
+import { worksAt } from '@/lib/timetable';
 import {
   addDays, addTeacher, deleteTeacher, deleteTemplate, dowLabel, getBusyTimes, getTemplates, parseDateList, parseYmd,
   saveSchedule, saveTemplate, scheduleRange, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
@@ -80,6 +81,8 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   useEffect(() => { getTemplates().then(setTemplates).catch(() => {}); }, []);
 
   const days = mode === 'holiday' ? holidayDates : weekDays(weekStart);
+  // 수업스케쥴은 은평 — 그 요일에 은평에 출근하지 않는 선생님(예: 설영수 월·토 의정부)은 시간을 넣지 않는다
+  const away = (t: Teacher, d: string) => !worksAt(t, 'eunpyeong', parseYmd(d).getDay());
 
   // 신청된 시간 (잠금) — "선생님|날짜|시간" → 닉네임
   const locked = useMemo(() => {
@@ -141,7 +144,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   // 새 스케쥴을 만들 땐 캘린더가 연결된 선생님을 자동으로 채우고(ask=false), 버튼으로 다시 불러올 수도 있다.
   const [busyLoading, setBusyLoading] = useState<string | null>(null);
   const fillFromCalendar = async (t: Teacher, ask = true) => {
-    const open = days.filter(d => !closed[d] && teacherOff[`${t.id}|${d}`] === undefined);
+    const open = days.filter(d => !closed[d] && teacherOff[`${t.id}|${d}`] === undefined && !away(t, d));
     if (!open.length) return;
     if (ask && !confirm(`${t.name} 선생님 캘린더에서 빈 시간을 불러올까요?\n(지금 넣어 둔 시간은 바뀌어요. 신청된 시간은 남아요)`)) return;
     setBusyLoading(t.id);
@@ -179,7 +182,8 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
 
   // 평일 동일 적용 — 첫 평일 시간을 나머지 평일(월~금)에 똑같이. 토·일은 건드리지 않는다
   const copyFirstToAll = (tid: string) => {
-    const open = days.filter(d => !closed[d] && teacherOff[`${tid}|${d}`] === undefined && parseYmd(d).getDay() >= 1 && parseYmd(d).getDay() <= 5);
+    const tt = teachers.find(x => x.id === tid);
+    const open = days.filter(d => !closed[d] && teacherOff[`${tid}|${d}`] === undefined && !(tt && away(tt, d)) && parseYmd(d).getDay() >= 1 && parseYmd(d).getDay() <= 5);
     if (open.length < 2) return;
     const first = times[tid]?.[open[0]] ?? [];
     setTimes(p => ({
@@ -250,7 +254,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     for (const t of teachers) {
       for (const d of days) {
         for (const time of times[t.id]?.[d] ?? []) {
-          if ((closed[d] || teacherOff[`${t.id}|${d}`] !== undefined) && !locked.has(`${t.id}|${d}|${time}`)) continue;   // 공휴일·선생님 휴무는 올리지 않는다
+          if ((closed[d] || teacherOff[`${t.id}|${d}`] !== undefined || away(t, d)) && !locked.has(`${t.id}|${d}|${time}`)) continue;   // 공휴일·선생님 휴무·다른 센터 출근일은 올리지 않는다
           slots.push({ teacherId: t.id, day: d, time });
         }
       }
@@ -399,6 +403,15 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                 const key = `${t.id}|${d}`;
                 const tOff = teacherOff[key] !== undefined;
                 const off = !!closed[d] || tOff;
+                if (away(t, d) && !(times[t.id]?.[d] ?? []).some(x => locked.has(`${t.id}|${d}|${x}`))) {
+                  return (
+                    <div key={d} className="flex items-center gap-2 opacity-50">
+                      <span className="w-[42px]" />
+                      <span className="w-[80px] shrink-0 text-[13px] text-[#71717b] whitespace-nowrap">{dowLabel(d)} <span className="text-[#bbb]">{shortDay(d).split('(')[0]}</span></span>
+                      <span className="text-[12px] text-[#999]">은평 출근 안 하는 날 (시간표 관리의 출근 요일)</span>
+                    </div>
+                  );
+                }
                 const hasLocked = (times[t.id]?.[d] ?? []).some(x => locked.has(`${t.id}|${d}|${x}`));
                 return (
                   <div key={d} className={`flex items-start gap-2 ${closed[d] ? 'opacity-40' : ''}`}>
