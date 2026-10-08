@@ -17,7 +17,7 @@ import {
 // 빈타임 칸을 누르면 칸 아래로 아이 명단이 열리고, 맨 위에 적으면 검색된다(명단에 있는 아이만 — 오타 없게).
 // 고정 시간표: 요일을 골라 왼쪽 고정 수업 자체를 고친다.
 // 칸 표시: 이름 앞 숫자(같은 이름 구분) + 이름만. 결제 글자(b·e …)·구강(S) 같은 영어는 표에 보이지 않는다. 글자 색은 모두 기본.
-// 결제방식 칸 단계: 기본 결제(그대로) → 고르면 노랑(기본과 같음) / 빨강(실제 결제로 바꿈) → [결제 완료]로 확정(연한 초록).
+// 결제방식 칸 단계: 기본 결제(그대로) → 직접 고르면 파랑 → [결제 완료]로 확정하면 빨강.
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 type Mode = 'day' | 'fixed';
@@ -336,7 +336,7 @@ export default function TimetablePage() {
                           </td>
                         }
                         right={mode === 'day' ? (<>
-                          <td className={`${td} min-w-[84px] ${right.status === 'child' ? 'bg-[#eaf3fd]' : 'bg-[#fcfcfd]'}`} onClick={e => {
+                          <td className={`${td} min-w-[84px] bg-[#fcfcfd]`} onClick={e => {
                             // 보호자 신청 칸은 안내가 있는 창으로, 그 밖은 칸 아래로 아이 명단을 연다
                             if (right.source === 'booking') { setEditing({ teacher: t, time, side: 'open', cell: right }); return; }
                             const b = e.currentTarget.getBoundingClientRect();
@@ -345,7 +345,8 @@ export default function TimetablePage() {
                             <CellText cell={right} label={ROW_LABEL[time]} />
                           </td>
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
-                            {[left, right].filter(c => c.status === 'child' && !c.moved).map((c, i) => (
+                            {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
+                            {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved).map((c, i) => (
                               <PayCell key={i} cell={c} paid={c.childId ? paidOf(c.childId, time) : undefined}
                                 pending={!!c.childId && draft.has(keyOf(c.childId, time))}
                                 left={c.childId ? (m => remaining(c.childId!, m)) : undefined}
@@ -365,7 +366,7 @@ export default function TimetablePage() {
         {mode === 'day' && (
           <div className="sticky bottom-0 z-20 flex items-center justify-end gap-3 bg-white/95 border-t border-[#eee] py-3 mt-2">
             <span className="text-[12px] text-[#888]">
-              {draft.size ? `저장 안 한 결제 체크 ${draft.size}건 — 노랑·빨강 칸` : '결제방식을 다 고른 뒤 [결제 완료]를 눌러 주세요.'}
+              {draft.size ? `저장 안 한 결제 체크 ${draft.size}건 — 파란 칸` : '결제방식을 다 고른 뒤 [결제 완료]를 눌러 주세요.'}
             </span>
             {draft.size > 0 && (
               <button onClick={() => setDraft(new Map())} disabled={savingPay} className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
@@ -379,7 +380,7 @@ export default function TimetablePage() {
 
         <p className="text-[11px] text-[#999] mt-3 leading-[2]">
           칸을 누르면 고칠 수 있어요. 앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정
-          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#fef3c7] text-[#92400e] px-1 rounded">노랑 = 기본대로 고름</span> · <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">빨강 = 실제 결제로 바꿈</span> → [결제 완료] → <span className="bg-[#edf5ef] text-[#4b7a5c] px-1 rounded">✓ 확정</span></>}
+          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span></>}
         </p>
       </div>
 
@@ -443,11 +444,8 @@ function PayCell({ cell, paid, pending, left, onPay }: {
   const base = defaultMethod(cell.payment);
   const label = (k?: PayMethod) => PAY_METHODS.find(m => m.key === k)?.label;
   const rest = paid && left?.(paid.method);
-  // 단계 — 기본(그대로) / 노랑: 고름(기본과 같음) / 빨강: 실제 결제로 바꿈·체크 풀기 / 확정: 결제 완료로 저장됨
-  const changed = pending && (!paid || paid.method !== base || !!paid.note);
-  const tone = pending
-    ? (changed ? 'bg-[#fde2e2] text-[#b91c1c]' : 'bg-[#fef3c7] text-[#92400e]')
-    : paid ? 'bg-[#edf5ef] text-[#4b7a5c]' : 'text-[#27272a]';
+  // 단계 — 기본(그대로) / 파랑: 직접 고름(저장 전) / 빨강: 결제 완료로 확정
+  const tone = pending ? 'bg-[#e3edfc] text-[#1d4ed8]' : paid ? 'bg-[#fde2e2] text-[#b91c1c]' : 'text-[#27272a]';
   const text = paid
     ? <span>{pending ? '' : '✓'}{paid.note || label(paid.method)}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
     : <span>{pending ? '체크 풀기' : (label(base) ?? '')}</span>;
