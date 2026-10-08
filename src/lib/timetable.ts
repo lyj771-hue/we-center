@@ -174,25 +174,26 @@ export async function getDayBoard(day: string, children: Child[], center: Center
   const byId = new Map(children.map(c => [c.id, c]));
   const byName = new Map(children.map(c => [c.name, c]));
   const weekday = parseYmd(day).getDay();
-  const [fixedRes, cellsRes, slotsRes] = await Promise.all([
+  const [fixedRes, cellsRes, slotsRes, teachersRes] = await Promise.all([
     // 고정 수업은 시작일(start_date, 2026-10-01부터) 이후 날짜에만
     supabase.from('fixed_lessons').select('*').eq('weekday', weekday).eq('center', center).lte('start_date', day),
     supabase.from('board_cells').select('*').eq('day', day).eq('center', center),
-    // 수업스케쥴 신청은 지금은 은평만
-    center === 'eunpyeong'
-      ? supabase.from('slots').select('id, teacher_id, time, booked_by, cancel_state').eq('day', day).not('booked_by', 'is', null)
-      : Promise.resolve({ data: [] as { id: string; teacher_id: string; time: string; booked_by: string; cancel_state: string | null }[], error: null }),
+    supabase.from('slots').select('id, teacher_id, time, booked_by, cancel_state').eq('day', day).not('booked_by', 'is', null),
+    supabase.from('teachers').select('id, centers'),
   ]);
   if (fixedRes.error) throw fixedRes.error;
   if (cellsRes.error) throw cellsRes.error;
   if (slotsRes.error) throw slotsRes.error;
+  if (teachersRes.error) throw teachersRes.error;
+  // 수업스케쥴 신청은 은평에서 일하는 선생님이면 은평, 의정부만 다니는 선생님(공휴일 스케쥴)이면 의정부 표에
+  const slotCenter = new Map((teachersRes.data ?? []).map(t => [t.id as string, ((t.centers as string[] | null) ?? ['eunpyeong']).includes('eunpyeong') ? 'eunpyeong' : 'uijeongbu']));
 
   const fixed = new Map<string, CellView>();
   const open = new Map<string, CellView>();
   for (const r of fixedRes.data ?? []) fixed.set(key(r.teacher_id, r.time), fromRow({ ...r, status: 'child' }, 'fixed', byId));
 
   // 보호자 신청 — 보호자 닉네임(관리자 닉네임이 다르면 아래 작게). 아이 명단에서 그 보호자의 아이(또는 관리자 닉네임과 같은 이름)를 찾아 결제 글자를 붙인다
-  const booked = slotsRes.data ?? [];
+  const booked = (slotsRes.data ?? []).filter(sl => (slotCenter.get(sl.teacher_id) ?? 'eunpyeong') === center);
   if (booked.length) {
     const ids = [...new Set(booked.map(s => s.booked_by as string))];
     const { data: ps } = await supabase.from('profiles').select('user_id, nickname, center_nickname').in('user_id', ids);
