@@ -59,7 +59,7 @@ export default function TimetablePage() {
   const [payments, setPayments] = useState<Map<string, PayEntry>>(new Map());
   // 아직 저장 안 한 결제 체크 — 다 고르고 [결제 완료]를 누르면 디비에 반영된다 (null = 체크 풀기)
   const [draft, setDraft] = useState<Map<string, { entry: PayEntry | null; childId: string; teacherId: string; time: string }>>(new Map());
-  // 아이마다 이번 달 바우처·굳센·꿈이든, 지금까지 차감 사용 횟수(디비)
+  // 아이마다 이번 달 바우처·굳센·꿈이든, 지금까지 선결제 사용 횟수(디비)
   const [counts, setCounts] = useState<Map<string, PayCount>>(new Map());
   const [savingPay, setSavingPay] = useState(false);
   // 그날만 이 센터에 더한 선생님 (공휴일 등)
@@ -197,10 +197,11 @@ export default function TimetablePage() {
     if (failedKeys.length) showAlert(`${failedKeys.length}건을 저장하지 못했어요. 다시 [결제 완료]를 눌러 주세요.`);
   };
 
-  // 남은 횟수 — 바우처·굳센·꿈이든은 이번 달 제공 횟수에서, 차감은 지금까지 충전한 횟수에서 사용한 만큼 뺀다(저장 전 체크도 셈)
+  // 남은 횟수 — 바우처·굳센·꿈이든은 이번 달 제공 횟수에서, 선결제는 지금까지 충전한 횟수에서 사용한 만큼 뺀다(저장 전 체크도 셈)
   const remaining = (childId: string, method: PayMethod): string | undefined => {
     const c = children.find(x => x.id === childId);
-    if (!c || method === 'other') return undefined;
+    // 횟수가 있는 결제만 (신용카드·현금·직접 작성은 횟수 없음)
+    if (!c || (method !== 'voucher' && method !== 'gusen' && method !== 'kkumideun' && method !== 'prepaid')) return undefined;
     const limit = { voucher: c.voucherLimit, gusen: c.gusenLimit, kkumideun: c.kkumideunLimit, prepaid: c.prepaidTotal }[method] ?? 0;
     if (!limit) return undefined;
     let used = counts.get(childId)?.[method] ?? 0;
@@ -415,7 +416,7 @@ function CellText({ cell, label }: { cell: CellView; label?: string }) {
   );
 }
 
-/** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 차감 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
+/** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
 function PayCell({ cell, paid, pending, left, onPay }: {
   cell: CellView;
   paid?: PayEntry;

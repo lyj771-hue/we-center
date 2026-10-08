@@ -6,7 +6,7 @@ import { addDays, parseYmd, thisMonday } from '@/lib/schedule';
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', kkumideun: '꿈이든', prepaid: '차감(선결제)' };
+const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', kkumideun: '꿈이든', prepaid: '선결제' };
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈이든' };
 const payKind = (p: string) => {
   const code = p.toLowerCase().replace(/[x~]/g, '');
@@ -53,10 +53,10 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         {!child?.memberCode && <p className="text-[13px] text-[#999] mt-2">아직 센터 회원 정보와 연결되지 않았어요. 연결되면 시간표가 보여요.</p>}
       </section>
 
-      {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용/제공, 차감(선결제)은 지금까지 사용/충전 */}
+      {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용/제공, 선결제는 지금까지 사용/충전 */}
       <section className={card}>
         <h2 className="text-[17px] text-[#27272a] mb-1">결제 현황</h2>
-        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든은 {monthNo}월 기준, 차감은 충전한 횟수 기준이에요.</p>
+        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든은 {monthNo}월 기준, 선결제는 충전한 횟수 기준이에요.</p>
         {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
           <table className="w-full text-[15px]">
             <tbody>

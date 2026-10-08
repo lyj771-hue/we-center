@@ -8,7 +8,7 @@ import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
 import { getMyChild, getMyLessons, getMyPayments } from '@/lib/mypage';
 import { addDays, thisMonday, toYmd } from '@/lib/schedule';
 
-// 마이페이지(보호자) — 내 아이 정보, 결제 현황(바우처·굳센·꿈이든 이번 달, 차감 누적), 주별 시간표.
+// 마이페이지(보호자) — 내 아이 정보, 결제 현황(바우처·굳센·꿈이든 이번 달, 선결제 누적), 주별 시간표.
 // 수업은 관리자 시간표(고정·그날 바꾼 칸)와 수업스케쥴 신청을 합친 것 — 센터 시간표와 늘 같다. 화면은 MyPageView.
 
 export default function MyPage() {

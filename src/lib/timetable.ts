@@ -14,7 +14,7 @@ export interface Child {
   oral?: boolean;
   /** 대표 보호자 전화번호 뒷 4자리 */
   phoneLast4?: string;
-  /** 한 달 제공 횟수(0 = 안 씀) — 바우처·굳센·꿈이든. 선결제(차감)는 지금까지 충전한 횟수 */
+  /** 한 달 제공 횟수(0 = 안 씀) — 바우처·굳센·꿈이든. 선결제는 지금까지 충전한 횟수 */
   voucherLimit?: number;
   gusenLimit?: number;
   kkumideunLimit?: number;
@@ -283,13 +283,14 @@ export async function syncTimetable(body: TimetableSync): Promise<Record<string,
 
 // ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
 
-export type PayMethod = 'voucher' | 'gusen' | 'kkumideun' | 'prepaid' | 'other';
+export type PayMethod = 'voucher' | 'gusen' | 'kkumideun' | 'prepaid' | 'card' | 'cash' | 'other';
 export const PAY_METHODS: { key: PayMethod; label: string; short: string }[] = [
   { key: 'voucher', label: '바우처', short: 'b' },
   { key: 'gusen', label: '굳센', short: 'e' },
   { key: 'kkumideun', label: '꿈이든', short: 'c' },
-  { key: 'prepaid', label: '차감', short: '차' },
-  { key: 'other', label: '기타', short: '기' },
+  { key: 'prepaid', label: '선결제', short: '선' },
+  { key: 'card', label: '신용카드', short: '카' },
+  { key: 'cash', label: '현금', short: '현' },
 ];
 
 /** 결제 체크 하나 — 직접 적은 결제는 method = 'other' + note */
@@ -318,7 +319,7 @@ export async function setLessonPayment(childId: string, day: string, time: strin
 
 export interface PayCount { voucher: number; gusen: number; kkumideun: number; prepaid: number }
 
-/** 아이마다 사용 횟수 — 바우처·굳센·꿈이든은 이번 달, 차감은 지금까지 */
+/** 아이마다 사용 횟수 — 바우처·굳센·꿈이든은 이번 달, 선결제는 지금까지 */
 export async function getPaymentCounts(monthStart: string, monthEnd: string): Promise<Map<string, PayCount>> {
   const [month, prepaid] = await Promise.all([
     supabase.from('lesson_payments').select('child_id, method').gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'kkumideun']),

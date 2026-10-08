@@ -16,12 +16,12 @@ const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈
 type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean };
 const emptyForm = { name: '', number: '', payment: '', oral: false, memo: '', guardian: '', phone: '', vl: '0', gl: '0', kl: '0', pt: '0' };
 
-// 결제 현황 칸 — 바우처·굳센·꿈이든은 이번 달, 차감은 지금까지 (사용/제공·충전)
+// 결제 현황 칸 — 바우처·굳센·꿈이든은 이번 달, 선결제는 지금까지 (사용/제공·충전)
 const PAY_COLS = [
   { key: 'voucher', label: '바우처', limit: 'voucherLimit', form: 'vl' },
   { key: 'gusen', label: '굳센', limit: 'gusenLimit', form: 'gl' },
   { key: 'kkumideun', label: '꿈이든', limit: 'kkumideunLimit', form: 'kl' },
-  { key: 'prepaid', label: '차감', limit: 'prepaidTotal', form: 'pt' },
+  { key: 'prepaid', label: '선결제', limit: 'prepaidTotal', form: 'pt' },
 ] as const;
 
 export default function ChildrenTab({ members, onLinked }: { members: Member[]; onLinked: () => void }) {

@@ -63,7 +63,7 @@ export async function getMyLessons(from: string, to: string): Promise<MyLesson[]
 /** 실제로 하는 수업인지 — 비움·미정·안 함·옮김·취소 승인은 뺀다 */
 export const isRealLesson = (l: MyLesson) => (l.status === 'child' || l.status === 'cancel_requested') && !l.moved;
 
-/** 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용/제공, 차감은 지금까지 사용/충전 */
+/** 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용/제공, 선결제는 지금까지 사용/충전 */
 export interface MyPayment { method: 'voucher' | 'gusen' | 'kkumideun' | 'prepaid'; used: number; total: number }
 
 export async function getMyPayments(): Promise<MyPayment[]> {
