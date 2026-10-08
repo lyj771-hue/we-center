@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
-import { askConfirm, showAlert } from '@/lib/dialog';
+import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
-import type { CellInput, CellView, Center, Child, PayMethod } from '@/lib/timetable';
+import type { CellInput, CellView, Center, Child, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import {
-  CENTERS, PAY_METHODS, ROW_LABEL, cellOf, deleteFixed, getDayAssigns, getDayPayments, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
+  CENTERS, PAY_METHODS, ROW_LABEL, cellOf, deleteFixed, getDayAssigns, getDayPayments, getPaymentCounts, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
   rowsForDay, rowsForWeekday, saveDayCell, saveFixed, syncTimetable,
 } from '@/lib/timetable';
 
@@ -55,8 +55,13 @@ export default function TimetablePage() {
   const [weekday, setWeekday] = useState(() => new Date().getDay() || 1);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [children, setChildren] = useState<Child[]>([]);
-  // 그날 결제 체크 — "아이|시간" → 결제
-  const [payments, setPayments] = useState<Map<string, PayMethod>>(new Map());
+  // 그날 결제 체크(디비) — "아이|시간" → 결제
+  const [payments, setPayments] = useState<Map<string, PayEntry>>(new Map());
+  // 아직 저장 안 한 결제 체크 — 다 고르고 [결제 완료]를 누르면 디비에 반영된다 (null = 체크 풀기)
+  const [draft, setDraft] = useState<Map<string, { entry: PayEntry | null; childId: string; teacherId: string; time: string }>>(new Map());
+  // 아이마다 이번 달 바우처·굳센·꿈이든, 지금까지 차감 사용 횟수(디비)
+  const [counts, setCounts] = useState<Map<string, PayCount>>(new Map());
+  const [savingPay, setSavingPay] = useState(false);
   // 그날만 이 센터에 더한 선생님 (공휴일 등)
   const [assigns, setAssigns] = useState<string[]>([]);
   const [board, setBoard] = useState<{ fixed: Map<string, CellView>; open: Map<string, CellView> }>({ fixed: new Map(), open: new Map() });
@@ -72,6 +77,8 @@ export default function TimetablePage() {
       if (mode === 'day') {
         setBoard(await getDayBoard(day, c, center));
         setPayments(await getDayPayments(day).catch(() => new Map()));
+        const ym = day.slice(0, 7);
+        setCounts(await getPaymentCounts(`${ym}-01`, `${ym}-31`).catch(() => new Map()));
         setAssigns(await getDayAssigns(day, center).catch(() => []));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
@@ -82,6 +89,19 @@ export default function TimetablePage() {
   }, [mode, day, weekday, center]);
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
+
+  // 저장 안 한 결제 체크가 있으면 다른 날·센터로 가기 전에 묻는다
+  const guard = async (go: () => void) => {
+    if (draft.size && !(await askConfirm(`저장 안 한 결제 체크가 ${draft.size}건 있어요.\n저장하지 않고 넘어갈까요?`))) return;
+    setDraft(new Map());
+    go();
+  };
+  useEffect(() => {
+    if (!draft.size) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [draft.size]);
 
   // 칸을 고칠 때마다 그 칸만 구글 캘린더에 맞춘다(뒤에서). 실패하면 위에 알려 준다
   const [syncMsg, setSyncMsg] = useState('');
@@ -148,14 +168,48 @@ export default function TimetablePage() {
     }
   };
 
-  // 수업 후 결제 체크 (null = 체크 풀기)
-  const pay = async (childId: string, teacherId: string, time: string, method: PayMethod | null) => {
-    try {
-      await setLessonPayment(childId, day, time, teacherId, center, method);
-      setPayments(p => { const n = new Map(p); const k = `${childId}|${time}`; if (method) n.set(k, method); else n.delete(k); return n; });
-    } catch (e) {
-      showAlert(`결제 체크를 저장하지 못했어요.\n${(e as Error).message}`);
+  // 수업 후 결제 체크 — 먼저 표에만 표시하고, [결제 완료]에서 한꺼번에 저장한다
+  const keyOf = (childId: string, time: string) => `${childId}|${time}`;
+  const sameEntry = (a?: PayEntry | null, b?: PayEntry | null) => (a?.method ?? null) === (b?.method ?? null) && (a?.note ?? '') === (b?.note ?? '');
+  const paidOf = (childId: string, time: string): PayEntry | undefined => {
+    const k = keyOf(childId, time);
+    return draft.has(k) ? draft.get(k)!.entry ?? undefined : payments.get(k);
+  };
+  const pay = (childId: string, teacherId: string, time: string, entry: PayEntry | null) => {
+    const k = keyOf(childId, time);
+    setDraft(dr => {
+      const n = new Map(dr);
+      if (sameEntry(payments.get(k), entry)) n.delete(k);   // 디비와 같아지면 바꿀 것 없음
+      else n.set(k, { entry, childId, teacherId, time });
+      return n;
+    });
+  };
+  const savePayments = async () => {
+    setSavingPay(true);
+    const failedKeys: string[] = [];
+    for (const [k, v] of draft) {
+      try { await setLessonPayment(v.childId, day, v.time, v.teacherId, center, v.entry); }
+      catch { failedKeys.push(k); }
     }
+    setDraft(dr => new Map([...dr].filter(([k]) => failedKeys.includes(k))));
+    setSavingPay(false);
+    await load();
+    if (failedKeys.length) showAlert(`${failedKeys.length}건을 저장하지 못했어요. 다시 [결제 완료]를 눌러 주세요.`);
+  };
+
+  // 남은 횟수 — 바우처·굳센·꿈이든은 이번 달 제공 횟수에서, 차감은 지금까지 충전한 횟수에서 사용한 만큼 뺀다(저장 전 체크도 셈)
+  const remaining = (childId: string, method: PayMethod): string | undefined => {
+    const c = children.find(x => x.id === childId);
+    if (!c || method === 'other') return undefined;
+    const limit = { voucher: c.voucherLimit, gusen: c.gusenLimit, kkumideun: c.kkumideunLimit, prepaid: c.prepaidTotal }[method] ?? 0;
+    if (!limit) return undefined;
+    let used = counts.get(childId)?.[method] ?? 0;
+    for (const v of draft.values()) {
+      if (v.childId !== childId) continue;
+      if (payments.get(keyOf(v.childId, v.time))?.method === method) used--;
+      if (v.entry?.method === method) used++;
+    }
+    return method === 'prepaid' ? `${limit - used}` : `${limit - used}/${limit}`;
   };
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
@@ -171,21 +225,21 @@ export default function TimetablePage() {
         {/* 보기 고르기 */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           {CENTERS.map(cn => (
-            <button key={cn.key} onClick={() => setCenter(cn.key)}
+            <button key={cn.key} onClick={() => guard(() => setCenter(cn.key))}
               className={`text-[14px] px-4 py-2 border-b-2 ${center === cn.key ? 'border-[var(--brand)] text-[var(--brand)]' : 'border-transparent text-[#999] hover:text-[#333]'}`}>{cn.label}</button>
           ))}
           <span className="w-4" />
           {([['day', '날짜별'], ['fixed', '고정 시간표']] as const).map(([m, n]) => (
-            <button key={m} onClick={() => setMode(m)}
+            <button key={m} onClick={() => guard(() => setMode(m))}
               className={`text-[13px] px-4 py-2 border ${mode === m ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>{n}</button>
           ))}
           <span className="w-4" />
           {mode === 'day' ? (
             <>
-              <button onClick={() => setDay(x => addDays(x, -1))} className="text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]" aria-label="전날">‹</button>
-              <input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} className="text-[13px] border border-[#ddd] px-2 h-8" />
-              <button onClick={() => setDay(x => addDays(x, 1))} className="text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]" aria-label="다음날">›</button>
-              <button onClick={() => setDay(toYmd(new Date()))} className="text-[12px] text-[#888] underline underline-offset-2 ml-1">오늘</button>
+              <button onClick={() => guard(() => setDay(x => addDays(x, -1)))} className="text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]" aria-label="전날">‹</button>
+              <input type="date" value={day} onChange={e => { const v = e.target.value; if (v) guard(() => setDay(v)); }} className="text-[13px] border border-[#ddd] px-2 h-8" />
+              <button onClick={() => guard(() => setDay(x => addDays(x, 1)))} className="text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]" aria-label="다음날">›</button>
+              <button onClick={() => guard(() => setDay(toYmd(new Date())))} className="text-[12px] text-[#888] underline underline-offset-2 ml-1">오늘</button>
               {addable.length > 0 && (
                 <select value="" onChange={e => { if (e.target.value) changeAssign(e.target.value, true); }}
                   className="ml-2 text-[12px] border border-[#f59e0b] text-[#b45309] bg-white px-2 h-8" title="공휴일 등 그날만 이 센터에서 일하는 선생님">
@@ -276,8 +330,10 @@ export default function TimetablePage() {
                           </td>
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {[left, right].filter(c => c.status === 'child' && !c.moved).map((c, i) => (
-                              <PayCell key={i} cell={c} paid={c.childId ? payments.get(`${c.childId}|${time}`) : undefined}
-                                onPay={c.childId ? m => pay(c.childId!, t.id, time, m) : undefined} />
+                              <PayCell key={i} cell={c} paid={c.childId ? paidOf(c.childId, time) : undefined}
+                                pending={!!c.childId && draft.has(keyOf(c.childId, time))}
+                                left={c.childId ? (m => remaining(c.childId!, m)) : undefined}
+                                onPay={c.childId ? e => pay(c.childId!, t.id, time, e) : undefined} />
                             ))}
                           </td>
                         </>) : null}
@@ -289,6 +345,21 @@ export default function TimetablePage() {
             </tbody>
           </table>
         </div>
+
+        {mode === 'day' && (
+          <div className="sticky bottom-0 z-20 flex items-center justify-end gap-3 bg-white/95 border-t border-[#eee] py-3 mt-2">
+            <span className="text-[12px] text-[#888]">
+              {draft.size ? `저장 안 한 결제 체크 ${draft.size}건 — 노란 칸` : '결제방식을 다 고른 뒤 [결제 완료]를 눌러 주세요.'}
+            </span>
+            {draft.size > 0 && (
+              <button onClick={() => setDraft(new Map())} disabled={savingPay} className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
+            )}
+            <button onClick={savePayments} disabled={!draft.size || savingPay}
+              className="text-[13px] border border-[#16a34a] bg-[#16a34a] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
+              {savingPay ? '저장 중…' : '결제 완료'}
+            </button>
+          </div>
+        )}
 
         <p className="text-[11px] text-[#999] mt-3 leading-[2]">
           칸을 누르면 고칠 수 있어요. 글자 색: <span style={{ color: paymentColor('b') }}>바우처(b)</span> · <span style={{ color: paymentColor('') }}>결제 글자 없음</span> · <span style={{ color: paymentColor('e') }}>그 밖(e·c·v …)</span>
@@ -344,22 +415,39 @@ function CellText({ cell, label }: { cell: CellView; label?: string }) {
   );
 }
 
-/** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓. 누르면 드롭박스로 고른다 */
-function PayCell({ cell, paid, onPay }: { cell: CellView; paid?: PayMethod; onPay?: (m: PayMethod | null) => void }) {
+/** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 차감 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
+function PayCell({ cell, paid, pending, left, onPay }: {
+  cell: CellView;
+  paid?: PayEntry;
+  /** 저장 안 한 체크 */
+  pending?: boolean;
+  left?: (m: PayMethod) => string | undefined;
+  onPay?: (e: PayEntry | null) => void;
+}) {
   if (cell.absent) return <span className="block text-[10px] text-[#c4c4cc]">결석</span>;
   const base = defaultMethod(cell.payment);
   const label = (k?: PayMethod) => PAY_METHODS.find(m => m.key === k)?.label;
+  const rest = paid && left?.(paid.method);
   const text = paid
-    ? <span className="text-[#16a34a]">✓{label(paid)}</span>
+    ? <span className="text-[#16a34a]">✓{paid.note || label(paid.method)}{rest && <span className="ml-0.5 text-[10px]">{rest}</span>}</span>
     : <span className="text-[#a1a1aa]">{label(base) ?? (cell.payment || '—')}</span>;
   if (!onPay) return <span className="block text-[11px]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{text}</span>;
   return (
-    <label className="relative block text-[11px] cursor-pointer hover:underline" title="수업 후 결제 체크">
+    <label className={`relative block text-[11px] cursor-pointer hover:underline rounded ${pending ? 'bg-[#fef3c7]' : ''}`} title="수업 후 결제 체크">
       {text}
-      <select value={paid ?? ''} onChange={e => onPay((e.target.value || null) as PayMethod | null)}
+      <select value={paid ? (paid.note ? 'custom' : paid.method) : ''}
+        onChange={async e => {
+          const v = e.target.value;
+          if (!v) onPay(null);
+          else if (v === 'custom') {
+            const t = await askPrompt('결제 방식을 적어 주세요', paid?.note ?? '');
+            if (t?.trim()) onPay({ method: 'other', note: t.trim() });
+          } else onPay({ method: v as PayMethod });
+        }}
         className="absolute inset-0 w-full opacity-0 cursor-pointer" aria-label={`${cell.name} 결제 체크`}>
         <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
         {PAY_METHODS.map(m => <option key={m.key} value={m.key}>✓ {m.label}</option>)}
+        <option value="custom">{paid?.note ? `✓ ${paid.note} (고치기)` : '직접 작성…'}</option>
       </select>
     </label>
   );

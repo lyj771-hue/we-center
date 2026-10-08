@@ -61,8 +61,16 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   const [closed, setClosed] = useState<Record<string, Holiday>>(() =>
     Object.fromEntries((existing?.holidays ?? []).filter(h => !h.teacherId).map(h => [h.date, h])));
   // 선생님별 휴무 — "선생님|날짜" → 적어 둔 글(사유)
-  const [teacherOff, setTeacherOff] = useState<Record<string, string>>(() =>
-    Object.fromEntries((existing?.holidays ?? []).filter(h => h.teacherId).map(h => [`${h.teacherId}|${h.date}`, h.label])));
+  // 공휴일 스케쥴에선 "빼기" — 그 선생님이 그날 일하지 않음(저장하지 않고, 다시 열면 시간이 없는 날을 뺀 날로 본다)
+  const [teacherOff, setTeacherOff] = useState<Record<string, string>>(() => {
+    const off: Record<string, string> = Object.fromEntries((existing?.holidays ?? []).filter(h => h.teacherId).map(h => [`${h.teacherId}|${h.date}`, h.label]));
+    if (existing?.days?.length) {
+      const has = new Set(existing.slots.map(sl => `${sl.teacherId}|${sl.day}`));
+      for (const tid of new Set(existing.slots.map(sl => sl.teacherId)))
+        for (const d of existing.days) if (!has.has(`${tid}|${d}`)) off[`${tid}|${d}`] = '';
+    }
+    return off;
+  });
   const [times, setTimes] = useState<Times>(() => {
     const t: Times = {};
     for (const s of existing?.slots ?? []) {
@@ -291,7 +299,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
         notice,
         holidays: [
           ...(mode === 'holiday' ? [] : days.filter(d => closed[d]).map(d => closed[d])),
-          ...Object.entries(teacherOff)
+          ...Object.entries(mode === 'holiday' ? {} : teacherOff)
             .map(([k, label]) => { const [teacherId, date] = k.split('|'); return { teacherId, date, label: label.trim() }; })
             .filter(h => days.includes(h.date) && active.some(t => t.id === h.teacherId)),
         ],
@@ -463,16 +471,18 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                 const hasLocked = (times[t.id]?.[d] ?? []).some(x => locked.has(`${t.id}|${d}|${x}`));
                 return (
                   <div key={d} className={`flex items-start gap-2 ${closed[d] ? 'opacity-40' : ''}`}>
-                    <label className="shrink-0 pt-1.5 flex items-center gap-1 text-[12px] text-[#999] cursor-pointer whitespace-nowrap" title="이 선생님만 그날 휴무">
+                    <label className="shrink-0 pt-1.5 flex items-center gap-1 text-[12px] text-[#999] cursor-pointer whitespace-nowrap" title={mode === 'holiday' ? '이 선생님은 이 날 빼기 (일하는 날만 보여요)' : '이 선생님만 그날 휴무'}>
                       <input type="checkbox" checked={tOff} disabled={!!closed[d]}
                         onChange={e => {
                           if (e.target.checked && hasLocked) { alert('신청된 시간이 있어요. 먼저 신청을 취소해 주세요.'); return; }
                           setTeacherOff(o => { const n = { ...o }; if (e.target.checked) n[key] = ''; else delete n[key]; return n; });
                         }} />
-                      휴무
+                      {mode === 'holiday' ? '빼기' : '휴무'}
                     </label>
                     <span className="w-[80px] shrink-0 pt-1.5 text-[13px] text-[#71717b] whitespace-nowrap">{dowLabel(d)} <span className="text-[#bbb]">{shortDay(d).split('(')[0]}</span></span>
-                    {tOff ? (
+                    {tOff && mode === 'holiday' ? (
+                      <span className="pt-1.5 text-[13px] text-[#bbb]">이 날은 빠져요 — 스케쥴에 안 보여요</span>
+                    ) : tOff ? (
                       <input value={teacherOff[key]} placeholder="휴무 사유를 적어 주세요 (예: 연차, 교육)" autoFocus
                         onChange={e => setTeacherOff(o => ({ ...o, [key]: e.target.value }))}
                         className="flex-1 border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)] placeholder:text-[#ccc]" />

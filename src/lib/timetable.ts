@@ -292,22 +292,25 @@ export const PAY_METHODS: { key: PayMethod; label: string; short: string }[] = [
   { key: 'other', label: '기타', short: '기' },
 ];
 
+/** 결제 체크 하나 — 직접 적은 결제는 method = 'other' + note */
+export interface PayEntry { method: PayMethod; note?: string }
+
 /** 그날 결제 체크 — "아이|시간" → 결제 */
-export async function getDayPayments(day: string): Promise<Map<string, PayMethod>> {
-  const { data, error } = await supabase.from('lesson_payments').select('child_id, time, method').eq('day', day);
+export async function getDayPayments(day: string): Promise<Map<string, PayEntry>> {
+  const { data, error } = await supabase.from('lesson_payments').select('*').eq('day', day);
   if (error) throw error;
-  return new Map((data ?? []).map(r => [`${r.child_id}|${r.time}`, r.method as PayMethod]));
+  return new Map((data ?? []).map(r => [`${r.child_id}|${r.time}`, { method: r.method as PayMethod, note: (r.note as string | null) ?? undefined }]));
 }
 
-/** 결제 체크 저장 / 지우기(method = null) */
-export async function setLessonPayment(childId: string, day: string, time: string, teacherId: string, center: Center, method: PayMethod | null): Promise<void> {
-  if (!method) {
+/** 결제 체크 저장 / 지우기(entry = null) */
+export async function setLessonPayment(childId: string, day: string, time: string, teacherId: string, center: Center, entry: PayEntry | null): Promise<void> {
+  if (!entry) {
     const { error } = await supabase.from('lesson_payments').delete().match({ child_id: childId, day, time });
     if (error) throw error;
     return;
   }
   const { error } = await supabase.from('lesson_payments').upsert(
-    { child_id: childId, day, time, teacher_id: teacherId, center, method },
+    { child_id: childId, day, time, teacher_id: teacherId, center, method: entry.method, note: entry.note ?? null },
     { onConflict: 'child_id,day,time' },
   );
   if (error) throw error;
