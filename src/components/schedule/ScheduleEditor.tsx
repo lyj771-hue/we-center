@@ -85,21 +85,25 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   // 공휴일 스케쥴에선 빼지 않는다. "이 날 추가"로 언제든 넣을 수 있고, 이미 시간이 올라가 있는 날은 넣은 것으로 본다.
   const [addedAway, setAddedAway] = useState<Set<string>>(() => new Set((existing?.slots ?? []).map(sl => `${sl.teacherId}|${sl.day}`)));
   const away = (t: Teacher, d: string) =>
-    mode !== 'holiday' && !worksAt(t, 'eunpyeong', parseYmd(d).getDay()) && !addedAway.has(`${t.id}|${d}`);
+    mode !== 'holiday' && t.centers.includes('eunpyeong') && !worksAt(t, 'eunpyeong', parseYmd(d).getDay()) && !addedAway.has(`${t.id}|${d}`);
 
-  // 선생님 줄 — 이번 주·다음 주는 은평 선생님, 공휴일은 두 센터 선생님 모두(✕로 이 스케쥴에서 뺄 수 있다)
+  // 선생님 줄 — 이번 주·다음 주는 은평 선생님, 공휴일은 두 센터 선생님 모두가 기본. 위의 선생님 줄에서 더하고 뺄 수 있다
+  const isDefault = (t: Teacher) => mode === 'holiday' || t.centers.includes('eunpyeong');
   const [removed, setRemoved] = useState<Set<string>>(() => {
     if (!existing?.days?.length) return new Set();
     const has = new Set(existing.slots.map(sl => sl.teacherId));
     return new Set(teachers.filter(t => !has.has(t.id)).map(t => t.id));
   });
-  const active = mode === 'holiday'
-    ? teachers.filter(t => !removed.has(t.id))
-    : teachers.filter(t => t.centers.includes('eunpyeong'));
-  const removedList = mode === 'holiday' ? teachers.filter(t => removed.has(t.id)) : [];
+  const [extra, setExtra] = useState<Set<string>>(() => new Set((existing?.slots ?? []).map(sl => sl.teacherId)));
+  const active = teachers.filter(t => (isDefault(t) || extra.has(t.id)) && !removed.has(t.id));
+  const addTeacherToSchedule = (t: Teacher) => {
+    setRemoved(r => { const n = new Set(r); n.delete(t.id); return n; });
+    if (!isDefault(t)) setExtra(x => new Set(x).add(t.id));
+  };
   const removeTeacher = (t: Teacher) => {
     if ([...locked.keys()].some(k => k.startsWith(`${t.id}|`))) { alert('신청된 시간이 있는 선생님은 뺄 수 없어요. 먼저 신청을 취소해 주세요.'); return; }
     setRemoved(r => new Set(r).add(t.id));
+    setExtra(x => { const n = new Set(x); n.delete(t.id); return n; });
   };
 
   // 신청된 시간 (잠금) — "선생님|날짜|시간" → 닉네임
@@ -326,7 +330,12 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
         </div>
         {mode === 'holiday' && (
           <div className="mt-3 space-y-1.5">
-            <input value={holidayText} onChange={e => setHolidayText(e.target.value)} onBlur={applyHolidayText}
+            <input value={holidayText} onChange={e => {
+              setHolidayText(e.target.value);
+              // 적는 동안에도 알아볼 수 있는 날짜는 바로 반영한다 (글 정리·오류 안내는 칸을 나갈 때)
+              const { dates } = parseDateList(e.target.value);
+              setHolidayDates([...new Set([...dates, ...lockedDays])].sort());
+            }} onBlur={applyHolidayText}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyHolidayText(); } }}
               placeholder="년/월/일 — 여러 날은 쉼표로 (예: 2026/10/9, 2026/12/25)"
               className="w-full border-b border-[#ddd] py-2 text-[15px] outline-none focus:border-[var(--brand)] placeholder:text-[#ccc]" />
@@ -391,6 +400,21 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
             <button type="button" onClick={handleDeleteTemplate} className="text-[13px] border border-[#e5e5e5] bg-white text-red-400 px-3 py-2 hover:bg-red-50">형식 삭제</button>
           )}
         </div>
+      </div>
+
+      {/* 이 스케쥴에 넣을 선생님 — 누르면 빼고, + 를 누르면 넣는다 */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[13px] text-[#888] mr-1">선생님</span>
+        {teachers.map(t => {
+          const on = active.some(a => a.id === t.id);
+          return on ? (
+            <button key={t.id} type="button" onClick={() => removeTeacher(t)} title="이 스케쥴에서 빼기"
+              className="text-[13px] rounded-full px-3 py-1 bg-[var(--brand)] text-white hover:opacity-80">{t.name} ✕</button>
+          ) : (
+            <button key={t.id} type="button" onClick={() => addTeacherToSchedule(t)} title="이 스케쥴에 넣기"
+              className="text-[13px] rounded-full px-3 py-1 border border-[#ccc] text-[#888] hover:border-[var(--brand)] hover:text-[var(--brand)]">+ {t.name}</button>
+          );
+        })}
       </div>
 
       {/* 선생님별 시간 */}
@@ -525,16 +549,6 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                 );
               })}
             </section>
-          ))}
-        </div>
-      )}
-
-      {removedList.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 -mt-3">
-          <span className="text-[12px] text-[#999]">뺀 선생님:</span>
-          {removedList.map(t => (
-            <button key={t.id} type="button" onClick={() => setRemoved(r => { const n = new Set(r); n.delete(t.id); return n; })}
-              className="text-[12px] border border-[#ddd] rounded-full px-2.5 py-0.5 hover:bg-[#f8f8f8]">+ {t.name}</button>
           ))}
         </div>
       )}
