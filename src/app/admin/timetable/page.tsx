@@ -7,7 +7,7 @@ import type { Teacher } from '@/lib/schedule';
 import { addDays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import {
-  CENTERS, PAY_METHODS, ROW_LABEL, cellOf, deleteFixed, getDayAssigns, getDayPayments, getPaymentCounts, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, paymentColor, resetDayCell,
+  CENTERS, PAY_METHODS, ROW_LABEL, cellOf, deleteFixed, getDayAssigns, getDayPayments, getPaymentCounts, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, saveDayCell, saveFixed, syncTimetable,
 } from '@/lib/timetable';
 
@@ -16,7 +16,8 @@ import {
 // 결제방식: 아이의 기본 결제(b 바우처 …)를 흐리게 보여 주고, 눌러서 수업 후 결제를 고르면 체크된다.
 // 빈타임 칸을 누르면 칸 아래로 아이 명단이 열리고, 맨 위에 적으면 검색된다(명단에 있는 아이만 — 오타 없게).
 // 고정 시간표: 요일을 골라 왼쪽 고정 수업 자체를 고친다.
-// 칸 표시: 이름 앞 숫자(같은 이름 구분)·S(구강), 이름 뒤 결제 글자(b 바우처 …)·x(결석). 글자 색 = 결제(b 하늘색, 없음 빨강, 그 밖 검정).
+// 칸 표시: 이름 앞 숫자(같은 이름 구분) + 이름만. 결제 글자(b·e …)·구강(S) 같은 영어는 표에 보이지 않는다. 글자 색은 모두 기본.
+// 결제방식 칸 단계: 기본 결제(그대로) → 고르면 노랑(기본과 같음) / 빨강(실제 결제로 바꿈) → [결제 완료]로 확정(연한 초록).
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 type Mode = 'day' | 'fixed';
@@ -350,7 +351,7 @@ export default function TimetablePage() {
         {mode === 'day' && (
           <div className="sticky bottom-0 z-20 flex items-center justify-end gap-3 bg-white/95 border-t border-[#eee] py-3 mt-2">
             <span className="text-[12px] text-[#888]">
-              {draft.size ? `저장 안 한 결제 체크 ${draft.size}건 — 노란 칸` : '결제방식을 다 고른 뒤 [결제 완료]를 눌러 주세요.'}
+              {draft.size ? `저장 안 한 결제 체크 ${draft.size}건 — 노랑·빨강 칸` : '결제방식을 다 고른 뒤 [결제 완료]를 눌러 주세요.'}
             </span>
             {draft.size > 0 && (
               <button onClick={() => setDraft(new Map())} disabled={savingPay} className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
@@ -363,9 +364,8 @@ export default function TimetablePage() {
         )}
 
         <p className="text-[11px] text-[#999] mt-3 leading-[2]">
-          칸을 누르면 고칠 수 있어요. 글자 색: <span style={{ color: paymentColor('b') }}>바우처(b)</span> · <span style={{ color: paymentColor('') }}>결제 글자 없음</span> · <span style={{ color: paymentColor('e') }}>그 밖(e·c·v …)</span>
-          {' '}· 앞 숫자 = 같은 이름 구분 · S = 구강 · 뒤 x = 결석 · 줄 = 다른 선생님에게 옮김 · ? = 미정 · x = 그 시간 수업 안 함
-          {mode === 'day' && ' · 빈타임의 "신청" = 보호자가 수업스케쥴에서 신청'}
+          칸을 누르면 고칠 수 있어요. 앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정
+          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#fef3c7] text-[#92400e] px-1 rounded">노랑 = 기본대로 고름</span> · <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">빨강 = 실제 결제로 바꿈</span> → [결제 완료] → <span className="bg-[#edf5ef] text-[#4b7a5c] px-1 rounded">✓ 확정</span></>}
         </p>
       </div>
 
@@ -398,17 +398,17 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
   return <>{left}{right}</>;
 }
 
-/** 칸 글자 — 3S김채현bx 처럼 */
+/** 칸 글자 — 3김채현 처럼 (숫자 + 이름) */
 function CellText({ cell, label }: { cell: CellView; label?: string }) {
   if (cell.status === 'empty' || cell.status === 'none') {
     return label ? <span className="text-[#c4c4cc]">{label}</span> : null;
   }
   if (cell.status === 'undecided') return <span className="text-[#71717a]">?</span>;
-  if (cell.status === 'off') return <span className="text-[#a1a1aa]">x</span>;
+  if (cell.status === 'off') return <span className="text-[#a1a1aa]">수업 안 함</span>;
   return (
-    <span title={cell.note} style={{ color: paymentColor(cell.payment) }} className={`${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-60' : ''}`}>
-      {cell.number ?? ''}{cell.oral ? 'S' : ''}{cell.name}
-      <span className="text-[10px]">{cell.payment}{cell.absent && !/x/i.test(cell.payment) ? 'x' : ''}</span>
+    <span title={cell.note} className={`text-[#27272a] ${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-50' : ''}`}>
+      {cell.number ?? ''}{cell.name}
+      {cell.absent && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">결석</span>}
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
       {cell.note && <span className="ml-0.5 text-[9px] text-[#f59e0b]">●</span>}
@@ -429,12 +429,18 @@ function PayCell({ cell, paid, pending, left, onPay }: {
   const base = defaultMethod(cell.payment);
   const label = (k?: PayMethod) => PAY_METHODS.find(m => m.key === k)?.label;
   const rest = paid && left?.(paid.method);
+  // 단계 — 기본(그대로) / 노랑: 고름(기본과 같음) / 빨강: 실제 결제로 바꿈·체크 풀기 / 확정: 결제 완료로 저장됨
+  const changed = pending && (!paid || paid.method !== base || !!paid.note);
+  const tone = pending
+    ? (changed ? 'bg-[#fde2e2] text-[#b91c1c]' : 'bg-[#fef3c7] text-[#92400e]')
+    : paid ? 'bg-[#edf5ef] text-[#4b7a5c]' : 'text-[#27272a]';
   const text = paid
-    ? <span className="text-[#16a34a]">✓{paid.note || label(paid.method)}{rest && <span className="ml-0.5 text-[10px]">{rest}</span>}</span>
-    : <span className="text-[#a1a1aa]">{label(base) ?? (cell.payment || '—')}</span>;
-  if (!onPay) return <span className="block text-[11px]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{text}</span>;
+    ? <span>{pending ? '' : '✓'}{paid.note || label(paid.method)}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
+    : <span>{pending ? '체크 풀기' : (label(base) ?? '—')}</span>;
+  if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{label(base) ?? '—'}</span>;
   return (
-    <label className={`relative block text-[11px] cursor-pointer hover:underline rounded ${pending ? 'bg-[#fef3c7]' : ''}`} title="수업 후 결제 체크">
+    <label className={`relative block text-[11px] cursor-pointer rounded px-1 ${tone}`}
+      title={pending ? '저장 전 — [결제 완료]를 눌러야 확정돼요' : paid ? '결제 완료로 확정됨' : '기본 결제 — 눌러서 고르기'}>
       {text}
       <select value={paid ? (paid.note ? 'custom' : paid.method) : ''}
         onChange={async e => {
@@ -447,8 +453,8 @@ function PayCell({ cell, paid, pending, left, onPay }: {
         }}
         className="absolute inset-0 w-full opacity-0 cursor-pointer" aria-label={`${cell.name} 결제 체크`}>
         <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
-        {PAY_METHODS.map(m => <option key={m.key} value={m.key}>✓ {m.label}</option>)}
-        <option value="custom">{paid?.note ? `✓ ${paid.note} (고치기)` : '직접 작성…'}</option>
+        {PAY_METHODS.map(m => <option key={m.key} value={m.key}>{m.label}{m.key === base ? ' (기본)' : ''}</option>)}
+        <option value="custom">{paid?.note ? `${paid.note} (고치기)` : '직접 작성…'}</option>
       </select>
     </label>
   );
@@ -488,8 +494,7 @@ function ChildPicker({ picking, kids, onPick, onSave, onMore, onClose }: {
             <li key={c.id}>
               <button type="button" onClick={() => onPick(c)}
                 className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-[#f0f6fe] ${cell.childId === c.id ? 'bg-[#f0f6fe]' : ''}`}>
-                {c.number ?? ''}{c.oral ? 'S' : ''}{c.name}
-                <span className="ml-1 text-[11px]" style={{ color: paymentColor(c.payment) }}>{c.payment}</span>
+                {c.number ?? ''}{c.name}
                 {c.memberCode && <span className="ml-1 text-[10px] text-[#bbb]">{c.memberCode}</span>}
               </button>
             </li>
