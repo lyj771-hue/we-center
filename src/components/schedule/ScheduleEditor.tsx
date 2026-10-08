@@ -17,7 +17,7 @@ const DEFAULT_NOTICE = '원하시는 시간을 누르면 바로 신청돼요. �
 
 type Mode = 'this' | 'next' | 'holiday';
 
-/** "모두 불러오기"로 한 번에 넣는 센터 기본 수업 시간 (월~금 = 평일, 토요일·공휴일 = 휴일) */
+/** "ALL"로 한 번에 넣는 센터 기본 수업 시간 (월~금 = 평일, 토요일·공휴일 = 휴일) */
 const WEEKDAY_TIMES = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '14:00', '14:50', '15:40', '16:30', '17:40', '18:30', '19:20'];
 const HOLIDAY_TIMES = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '13:30', '14:20', '15:10', '16:00', '16:50', '17:40', '18:30', '19:20'];
 
@@ -150,7 +150,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     if (!/^\d{2}:\d{2}$/.test(time)) return;
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), time]) } }));
   };
-  // 그날 시간을 통째로 바꾼다(신청된 시간은 남긴다) — 모두 불러오기 · 비우기
+  // 그날 시간을 통째로 바꾼다(신청된 시간은 남긴다) — ALL · 비우기(휴지통)
   const setDayTimes = (tid: string, day: string, list: string[]) =>
     setTimes(p => ({
       ...p,
@@ -476,22 +476,27 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                         return (
                           <span className="order-first inline-flex flex-wrap items-center gap-1">
                             <button type="button" onClick={() => setDayTimes(t.id, d, preset)} className={btn}
-                              title={`${weekday ? '평일' : '휴일'} 기본 시간을 모두 넣어요`}>모두 불러오기</button>
+                              title={`${weekday ? '평일' : '휴일'} 기본 시간을 모두 넣어요`}>ALL</button>
                             <select value="" aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 추가`}
                               onChange={e => {
                                 const v = e.target.value;
                                 if (v === 'custom') setCustom(c => ({ ...c, [key]: '' }));
                                 else if (v) addTime(t.id, d, v);
                               }}
-                              className="text-[13px] border border-[var(--brand)] bg-white px-2 py-1">
-                              <option value="">시간 추가</option>
+                              title="시간 추가"
+                              className="w-[52px] text-[13px] text-[var(--brand)] border border-[var(--brand)] bg-white px-2 py-1">
+                              <option value="">+</option>
                               {preset.filter(x => !(times[t.id]?.[d] ?? []).includes(x)).map(x => <option key={x} value={x}>{x}</option>)}
                               <option value="custom">직접 입력…</option>
                             </select>
                             {!!(times[t.id]?.[d] ?? []).length && (
                               <button type="button" onClick={() => { setDayTimes(t.id, d, []); setCustom(c => ({ ...c, [key]: undefined })); }}
-                                title="그날 시간을 모두 빼요 (신청된 시간은 남아요)"
-                                className="text-[12px] text-[#888] underline underline-offset-2 px-1 hover:text-red-400">비우기</button>
+                                title="비우기 — 그날 시간을 모두 빼요 (신청된 시간은 남아요)" aria-label={`${t.name} 선생님 ${shortDay(d)} 비우기`}
+                                className="p-1 text-[#999] hover:text-red-400">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                  <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
+                                </svg>
+                              </button>
                             )}
                           </span>
                         );
