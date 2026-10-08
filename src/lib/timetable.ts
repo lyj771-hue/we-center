@@ -343,17 +343,22 @@ export function worksAt(t: { centers: string[]; workDays?: Record<string, number
   return !days || days.includes(weekday);
 }
 
-/** 그날 그 센터에 더한 선생님 id 들 */
-export async function getDayAssigns(day: string, center: Center): Promise<string[]> {
-  const { data, error } = await supabase.from('teacher_day_assign').select('teacher_id').eq('day', day).eq('center', center);
+/** 그날 그 센터에 더한(added)·뺀(removed) 선생님 id 들 */
+export async function getDayAssigns(day: string, center: Center): Promise<{ added: string[]; removed: string[] }> {
+  const { data, error } = await supabase.from('teacher_day_assign').select('*').eq('day', day).eq('center', center);
   if (error) throw error;
-  return (data ?? []).map(r => r.teacher_id as string);
+  const rows = data ?? [];
+  return {
+    added: rows.filter(r => !r.off).map(r => r.teacher_id as string),
+    removed: rows.filter(r => r.off).map(r => r.teacher_id as string),
+  };
 }
 
-export async function setDayAssign(day: string, teacherId: string, center: Center, on: boolean): Promise<void> {
+/** 그날만 선생님 더하기('add') · 빼기('off') · 원래대로(null) */
+export async function setDayAssign(day: string, teacherId: string, center: Center, state: 'add' | 'off' | null): Promise<void> {
   const q = supabase.from('teacher_day_assign');
-  const { error } = on
-    ? await q.upsert({ day, teacher_id: teacherId, center }, { onConflict: 'day,teacher_id,center' })
+  const { error } = state
+    ? await q.upsert({ day, teacher_id: teacherId, center, off: state === 'off' }, { onConflict: 'day,teacher_id,center' })
     : await q.delete().match({ day, teacher_id: teacherId, center });
   if (error) throw error;
 }

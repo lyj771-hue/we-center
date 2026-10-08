@@ -63,8 +63,8 @@ export default function TimetablePage() {
   // 아이마다 이번 달 바우처·굳센·꿈이든, 지금까지 선결제 사용 횟수(디비)
   const [counts, setCounts] = useState<Map<string, PayCount>>(new Map());
   const [savingPay, setSavingPay] = useState(false);
-  // 그날만 이 센터에 더한 선생님 (공휴일 등)
-  const [assigns, setAssigns] = useState<string[]>([]);
+  // 그날만 이 센터에 더한 선생님(공휴일 등)·뺀 선생님
+  const [assigns, setAssigns] = useState<{ added: string[]; removed: string[] }>({ added: [], removed: [] });
   const [board, setBoard] = useState<{ fixed: Map<string, CellView>; open: Map<string, CellView> }>({ fixed: new Map(), open: new Map() });
   const [editing, setEditing] = useState<Editing | null>(null);
   const [picking, setPicking] = useState<Picking | null>(null);
@@ -80,7 +80,7 @@ export default function TimetablePage() {
         setPayments(await getDayPayments(day).catch(() => new Map()));
         const ym = day.slice(0, 7);
         setCounts(await getPaymentCounts(`${ym}-01`, `${ym}-31`).catch(() => new Map()));
-        setAssigns(await getDayAssigns(day, center).catch(() => []));
+        setAssigns(await getDayAssigns(day, center).catch(() => ({ added: [], removed: [] })));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
       setFailed('');
@@ -123,18 +123,26 @@ export default function TimetablePage() {
     }
   };
 
-  // 이 센터·요일에 일하는 선생님 + 그날만 더한 선생님 + (혹시) 칸이 채워져 있는 선생님
+  // 이 센터·요일에 일하는 선생님 + 그날만 더한 선생님 + (혹시) 칸이 채워져 있는 선생님 − 그날만 뺀 선생님
+  const wd = mode === 'day' ? parseYmd(day).getDay() : weekday;
   const shown = useMemo(() => {
-    const wd = mode === 'day' ? parseYmd(day).getDay() : weekday;
     const hasCells = new Set([...board.fixed.keys(), ...board.open.keys()].map(k => k.split('|')[0]));
-    return teachers.filter(t => worksAt(t, center, wd) || (mode === 'day' && assigns.includes(t.id)) || hasCells.has(t.id));
-  }, [teachers, center, mode, day, weekday, assigns, board]);
-  const extraIds = useMemo(() => new Set(mode === 'day' ? assigns : []), [mode, assigns]);
+    return teachers.filter(t => {
+      if (mode === 'day' && assigns.removed.includes(t.id)) return false;
+      return worksAt(t, center, wd) || (mode === 'day' && assigns.added.includes(t.id)) || hasCells.has(t.id);
+    });
+  }, [teachers, center, mode, wd, assigns, board]);
   const addable = useMemo(() => teachers.filter(t => !shown.some(x => x.id === t.id)), [teachers, shown]);
-  const changeAssign = async (teacherId: string, on: boolean) => {
+  // 그날만 더하기 / 빼기 — 원래 이 요일에 일하는 선생님은 빼면 'off', 다시 넣으면 원래대로. 그 밖의 선생님은 더하면 'add', 빼면 원래대로
+  const changeAssign = async (t: Teacher, on: boolean) => {
+    const regular = worksAt(t, center, wd);
+    const state = on ? (regular ? null : 'add') : (regular ? 'off' : null);
     try {
-      await setDayAssign(day, teacherId, center, on);
-      setAssigns(a => on ? [...a, teacherId] : a.filter(x => x !== teacherId));
+      await setDayAssign(day, t.id, center, state);
+      setAssigns(a => ({
+        added: state === 'add' ? [...a.added, t.id] : a.added.filter(x => x !== t.id),
+        removed: state === 'off' ? [...a.removed, t.id] : a.removed.filter(x => x !== t.id),
+      }));
     } catch (e) {
       showAlert(`저장하지 못했어요.\n${(e as Error).message}`);
     }
@@ -243,7 +251,7 @@ export default function TimetablePage() {
               <button onClick={() => guard(() => setDay(x => addDays(x, 1)))} className="text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]" aria-label="다음날">›</button>
               <button onClick={() => guard(() => setDay(toYmd(new Date())))} className="text-[12px] text-[#888] underline underline-offset-2 ml-1">오늘</button>
               {addable.length > 0 && (
-                <select value="" onChange={e => { if (e.target.value) changeAssign(e.target.value, true); }}
+                <select value="" onChange={e => { const t = teachers.find(x => x.id === e.target.value); if (t) changeAssign(t, true); }}
                   className="ml-2 text-[12px] border border-[#f59e0b] text-[#b45309] bg-white px-2 h-8" title="공휴일 등 그날만 이 센터에서 일하는 선생님">
                   <option value="">+ 이 날 선생님 추가</option>
                   {addable.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -287,9 +295,14 @@ export default function TimetablePage() {
                       className="inline-flex items-center gap-1 hover:opacity-70">
                       {t.name}<span className="text-[10px] text-[#aaa]">{folded.has(t.name) ? '▸' : '◂'}</span>
                     </button>
-                    {extraIds.has(t.id) && (
-                      <button type="button" onClick={async () => { if (await askConfirm(`${t.name} 선생님을 이 날 시간표에서 뺄까요?`)) changeAssign(t.id, false); }}
-                        className="ml-1 text-[10px] text-[#f59e0b] border border-[#fcd34d] rounded px-1" title="이 날만 더한 선생님 — 누르면 빼요">이 날만 ✕</button>
+                    {mode === 'day' && (
+                      <button type="button"
+                        onClick={async () => {
+                          const has = [...board.fixed.keys(), ...board.open.keys()].some(k => k.startsWith(`${t.id}|`));
+                          if (await askConfirm(`${t.name} 선생님을 이 날 시간표에서 뺄까요?${has ? '\n(이 날 칸에 들어 있는 아이들도 표에서 안 보여요)' : ''}\n위의 [+ 이 날 선생님 추가]로 다시 넣을 수 있어요.`)) changeAssign(t, false);
+                        }}
+                        className={`ml-1 text-[10px] rounded px-1 border ${assigns.added.includes(t.id) ? 'text-[#f59e0b] border-[#fcd34d]' : 'text-[#a1a1aa] border-[#e4e4e7] hover:text-red-400'}`}
+                        title="이 날만 시간표에서 빼기">✕ 빼기</button>
                     )}
                   </th>
                 ))}
@@ -317,12 +330,13 @@ export default function TimetablePage() {
                     return (
                       <FragmentPair key={t.id}
                         left={
-                          <td className={`${td} min-w-[84px]`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
-                            <CellText cell={left} label={ROW_LABEL[time]} />
+                          <td className={`${td} min-w-[84px] ${mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
+                            {/* 빈타임에 아이가 채워지면 옆 고정 칸은 회색으로 흐리게 */}
+                            <CellText cell={left} label={ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} />
                           </td>
                         }
                         right={mode === 'day' ? (<>
-                          <td className={`${td} min-w-[84px] bg-[#fcfcfd]`} onClick={e => {
+                          <td className={`${td} min-w-[84px] ${right.status === 'child' ? 'bg-[#eaf3fd]' : 'bg-[#fcfcfd]'}`} onClick={e => {
                             // 보호자 신청 칸은 안내가 있는 창으로, 그 밖은 칸 아래로 아이 명단을 연다
                             if (right.source === 'booking') { setEditing({ teacher: t, time, side: 'open', cell: right }); return; }
                             const b = e.currentTarget.getBoundingClientRect();
@@ -399,14 +413,14 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
 }
 
 /** 칸 글자 — 3김채현 처럼 (숫자 + 이름) */
-function CellText({ cell, label }: { cell: CellView; label?: string }) {
+function CellText({ cell, label, muted }: { cell: CellView; label?: string; muted?: boolean }) {
   if (cell.status === 'empty' || cell.status === 'none') {
     return label ? <span className="text-[#c4c4cc]">{label}</span> : null;
   }
   if (cell.status === 'undecided') return <span className="text-[#71717a]">?</span>;
   if (cell.status === 'off') return <span className="text-[#a1a1aa]">수업 안 함</span>;
   return (
-    <span title={cell.note} className={`text-[#27272a] ${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-50' : ''}`}>
+    <span title={cell.note} className={`${muted ? 'text-[#8a8a93]' : 'text-[#27272a]'} ${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-50' : ''}`}>
       {cell.number ?? ''}{cell.name}
       {cell.absent && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">결석</span>}
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
@@ -436,10 +450,10 @@ function PayCell({ cell, paid, pending, left, onPay }: {
     : paid ? 'bg-[#edf5ef] text-[#4b7a5c]' : 'text-[#27272a]';
   const text = paid
     ? <span>{pending ? '' : '✓'}{paid.note || label(paid.method)}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
-    : <span>{pending ? '체크 풀기' : (label(base) ?? '—')}</span>;
-  if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{label(base) ?? '—'}</span>;
+    : <span>{pending ? '체크 풀기' : (label(base) ?? '')}</span>;
+  if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{label(base) ?? ''}</span>;
   return (
-    <label className={`relative block text-[11px] cursor-pointer rounded px-1 ${tone}`}
+    <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone}`}
       title={pending ? '저장 전 — [결제 완료]를 눌러야 확정돼요' : paid ? '결제 완료로 확정됨' : '기본 결제 — 눌러서 고르기'}>
       {text}
       <select value={paid ? (paid.note ? 'custom' : paid.method) : ''}
