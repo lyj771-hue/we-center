@@ -11,8 +11,10 @@ import {
   rowsForDay, rowsForWeekday, saveDayCell, saveFixed, syncTimetable,
 } from '@/lib/timetable';
 
-// 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임] 두 칸.
+// 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임 | 결제방식] 세 칸.
 // 날짜별: 왼쪽은 요일 고정 수업이 깔리고 그날만 결석·옮김·변경. 오른쪽은 보호자 신청이 자동으로 보이고 직접 넣을 수도 있다.
+// 결제방식: 아이의 기본 결제(b 바우처 …)를 흐리게 보여 주고, 눌러서 수업 후 결제를 고르면 체크된다.
+// 빈타임 칸을 누르면 칸 아래로 아이 명단이 열리고, 맨 위에 적으면 검색된다(명단에 있는 아이만 — 오타 없게).
 // 고정 시간표: 요일을 골라 왼쪽 고정 수업 자체를 고친다.
 // 칸 표시: 이름 앞 숫자(같은 이름 구분)·S(구강), 이름 뒤 결제 글자(b 바우처 …)·x(결석). 글자 색 = 결제(b 하늘색, 없음 빨강, 그 밖 검정).
 
@@ -25,6 +27,21 @@ interface Editing {
   time: string;
   side: Side;
   cell: CellView;
+}
+
+/** 빈타임 칸 아래로 여는 아이 고르기 — 칸 위치(rect)에 붙여 띄운다 */
+interface Picking extends Editing {
+  rect: { left: number; top: number; bottom: number };
+}
+
+/** 결제 글자(b·e·c …) → 기본 결제. 모르는 글자면 없음 */
+function defaultMethod(payment: string | undefined): PayMethod | undefined {
+  const p = (payment ?? '').toLowerCase().replace(/x/g, '');
+  for (const ch of p) {
+    const m = PAY_METHODS.find(x => x.short === ch);
+    if (m) return m.key;
+  }
+  return undefined;
 }
 
 export default function TimetablePage() {
@@ -44,6 +61,7 @@ export default function TimetablePage() {
   const [assigns, setAssigns] = useState<string[]>([]);
   const [board, setBoard] = useState<{ fixed: Map<string, CellView>; open: Map<string, CellView> }>({ fixed: new Map(), open: new Map() });
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [picking, setPicking] = useState<Picking | null>(null);
   const [failed, setFailed] = useState('');
 
   const load = useCallback(async () => {
@@ -103,6 +121,42 @@ export default function TimetablePage() {
 
   const rows = useMemo(() => (mode === 'day' ? rowsForDay(day) : rowsForWeekday(weekday)), [mode, day, weekday]);
   const d = parseYmd(day);
+
+  const saveCell = async ({ teacher, time, side }: Editing, input: CellInput | 'reset', weekly?: boolean) => {
+    try {
+      if (weekly && input !== 'reset' && input.status === 'child') {
+        // 날짜별 화면에서 "매주 고정으로 저장" — 요일 고정 수업으로 넣고, 그날 따로 바꿔 둔 칸은 지운다
+        await saveFixed(d.getDay(), teacher.id, time, input, center);
+        await resetDayCell(day, teacher.id, time, 'fixed', center);
+        sync({ action: 'fixed', teacherId: teacher.id, weekday: d.getDay(), time, center });
+      } else if (mode === 'fixed') {
+        if (input === 'reset' || input.status !== 'child') await deleteFixed(weekday, teacher.id, time, center);
+        else await saveFixed(weekday, teacher.id, time, input, center);
+        sync({ action: 'fixed', teacherId: teacher.id, weekday, time, center });
+      } else if (input === 'reset') {
+        await resetDayCell(day, teacher.id, time, side, center);
+        sync({ action: 'cell', day, teacherId: teacher.id, time, side, center });
+      } else {
+        await saveDayCell(day, teacher.id, time, side, input, center);
+        sync({ action: 'cell', day, teacherId: teacher.id, time, side, center });
+      }
+      setEditing(null);
+      setPicking(null);
+      load();
+    } catch (e) {
+      showAlert(`저장하지 못했어요.\n${(e as Error).message}`);
+    }
+  };
+
+  // 수업 후 결제 체크 (null = 체크 풀기)
+  const pay = async (childId: string, teacherId: string, time: string, method: PayMethod | null) => {
+    try {
+      await setLessonPayment(childId, day, time, teacherId, center, method);
+      setPayments(p => { const n = new Map(p); const k = `${childId}|${time}`; if (method) n.set(k, method); else n.delete(k); return n; });
+    } catch (e) {
+      showAlert(`결제 체크를 저장하지 못했어요.\n${(e as Error).message}`);
+    }
+  };
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
@@ -165,14 +219,14 @@ export default function TimetablePage() {
             <thead>
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white w-16`}>시간</th>
-                <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : mode === 'day' ? 2 : 1), 0) || 1}>
+                <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : mode === 'day' ? 3 : 1), 0) || 1}>
                   {mode === 'day' ? `${DOW[d.getDay()]} / ${d.getMonth() + 1}월 ${d.getDate()}일` : `${DOW[weekday]}요일 고정 시간표`}
                 </th>
               </tr>
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white`} />
                 {shown.map(t => (
-                  <th key={t.id} colSpan={folded.has(t.name) ? 1 : mode === 'day' ? 2 : 1} className={`${th} text-[14px] text-[#16a34a] whitespace-nowrap`}>
+                  <th key={t.id} colSpan={folded.has(t.name) ? 1 : mode === 'day' ? 3 : 1} className={`${th} text-[14px] text-[#16a34a] whitespace-nowrap`}>
                     <button type="button" onClick={() => toggleFold(t.name)} title={folded.has(t.name) ? '펼치기' : '접기'}
                       className="inline-flex items-center gap-1 hover:opacity-70">
                       {t.name}<span className="text-[10px] text-[#aaa]">{folded.has(t.name) ? '▸' : '◂'}</span>
@@ -188,7 +242,10 @@ export default function TimetablePage() {
                 <tr>
                   <th className={`${th} sticky left-0 z-10 bg-white`} />
                   {shown.map(t => folded.has(t.name) ? <th key={t.id} className={`${th} text-[10px] text-[#ccc] w-6`}>접음</th> : (
-                    <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>} />
+                    <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={<>
+                      <th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>
+                      <th className={`${th} text-[10px] text-[#16a34a] min-w-[64px]`}>결제방식</th>
+                    </>} />
                   ))}
                 </tr>
               )}
@@ -205,14 +262,25 @@ export default function TimetablePage() {
                       <FragmentPair key={t.id}
                         left={
                           <td className={`${td} min-w-[84px]`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
-                            <CellText cell={left} label={ROW_LABEL[time]} paid={mode === 'day' && left.childId ? payments.get(`${left.childId}|${time}`) : undefined} />
+                            <CellText cell={left} label={ROW_LABEL[time]} />
                           </td>
                         }
-                        right={mode === 'day' ? (
-                          <td className={`${td} min-w-[84px] bg-[#fcfcfd]`} onClick={() => setEditing({ teacher: t, time, side: 'open', cell: right })}>
-                            <CellText cell={right} label={ROW_LABEL[time]} paid={right.childId ? payments.get(`${right.childId}|${time}`) : undefined} />
+                        right={mode === 'day' ? (<>
+                          <td className={`${td} min-w-[84px] bg-[#fcfcfd]`} onClick={e => {
+                            // 보호자 신청 칸은 안내가 있는 창으로, 그 밖은 칸 아래로 아이 명단을 연다
+                            if (right.source === 'booking') { setEditing({ teacher: t, time, side: 'open', cell: right }); return; }
+                            const b = e.currentTarget.getBoundingClientRect();
+                            setPicking({ teacher: t, time, side: 'open', cell: right, rect: { left: b.left, top: b.top, bottom: b.bottom } });
+                          }}>
+                            <CellText cell={right} label={ROW_LABEL[time]} />
                           </td>
-                        ) : null}
+                          <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
+                            {[left, right].filter(c => c.status === 'child' && !c.moved).map((c, i) => (
+                              <PayCell key={i} cell={c} paid={c.childId ? payments.get(`${c.childId}|${time}`) : undefined}
+                                onPay={c.childId ? m => pay(c.childId!, t.id, time, m) : undefined} />
+                            ))}
+                          </td>
+                        </>) : null}
                       />
                     );
                   })}
@@ -235,41 +303,19 @@ export default function TimetablePage() {
           mode={mode}
           dayLabel={mode === 'day' ? `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})` : `${DOW[weekday]}요일 고정`}
           kids={children}
-          paid={mode === 'day' && editing.cell.childId ? payments.get(`${editing.cell.childId}|${editing.time}`) : undefined}
-          onPay={mode === 'day' && editing.cell.childId && editing.cell.status === 'child' ? async method => {
-            try {
-              await setLessonPayment(editing.cell.childId!, day, editing.time, editing.teacher.id, center, method);
-              setPayments(p => { const n = new Map(p); const k = `${editing.cell.childId}|${editing.time}`; if (method) n.set(k, method); else n.delete(k); return n; });
-            } catch (e) {
-              showAlert(`결제 체크를 저장하지 못했어요.\n${(e as Error).message}`);
-            }
-          } : undefined}
           onClose={() => setEditing(null)}
-          onSave={async (input, weekly) => {
-            const { teacher, time, side } = editing;
-            try {
-              if (weekly && input !== 'reset' && input.status === 'child') {
-                // 날짜별 화면에서 "매주 고정으로 저장" — 요일 고정 수업으로 넣고, 그날 따로 바꿔 둔 칸은 지운다
-                await saveFixed(d.getDay(), teacher.id, time, input, center);
-                await resetDayCell(day, teacher.id, time, 'fixed', center);
-                sync({ action: 'fixed', teacherId: teacher.id, weekday: d.getDay(), time, center });
-              } else if (mode === 'fixed') {
-                if (input === 'reset' || input.status !== 'child') await deleteFixed(weekday, teacher.id, time, center);
-                else await saveFixed(weekday, teacher.id, time, input, center);
-                sync({ action: 'fixed', teacherId: teacher.id, weekday, time, center });
-              } else if (input === 'reset') {
-                await resetDayCell(day, teacher.id, time, side, center);
-                sync({ action: 'cell', day, teacherId: teacher.id, time, side, center });
-              } else {
-                await saveDayCell(day, teacher.id, time, side, input, center);
-                sync({ action: 'cell', day, teacherId: teacher.id, time, side, center });
-              }
-              setEditing(null);
-              load();
-            } catch (e) {
-              showAlert(`저장하지 못했어요.\n${(e as Error).message}`);
-            }
-          }}
+          onSave={(input, weekly) => saveCell(editing, input, weekly)}
+        />
+      )}
+
+      {picking && (
+        <ChildPicker
+          picking={picking}
+          kids={children}
+          onPick={c => saveCell(picking, { status: 'child', childId: c.id, name: c.name, payment: c.payment, oral: !!c.oral, absent: false, moved: false })}
+          onSave={input => saveCell(picking, input)}
+          onMore={() => { setEditing(picking); setPicking(null); }}
+          onClose={() => setPicking(null)}
         />
       )}
     </div>
@@ -281,7 +327,7 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
 }
 
 /** 칸 글자 — 3S김채현bx 처럼 */
-function CellText({ cell, label, paid }: { cell: CellView; label?: string; paid?: PayMethod }) {
+function CellText({ cell, label }: { cell: CellView; label?: string }) {
   if (cell.status === 'empty' || cell.status === 'none') {
     return label ? <span className="text-[#c4c4cc]">{label}</span> : null;
   }
@@ -294,19 +340,89 @@ function CellText({ cell, label, paid }: { cell: CellView; label?: string; paid?
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
       {cell.note && <span className="ml-0.5 text-[9px] text-[#f59e0b]">●</span>}
-      {paid && <span className="ml-0.5 text-[9px] text-white bg-[#16a34a] px-1 rounded" title="결제 체크됨">✓{PAY_METHODS.find(m => m.key === paid)?.label}</span>}
     </span>
   );
 }
 
-function CellEditor({ editing, mode, dayLabel, kids, paid, onPay, onClose, onSave }: {
+/** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓. 누르면 드롭박스로 고른다 */
+function PayCell({ cell, paid, onPay }: { cell: CellView; paid?: PayMethod; onPay?: (m: PayMethod | null) => void }) {
+  if (cell.absent) return <span className="block text-[10px] text-[#c4c4cc]">결석</span>;
+  const base = defaultMethod(cell.payment);
+  const label = (k?: PayMethod) => PAY_METHODS.find(m => m.key === k)?.label;
+  const text = paid
+    ? <span className="text-[#16a34a]">✓{label(paid)}</span>
+    : <span className="text-[#a1a1aa]">{label(base) ?? (cell.payment || '—')}</span>;
+  if (!onPay) return <span className="block text-[11px]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{text}</span>;
+  return (
+    <label className="relative block text-[11px] cursor-pointer hover:underline" title="수업 후 결제 체크">
+      {text}
+      <select value={paid ?? ''} onChange={e => onPay((e.target.value || null) as PayMethod | null)}
+        className="absolute inset-0 w-full opacity-0 cursor-pointer" aria-label={`${cell.name} 결제 체크`}>
+        <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
+        {PAY_METHODS.map(m => <option key={m.key} value={m.key}>✓ {m.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+/** 빈타임 칸 아래로 열리는 아이 명단 — 맨 위에 적으면 검색, 누르면 바로 저장 */
+function ChildPicker({ picking, kids, onPick, onSave, onMore, onClose }: {
+  picking: Picking;
+  kids: Child[];
+  onPick: (c: Child) => void;
+  onSave: (input: CellInput | 'reset') => void;
+  onMore: () => void;
+  onClose: () => void;
+}) {
+  const { cell, rect } = picking;
+  const [q, setQ] = useState('');
+  const query = q.trim().toLowerCase();
+  const list = kids.filter(c => !query || c.name.toLowerCase().includes(query) || (c.memberCode ?? '').toLowerCase().includes(query));
+  // 화면 아래쪽 칸이면 위로 연다
+  const W = 240, H = 340;
+  const below = rect.bottom + H < window.innerHeight;
+  const style: React.CSSProperties = {
+    left: Math.max(8, Math.min(rect.left, window.innerWidth - W - 8)),
+    ...(below ? { top: rect.bottom + 2 } : { bottom: window.innerHeight - rect.top + 2 }),
+    width: W,
+  };
+  const btn = 'text-[11px] px-2 py-1 border border-[#ddd] rounded-full hover:bg-[#f4f4f5]';
+
+  return (
+    <div className="fixed inset-0 z-[500]" onClick={onClose}>
+      <div className="fixed bg-white border border-[#d4d4d8] rounded-lg shadow-xl flex flex-col" style={style} onClick={e => e.stopPropagation()}>
+        <input value={q} onChange={e => setQ(e.target.value)} autoFocus placeholder="아이 이름 검색"
+          onKeyDown={e => { if (e.key === 'Enter' && list[0]) onPick(list[0]); if (e.key === 'Escape') onClose(); }}
+          className="m-2 border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]" />
+        <ul className="max-h-[220px] overflow-y-auto">
+          {list.map(c => (
+            <li key={c.id}>
+              <button type="button" onClick={() => onPick(c)}
+                className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-[#f0f6fe] ${cell.childId === c.id ? 'bg-[#f0f6fe]' : ''}`}>
+                {c.number ?? ''}{c.oral ? 'S' : ''}{c.name}
+                <span className="ml-1 text-[11px]" style={{ color: paymentColor(c.payment) }}>{c.payment}</span>
+                {c.memberCode && <span className="ml-1 text-[10px] text-[#bbb]">{c.memberCode}</span>}
+              </button>
+            </li>
+          ))}
+          {!list.length && <li className="px-3 py-2 text-[12px] text-[#aaa]">명단에 없어요. 아이 명단에 먼저 넣어 주세요.</li>}
+        </ul>
+        <div className="flex flex-wrap gap-1 p-2 border-t border-[#eee]">
+          {cell.source === 'override' && <button type="button" onClick={() => onSave('reset')} className={`${btn} text-red-400`}>비우기</button>}
+          <button type="button" onClick={() => onSave({ status: 'undecided' })} className={btn}>? 미정</button>
+          <button type="button" onClick={() => onSave({ status: 'off' })} className={btn}>x 수업 안 함</button>
+          <button type="button" onClick={onMore} className={`${btn} text-[#888]`}>자세히…</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
   editing: Editing;
   mode: Mode;
   dayLabel: string;
   kids: Child[];
-  /** 수업 후 결제 체크 (날짜별 화면, 아이가 명단에 있는 칸만) */
-  paid?: PayMethod;
-  onPay?: (method: PayMethod | null) => void;
   onClose: () => void;
   /** weekly = 날짜별 화면의 왼쪽 칸에서 "매주 고정으로 저장" */
   onSave: (input: CellInput | 'reset', weekly?: boolean) => void;
@@ -323,7 +439,7 @@ function CellEditor({ editing, mode, dayLabel, kids, paid, onPay, onClose, onSav
   const pickName = (v: string) => {
     setName(v);
     const c = kids.find(x => x.name === v.trim());
-    if (c && !payment) setPayment(c.payment);
+    if (c) setPayment(c.payment);   // 결제는 아이 명단의 기본 결제를 따른다 (그날 결제는 표의 결제방식 칸에서)
   };
 
   const saveWeekly = () => {
@@ -352,20 +468,14 @@ function CellEditor({ editing, mode, dayLabel, kids, paid, onPay, onClose, onSav
           </p>
         )}
 
-        <div className="flex items-end gap-2">
-          <label className="flex-1">
+        <div>
+          <label className="block">
             <span className="block text-[11px] text-[#999] mb-1">아이 이름</span>
             <input list="tt-children" value={name} onChange={e => pickName(e.target.value)} autoFocus placeholder="이름 (비우면 빈 칸)"
               className="w-full border-b border-[#ddd] py-1.5 text-[15px] outline-none focus:border-[var(--brand)]" />
             <datalist id="tt-children">
               {kids.map(c => <option key={c.id} value={c.name}>{c.number ? `${c.number} ${c.name}` : c.name}</option>)}
             </datalist>
-          </label>
-          <label className="w-20">
-            <span className="block text-[11px] text-[#999] mb-1">결제</span>
-            <input value={payment} onChange={e => setPayment(e.target.value)} placeholder="b"
-              className="w-full border-b border-[#ddd] py-1.5 text-[15px] text-center outline-none focus:border-[var(--brand)]"
-              style={{ color: paymentColor(payment) }} />
           </label>
         </div>
         {child?.number !== undefined && <p className="text-[11px] text-[#999] -mt-2">아이 명단: {child.number}{child.name}</p>}
@@ -380,21 +490,6 @@ function CellEditor({ editing, mode, dayLabel, kids, paid, onPay, onClose, onSav
             className="w-full border-b border-[#eee] py-1 text-[13px] outline-none focus:border-[var(--brand)]" />
         )}
 
-        {onPay ? (
-          <div className="rounded-xl bg-[#f6fbf7] px-3 py-2.5">
-            <p className="text-[11px] text-[#16a34a] mb-1.5">수업 후 결제 체크 {paid ? `· ${PAY_METHODS.find(m => m.key === paid)?.label}` : ''}</p>
-            <div className="flex flex-wrap gap-1">
-              {PAY_METHODS.map(m => (
-                <button key={m.key} type="button" onClick={() => onPay(paid === m.key ? null : m.key)}
-                  className={`text-[12px] px-2.5 py-1 rounded-full border ${paid === m.key ? 'border-[#16a34a] bg-[#16a34a] text-white' : 'border-[#d4d4d8] hover:bg-white'}`}>
-                  {paid === m.key ? '✓ ' : ''}{m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : mode === 'day' && cell.status === 'child' ? (
-          <p className="text-[11px] text-[#aaa]">아이 명단에 없는 이름이라 결제 체크를 할 수 없어요. 명단에서 고르면 체크할 수 있어요.</p>
-        ) : null}
 
         <div className="flex flex-wrap gap-1.5">
           <button onClick={save} className={`${chip} border-[var(--brand)] bg-[var(--brand)] text-white`}>

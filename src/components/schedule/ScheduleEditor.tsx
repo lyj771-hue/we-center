@@ -87,8 +87,8 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   const away = (t: Teacher, d: string) =>
     mode !== 'holiday' && t.centers.includes('eunpyeong') && !worksAt(t, 'eunpyeong', parseYmd(d).getDay()) && !addedAway.has(`${t.id}|${d}`);
 
-  // 선생님 줄 — 이번 주·다음 주는 은평 선생님, 공휴일은 두 센터 선생님 모두가 기본. 위의 선생님 줄에서 더하고 뺄 수 있다
-  const isDefault = (t: Teacher) => mode === 'holiday' || t.centers.includes('eunpyeong');
+  // 선생님 줄 — 은평 선생님이 기본으로 선택되고, 의정부 선생님(김영훈·문석현)은 보이되 선택 안 된 채로. 줄에서 더하고 뺄 수 있다
+  const isDefault = (t: Teacher) => t.centers.includes('eunpyeong');
   const [removed, setRemoved] = useState<Set<string>>(() => {
     if (!existing?.days?.length) return new Set();
     const has = new Set(existing.slots.map(sl => sl.teacherId));
