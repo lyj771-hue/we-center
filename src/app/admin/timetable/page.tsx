@@ -142,7 +142,9 @@ export default function TimetablePage() {
   // 그날만 더하기 / 빼기 — 원래 이 요일에 일하는 선생님은 빼면 'off', 다시 넣으면 원래대로. 그 밖의 선생님은 더하면 'add', 빼면 원래대로
   const changeAssign = async (t: Teacher, on: boolean) => {
     const regular = worksAt(t, center, wd);
-    const state = on ? (regular ? null : 'add') : (regular ? 'off' : null);
+    // 칸이 들어 있는 선생님은 원래 요일이 아니어도 표에 보이므로, 뺄 때는 'off'로 숨긴다
+    const hasCells = [...board.fixed.keys(), ...board.open.keys()].some(k => k.startsWith(`${t.id}|`));
+    const state = on ? (regular ? null : 'add') : (regular || hasCells ? 'off' : null);
     try {
       await setDayAssign(day, t.id, center, state);
       setAssigns(a => ({
