@@ -113,7 +113,10 @@ const hex = (s: string) => createHash('sha1').update(s).digest('hex').slice(0, 3
 /** 고정 수업 반복 일정 id — "vf" + 칸 위치 (구글 일정 id 는 a~v·숫자만 된다) */
 // 은평은 예전 id 그대로, 의정부는 센터를 붙여서 (설영수 선생님 캘린더 하나에 두 센터 수업이 같이 들어간다)
 const withCenter = (s: string, center = 'eunpyeong') => (center === 'eunpyeong' ? s : `${center}|${s}`);
-export const fixedEventId = (teacherId: string, weekday: number, time: string, center = 'eunpyeong') => `vf${hex(withCenter(`${teacherId}|${weekday}|${time}`, center))}`;
+/** 고정 수업 반복 일정 id — 시작일이 기본(2026-10-01)이 아니면("이 날부터 고정"으로 바꾼 것) 시작일도 넣는다 */
+export const FIXED_DEFAULT_START = '2026-10-01';
+export const fixedEventId = (teacherId: string, weekday: number, time: string, center = 'eunpyeong', start?: string) =>
+  `vf${hex(withCenter(`${teacherId}|${weekday}|${time}${start && start !== FIXED_DEFAULT_START ? `|${start}` : ''}`, center))}`;
 /** 빈타임 칸(관리자가 넣은 아이) 일정 id — "vc" + 날짜·칸 위치 */
 export const openCellEventId = (day: string, teacherId: string, time: string, center = 'eunpyeong') => `vc${hex(withCenter(`${day}|${teacherId}|${time}`, center))}`;
 
@@ -138,14 +141,16 @@ export async function koreanHolidays(from: string, to: string): Promise<string[]
     .map((e: { start: { date: string } }) => e.start.date);
 }
 
-/** 고정 수업 반복 일정 넣기/고치기 — firstDay = 첫 수업 날짜, holidays = 빼는 날짜들 */
-export async function upsertFixedLesson(calendarId: string, teacherId: string, weekday: number, time: string, firstDay: string, holidays: string[], text: LessonText, center = 'eunpyeong') {
-  const id = fixedEventId(teacherId, weekday, time, center);
+/** 고정 수업 반복 일정 넣기/고치기 — firstDay = 첫 수업 날짜, holidays = 빼는 날짜들,
+ *  start = 고정 수업 시작일(일정 id), until = 마지막 수업 날짜("이 날부터 고정"으로 끝난 이전 고정 수업) */
+export async function upsertFixedLesson(calendarId: string, teacherId: string, weekday: number, time: string, firstDay: string, holidays: string[], text: LessonText, center = 'eunpyeong', startDate?: string, until?: string) {
+  const id = fixedEventId(teacherId, weekday, time, center, startDate);
   const start = seoul(firstDay, time);
   const end = new Date(start.getTime() + LESSON_MINUTES * 60000);
   const byday = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][weekday];
-  const ex = holidays.filter(d => new Date(`${d}T12:00:00+09:00`).getUTCDay() === weekday && d >= firstDay);
-  const recurrence = [`RRULE:FREQ=WEEKLY;BYDAY=${byday}`];
+  const ex = holidays.filter(d => new Date(`${d}T12:00:00+09:00`).getUTCDay() === weekday && d >= firstDay && (!until || d <= until));
+  const untilUtc = until ? new Date(`${until}T23:59:59+09:00`).toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z' : '';
+  const recurrence = [`RRULE:FREQ=WEEKLY;BYDAY=${byday}${untilUtc ? `;UNTIL=${untilUtc}` : ''}`];
   if (ex.length) recurrence.push(`EXDATE;TZID=${TIME_ZONE}:${ex.map(d => `${d.replace(/-/g, '')}T${time.replace(':', '')}00`).join(',')}`);
   const event = {
     id, status: 'confirmed', summary: text.summary, description: text.description,
@@ -164,7 +169,7 @@ export async function removeEvent(calendarId: string, id: string) {
   if (!res.ok && res.status !== 404 && res.status !== 410) throw new Error(`일정 삭제 오류 ${res.status}`);
 }
 
-/** 이 캘린더에서 우리 시간표가 넣은 고정 수업 반복 일정 id 들 */
+/** 이 캘린더에서 우리 시간표가 넣은 고정 수업 반복 일정 id 들 — 끝난 반복 일정(UNTIL, "이 날부터 고정" 이전 것)은 지난 기록이라 빼고 */
 export async function listFixedEventIds(calendarId: string): Promise<string[]> {
   const ids: string[] = [];
   let page = '';
@@ -173,15 +178,19 @@ export async function listFixedEventIds(calendarId: string): Promise<string[]> {
     const res = await call('GET', `/calendars/${encodeURIComponent(calendarId)}/events?${q}`);
     if (!res.ok) throw new Error(`일정 목록 오류 ${res.status}`);
     const data = await res.json();
-    for (const e of data.items ?? []) if (e.status !== 'cancelled') ids.push(e.id);
+    for (const e of data.items ?? []) {
+      if (e.status === 'cancelled') continue;
+      if ((e.recurrence ?? []).some((x: string) => x.includes('UNTIL='))) continue;
+      ids.push(e.id);
+    }
     page = data.nextPageToken ?? '';
   } while (page);
   return ids;
 }
 
 /** 반복 일정의 그날 하나 — text 로 고치기(원래대로 돌릴 때도 고정 수업 글을 넘긴다) / null 이면 그날만 빼기 */
-export async function setFixedOccurrence(calendarId: string, teacherId: string, weekday: number, time: string, day: string, change: LessonText | null, center = 'eunpyeong') {
-  const id = fixedEventId(teacherId, weekday, time, center);
+export async function setFixedOccurrence(calendarId: string, teacherId: string, weekday: number, time: string, day: string, change: LessonText | null, center = 'eunpyeong', startDate?: string) {
+  const id = fixedEventId(teacherId, weekday, time, center, startDate);
   const cal = encodeURIComponent(calendarId);
   const start = seoul(day, time);
   const q = new URLSearchParams({ timeMin: new Date(start.getTime() - 60000).toISOString(), timeMax: new Date(start.getTime() + 60000).toISOString(), showDeleted: 'true' });

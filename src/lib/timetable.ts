@@ -39,6 +39,8 @@ export interface CellView {
   moved: boolean;
   note?: string;
   childId?: string;
+  /** 고정 수업 시작일 (요일 고정 칸) */
+  startDate?: string;
   /** 어디서 온 칸인지 — fixed = 요일 고정, override = 그날 바꾼 칸, booking = 보호자 신청 */
   source: 'fixed' | 'override' | 'booking' | 'none';
 }
@@ -150,6 +152,7 @@ function fromRow(r: Row, source: CellView['source'], children: Map<string, Child
     moved: !!r.moved,
     note: (r.note as string) ?? undefined,
     childId: (r.child_id as string) ?? undefined,
+    startDate: (r.start_date as string) ?? undefined,
     source,
   };
 }
@@ -265,7 +268,8 @@ export async function deleteFixed(weekday: number, teacherId: string, time: stri
 
 export type TimetableSync =
   | { action: 'full' }
-  | { action: 'fixed'; teacherId: string; weekday: number; time: string; center?: Center }
+  | { action: 'fixed'; teacherId: string; weekday: number; time: string; center?: Center; start?: string }
+  | { action: 'fixedFrom'; from: string; teacherId: string; weekday: number; time: string; center?: Center; input: CellInput | null }
   | { action: 'cell'; day: string; teacherId: string; time: string; side: 'fixed' | 'open'; center?: Center };
 
 /** 시간표를 선생님 구글 캘린더에 맞춘다 (관리자). 결과를 그대로 돌려준다 */

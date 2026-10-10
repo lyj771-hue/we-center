@@ -31,12 +31,12 @@ interface Editing {
 }
 
 /** 아직 저장 안 한 시간표 변경 — [스케줄 변경 완료]에서 차례로 디비·캘린더에 반영한다.
- *  day = 날짜별 칸, weekly = 날짜별 화면에서 "매주 고정으로 저장", fixed = 고정 시간표 칸.
+ *  day = 날짜별 칸, from = 날짜별 화면에서 "이 날부터 고정"(null = 이 날부터 고정 수업 없음), fixed = 고정 시간표 칸.
  *  auto = 선생님 빼기로 생긴 변경(다시 넣으면 같이 취소) */
 type Op =
   | { kind: 'day'; teacherId: string; time: string; side: Side; input: CellInput | 'reset'; auto?: boolean }
-  | { kind: 'weekly'; teacherId: string; time: string; input: CellInput }
-  | { kind: 'fixed'; teacherId: string; time: string; input: CellInput | 'reset' };
+  | { kind: 'from'; teacherId: string; time: string; input: CellInput | null }
+  | { kind: 'fixed'; teacherId: string; time: string; input: CellInput | 'reset'; start?: string };
 type AssignState = 'add' | 'off' | null;
 
 /** 빈타임 칸 아래로 여는 아이 고르기 — 칸 위치(rect)에 붙여 띄운다 */
@@ -159,7 +159,9 @@ export default function TimetablePage() {
       const k = `${o.teacherId}|${o.time}`;
       const side: Side = o.kind === 'day' ? o.side : 'fixed';
       const target = side === 'open' ? open : fixed;
-      const v = o.input === 'reset' ? (o.kind === 'day' && side === 'fixed' ? base.get(k) : undefined) : preview(o.input);
+      const v = o.input === null ? undefined
+        : o.input === 'reset' ? (o.kind === 'day' && side === 'fixed' ? base.get(k) : undefined)
+        : preview(o.input);
       if (v) target.set(k, v); else target.delete(k);
       pend.add(`${side}|${k}`);
     }
@@ -188,12 +190,12 @@ export default function TimetablePage() {
   const d = parseYmd(day);
 
   // 칸 변경은 바로 저장하지 않고 쌓아 둔다
-  const opKey = (o: Op) => o.kind === 'fixed' ? `fixed|${o.teacherId}|${o.time}` : `day|${o.teacherId}|${o.time}|${o.kind === 'weekly' ? 'fixed' : o.side}`;
+  const opKey = (o: Op) => o.kind === 'fixed' ? `fixed|${o.teacherId}|${o.time}` : `day|${o.teacherId}|${o.time}|${o.kind === 'from' ? 'fixed' : o.side}`;
   const putOps = (list: Op[]) => setOps(m => { const n = new Map(m); for (const o of list) n.set(opKey(o), o); return n; });
-  const stage = ({ teacher, time, side }: Editing, input: CellInput | 'reset', weekly?: boolean) => {
-    const o: Op = weekly && input !== 'reset' && input.status === 'child'
-      ? { kind: 'weekly', teacherId: teacher.id, time, input }
-      : mode === 'fixed' ? { kind: 'fixed', teacherId: teacher.id, time, input }
+  const stage = ({ teacher, time, side, cell }: Editing, input: CellInput | 'reset', from?: boolean) => {
+    const o: Op = from && mode === 'day'
+      ? { kind: 'from', teacherId: teacher.id, time, input: input !== 'reset' && input.status === 'child' ? input : null }
+      : mode === 'fixed' ? { kind: 'fixed', teacherId: teacher.id, time, input, start: cell.startDate }
       : { kind: 'day', teacherId: teacher.id, time, side, input };
     putOps([o]);
     setEditing(null);
@@ -215,7 +217,7 @@ export default function TimetablePage() {
   const clearTeacher = async (t: Teacher) => {
     if (mode === 'fixed') {
       if (!(await askConfirm(`${t.name} 선생님의 ${DOW[weekday]}요일 고정 수업을 모두 비울까요?\n[스케줄 변경 완료]를 눌러야 반영돼요.`))) return;
-      const list: Op[] = rows.filter(time => cellOf(view.fixed, t.id, time).status !== 'empty').map(time => ({ kind: 'fixed', teacherId: t.id, time, input: 'reset' }));
+      const list: Op[] = rows.filter(time => cellOf(view.fixed, t.id, time).status !== 'empty').map(time => ({ kind: 'fixed', teacherId: t.id, time, input: 'reset', start: cellOf(board.fixed, t.id, time).startDate }));
       putOps(list);
       return;
     }
@@ -244,15 +246,14 @@ export default function TimetablePage() {
   };
 
   const applyOp = async (o: Op) => {
-    if (o.kind === 'weekly') {
-      // 날짜별 화면에서 "매주 고정으로 저장" — 요일 고정 수업으로 넣고, 그날 따로 바꿔 둔 칸은 지운다
-      await saveFixed(d.getDay(), o.teacherId, o.time, o.input, center);
+    if (o.kind === 'from') {
+      // "이 날부터 고정" — 그날 따로 바꿔 둔 칸은 지우고, 이전 고정 수업은 전날까지·새 고정 수업은 이 날부터 (디비·캘린더 모두 서버에서)
       await resetDayCell(day, o.teacherId, o.time, 'fixed', center);
-      sync({ action: 'fixed', teacherId: o.teacherId, weekday: d.getDay(), time: o.time, center });
+      await syncTimetable({ action: 'fixedFrom', from: day, teacherId: o.teacherId, weekday: d.getDay(), time: o.time, center, input: o.input });
     } else if (o.kind === 'fixed') {
       if (o.input === 'reset' || o.input.status !== 'child') await deleteFixed(weekday, o.teacherId, o.time, center);
       else await saveFixed(weekday, o.teacherId, o.time, o.input, center);
-      sync({ action: 'fixed', teacherId: o.teacherId, weekday, time: o.time, center });
+      sync({ action: 'fixed', teacherId: o.teacherId, weekday, time: o.time, center, start: o.start });
     } else {
       if (o.input === 'reset') await resetDayCell(day, o.teacherId, o.time, o.side, center);
       else await saveDayCell(day, o.teacherId, o.time, o.side, o.input, center);
@@ -647,8 +648,8 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
   dayLabel: string;
   kids: Child[];
   onClose: () => void;
-  /** weekly = 날짜별 화면의 왼쪽 칸에서 "매주 고정으로 저장" */
-  onSave: (input: CellInput | 'reset', weekly?: boolean) => void;
+  /** from = 날짜별 화면의 고정 칸에서 "이 날부터 고정" */
+  onSave: (input: CellInput | 'reset', from?: boolean) => void;
 }) {
   const { teacher, time, side, cell } = editing;
   const [name, setName] = useState(cell.status === 'child' ? cell.name ?? '' : '');
@@ -665,25 +666,68 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
     if (c) setPayment(c.payment);   // 결제는 아이 명단의 기본 결제를 따른다 (그날 결제는 표의 결제방식 칸에서)
   };
 
-  const saveWeekly = () => {
-    if (!name.trim()) return;
-    onSave({ status: 'child', childId: child?.id ?? null, name: name.trim(), payment, oral, absent: false, moved: false }, true);
-  };
 
   const save = () => {
-    // 이름을 비우고 저장 — 고정 시간표: 고정 수업 지우기 / 날짜별 고정 칸: 그날만 비우기 / 빈타임 칸: 원래대로
-    if (!name.trim()) { onSave(mode === 'fixed' || side === 'open' ? 'reset' : { status: 'none' }); return; }
+    // (빈타임 칸) 이름을 비우고 저장 — 원래대로
+    if (!name.trim()) { onSave('reset'); return; }
     onSave({ status: 'child', childId: child?.id ?? null, name: name.trim(), payment, oral, absent, moved, note });
   };
 
   const isBooking = cell.source === 'booking';
   const chip = 'text-[13px] px-3 py-2 border rounded-full';
 
+  // 고정 자리 — 아이·구강·결제방식만 고르고 [이 날부터 고정](날짜별) / [저장](고정 시간표)
+  if (side === 'fixed') {
+    const base = defaultMethod(payment);
+    const saveFixedSeat = async () => {
+      if (!name.trim()) {
+        if (mode === 'day' && cell.status === 'child' && !(await askConfirm(`${dayLabel}부터 이 자리 고정 수업을 없앨까요?`))) return;
+        onSave(mode === 'day' ? { status: 'none' } : 'reset', mode === 'day');
+        return;
+      }
+      onSave({ status: 'child', childId: child?.id ?? null, name: name.trim(), payment, oral, absent: false, moved: false }, mode === 'day');
+    };
+    return (
+      <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+          <p className="text-[13px] text-[#888]">{dayLabel} · {time} · {teacher.name} 선생님 · 고정 자리</p>
+          <label className="block">
+            <span className="block text-[11px] text-[#999] mb-1">아이 (명단에서 검색)</span>
+            <input list="tt-children" value={name} onChange={e => pickName(e.target.value)} autoFocus placeholder="이름 (비우면 고정 수업 없음)"
+              className="w-full border-b border-[#ddd] py-1.5 text-[15px] outline-none focus:border-[var(--brand)]" />
+            <datalist id="tt-children">
+              {kids.map(c => <option key={c.id} value={c.name}>{c.number ? `${c.number} ${c.name}` : c.name}</option>)}
+            </datalist>
+          </label>
+          {name.trim() && !child && <p className="text-[11px] text-red-400 -mt-2">아이 명단에 없는 이름이에요. 명단에서 골라 주세요.</p>}
+          <div className="flex items-center gap-4 text-[13px]">
+            <label className="flex items-center gap-1.5"><input type="checkbox" checked={oral} onChange={e => setOral(e.target.checked)} />구강</label>
+            <label className="flex items-center gap-1.5">
+              결제방식
+              <select value={base ?? ''} onChange={e => setPayment(PAY_METHODS.find(m => m.key === e.target.value)?.short ?? '')}
+                className="border border-[#ddd] px-2 py-1 text-[13px] bg-white">
+                <option value="">없음</option>
+                {PAY_METHODS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button onClick={saveFixedSeat} disabled={!!name.trim() && !child} className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white disabled:opacity-40`}>
+              {mode === 'day' ? '이 날부터 고정' : '저장'}
+            </button>
+            <button onClick={onClose} className={`${chip} border-transparent text-[#888]`}>닫기</button>
+          </div>
+          {mode === 'day' && <p className="text-[11px] text-[#aaa] leading-[1.7]">[스케줄 변경 완료]를 누르면 {dayLabel}부터 매주 이렇게 바뀌고, 선생님 구글 캘린더도 그날부터 바뀌어요. 지난 날짜는 그대로 남아요.</p>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
         <p className="text-[13px] text-[#888]">
-          {dayLabel} · {time} · {teacher.name} 선생님 · {mode === 'fixed' ? '고정 수업' : side === 'fixed' ? '고정 칸' : '빈타임 칸'}
+          {dayLabel} · {time} · {teacher.name} 선생님 · 빈타임 칸
         </p>
         {isBooking && (
           <p className="text-[12px] leading-[1.8] text-[#b45309] bg-[#fef3c7] rounded-lg px-3 py-2">
@@ -715,26 +759,11 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
 
 
         <div className="flex flex-wrap gap-1.5">
-          <button onClick={save} className={`${chip} border-[var(--brand)] bg-[var(--brand)] text-white`}>
-            {mode === 'day' && side === 'fixed' ? '이 날만 저장' : '저장'}
-          </button>
-          {mode === 'day' && side === 'fixed' && (
-            <button onClick={saveWeekly} disabled={!name.trim()} className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white disabled:opacity-40`}>
-              매주 고정으로 저장
-            </button>
-          )}
+          <button onClick={save} className={`${chip} border-[var(--brand)] bg-[var(--brand)] text-white`}>저장</button>
           {mode === 'day' && <button onClick={() => onSave({ status: 'undecided' })} className={`${chip} border-[#ddd]`}>? 미정</button>}
           {mode === 'day' && <button onClick={() => onSave({ status: 'off' })} className={`${chip} border-[#ddd]`}>x 수업 안 함</button>}
-          {mode === 'day' && side === 'fixed' && cell.source !== 'none' && (
-            <button onClick={async () => { if (await askConfirm('이 날만 이 칸을 비울까요?\n(요일 고정 수업은 그대로예요)')) onSave({ status: 'none' }); }} className={`${chip} border-[#ddd]`}>이 날만 비우기</button>
-          )}
           {mode === 'day' && cell.source === 'override' && (
-            <button onClick={() => onSave('reset')} className={`${chip} border-[#ddd]`}>
-              {side === 'fixed' ? '고정 시간표대로' : '원래대로'}
-            </button>
-          )}
-          {mode === 'fixed' && cell.source === 'fixed' && (
-            <button onClick={async () => { if (await askConfirm('이 고정 수업을 지울까요?')) onSave('reset'); }} className={`${chip} border-[#ddd] text-red-400`}>고정 수업 지우기</button>
+            <button onClick={() => onSave('reset')} className={`${chip} border-[#ddd]`}>원래대로</button>
           )}
           <button onClick={onClose} className={`${chip} border-transparent text-[#888]`}>닫기</button>
         </div>
