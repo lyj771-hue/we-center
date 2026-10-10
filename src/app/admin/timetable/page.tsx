@@ -270,6 +270,16 @@ export default function TimetablePage() {
     for (const [id, st] of assignDraft) {
       try { await setDayAssign(day, id, center, st); } catch { failedAssign.push(id); }
     }
+    // 고른 결제방식은 "선택"으로 저장 (확정은 [결제 완료]). 숨긴 선생님 수업은 버린다
+    const shownIds = new Set(shown.map(t => t.id));
+    const failedPay: string[] = [];
+    for (const [k, v] of draft) {
+      if (!shownIds.has(v.teacherId)) continue;
+      try { await setLessonPayment(v.childId, day, v.time, v.teacherId, center, v.entry && { ...v.entry, confirmed: false }); }
+      catch { failedPay.push(k); }
+    }
+    setDraft(dr => new Map([...dr].filter(([k]) => failedPay.includes(k))));
+    failedOps.push(...failedPay);
     setOps(m => new Map([...m].filter(([k]) => failedOps.includes(k))));
     setAssignDraft(m => new Map([...m].filter(([id]) => failedAssign.includes(id))));
     setSavingSched(false);
@@ -303,43 +313,40 @@ export default function TimetablePage() {
   })) : [];
   // 결제방식이 빈 수업(고른 것도 기본 결제도 없음) — 하나라도 있으면 [결제 완료]를 누를 수 없다
   const missingPay = new Set(lessons.filter(x => !paidOf(x.childId, x.time) && !x.base).map(x => keyOf(x.childId, x.time)));
-  // 기본 결제 그대로인 수업 — [결제 완료]에서 기본 결제로 확정한다
-  const toConfirm = lessons.filter(x => x.base && !draft.has(keyOf(x.childId, x.time)) && !payments.has(keyOf(x.childId, x.time)));
-  const canPay = !missingPay.size && (draft.size > 0 || toConfirm.length > 0);
+  // 아직 확정 안 된 수업 — [결제 완료]에서 고른 결제(없으면 기본 결제)로 확정한다
+  const toConfirm = lessons.filter(x => {
+    const k = keyOf(x.childId, x.time);
+    return draft.has(k) || !payments.get(k)?.confirmed;
+  });
+  const schedPending = ops.size + assignDraft.size;
+  const canPay = !missingPay.size && !schedPending && toConfirm.length > 0;
 
+  // [결제 완료] — 그날 진행된 수업을 모두 확정 (스케줄 변경을 먼저 저장해야 누를 수 있다)
   const savePayments = async () => {
     if (!canPay) return;
     setSavingPay(true);
     const failedKeys: string[] = [];
-    const shownIds = new Set(shown.map(t => t.id));
     for (const x of toConfirm) {
-      try { await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { method: x.base! }); }
-      catch { failedKeys.push(keyOf(x.childId, x.time)); }
-    }
-    for (const [k, v] of draft) {
-      if (!shownIds.has(v.teacherId)) continue;   // 숨긴 선생님 수업 결제는 반영하지 않는다
-      try { await setLessonPayment(v.childId, day, v.time, v.teacherId, center, v.entry); }
+      const k = keyOf(x.childId, x.time);
+      const e = paidOf(x.childId, x.time) ?? (x.base ? { method: x.base } : undefined);
+      if (!e) continue;
+      try { await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { ...e, confirmed: true }); }
       catch { failedKeys.push(k); }
     }
-    setDraft(dr => new Map([...dr].filter(([k, v]) => failedKeys.includes(k) && shownIds.has(v.teacherId))));
+    setDraft(dr => new Map([...dr].filter(([k]) => failedKeys.includes(k))));
     setSavingPay(false);
     await load();
     if (failedKeys.length) showAlert(`${failedKeys.length}건을 저장하지 못했어요. 다시 [결제 완료]를 눌러 주세요.`);
   };
 
-  // 남은 횟수 — 바우처·굳센·꿈이든은 이번 달 제공 횟수에서, 선결제는 지금까지 충전한 횟수에서 사용한 만큼 뺀다(저장 전 체크도 셈)
+  // 남은 횟수 — 바우처·굳센·꿈이든은 이번 달 제공 횟수에서, 선결제는 지금까지 충전한 횟수에서 확정된 만큼 뺀다
   const remaining = (childId: string, method: PayMethod): string | undefined => {
     const c = children.find(x => x.id === childId);
     // 횟수가 있는 결제만 (신용카드·현금·직접 작성은 횟수 없음)
     if (!c || (method !== 'voucher' && method !== 'gusen' && method !== 'kkumideun' && method !== 'prepaid')) return undefined;
     const limit = { voucher: c.voucherLimit, gusen: c.gusenLimit, kkumideun: c.kkumideunLimit, prepaid: c.prepaidTotal }[method] ?? 0;
     if (!limit) return undefined;
-    let used = counts.get(childId)?.[method] ?? 0;
-    for (const v of draft.values()) {
-      if (v.childId !== childId) continue;
-      if (payments.get(keyOf(v.childId, v.time))?.method === method) used--;
-      if (v.entry?.method === method) used++;
-    }
+    const used = counts.get(childId)?.[method] ?? 0;   // 확정된 결제만 센다
     return method === 'prepaid' ? `${limit - used}` : `${limit - used}/${limit}`;
   };
 
@@ -489,15 +496,18 @@ export default function TimetablePage() {
           </table>
         </div>
 
-        {/* 저장 버튼 — 시간표 변경과 결제 체크는 따로 확정한다 */}
+        {/* 저장 버튼 — [스케줄 변경 완료] = 시간표 변경·결제방식 선택 저장 / [결제 완료] = 그날 결제 확정 */}
         <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 bg-white/95 border-t border-[#eee] py-3 mt-2">
           <span className="text-[12px] text-[#888]">
-            {ops.size + assignDraft.size ? `저장 안 한 시간표 변경 ${ops.size + assignDraft.size}건 — 노란 칸` : '칸을 고친 뒤 [스케줄 변경 완료]를 눌러 주세요.'}
+            {schedPending + draft.size
+              ? `저장 안 한 변경 ${schedPending + draft.size}건 (시간표 ${schedPending} · 결제방식 ${draft.size})`
+              : '칸이나 결제방식을 고친 뒤 [스케줄 변경 완료]를 눌러 주세요.'}
           </span>
-          {ops.size + assignDraft.size > 0 && (
-            <button onClick={() => { setOps(new Map()); setAssignDraft(new Map()); }} disabled={savingSched} className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
+          {schedPending + draft.size > 0 && (
+            <button onClick={() => { setOps(new Map()); setAssignDraft(new Map()); setDraft(new Map()); }} disabled={savingSched || savingPay}
+              className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
           )}
-          <button onClick={saveSchedule} disabled={!(ops.size + assignDraft.size) || savingSched}
+          <button onClick={saveSchedule} disabled={!(schedPending + draft.size) || savingSched}
             className="text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
             {savingSched ? '저장 중…' : '스케줄 변경 완료'}
           </button>
@@ -506,12 +516,10 @@ export default function TimetablePage() {
               <span className="w-px h-6 bg-[#e5e5e5] mx-1" />
               <span className={`text-[12px] ${missingPay.size ? 'text-red-400' : 'text-[#888]'}`}>
                 {missingPay.size ? `결제방식이 빈 수업 ${missingPay.size}개 — 빨간 테두리 칸을 채워 주세요`
-                  : draft.size || toConfirm.length ? `확정할 결제 ${draft.size + toConfirm.length}건 (고른 것 ${draft.size} · 기본 결제 ${toConfirm.length})`
-                  : '결제가 모두 확정됐어요'}
+                  : schedPending ? '시간표 변경을 먼저 저장해 주세요'
+                  : toConfirm.length ? `확정할 결제 ${toConfirm.length}건`
+                  : lessons.length ? '결제가 모두 확정됐어요' : ''}
               </span>
-              {draft.size > 0 && (
-                <button onClick={() => setDraft(new Map())} disabled={savingPay} className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
-              )}
               <button onClick={savePayments} disabled={!canPay || savingPay}
                 className="text-[13px] border border-[#16a34a] bg-[#16a34a] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
                 {savingPay ? '저장 중…' : '결제 완료'}
@@ -589,16 +597,18 @@ function PayCell({ cell, noBase, paid, pending, missing, left, onPay }: {
   if (cell.absent) return <span className="block text-[10px] text-[#c4c4cc]">결석</span>;
   const base = noBase ? undefined : defaultMethod(cell.payment);
   const label = (k?: PayMethod) => PAY_METHODS.find(m => m.key === k)?.label;
-  const rest = paid && left?.(paid.method);
+  const rest = paid?.confirmed && !pending ? left?.(paid.method) : undefined;
   // 단계 — 기본(그대로) / 파랑: 직접 고름(저장 전) / 빨강: 결제 완료로 확정
-  const tone = pending ? 'bg-[#e3edfc] text-[#1d4ed8]' : paid ? 'bg-[#fde2e2] text-[#b91c1c]' : 'text-[#27272a]';
+  // 파랑 = 고름(저장 전·선택 저장됨) / 빨강 = 결제 완료로 확정
+  const confirmed = !pending && !!paid?.confirmed;
+  const tone = confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
   const text = paid
-    ? <span>{pending ? '' : '✓'}{paid.note || label(paid.method)}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
+    ? <span>{confirmed ? '✓' : ''}{paid.note || label(paid.method)}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
     : <span>{pending ? '체크 풀기' : (label(base) ?? '')}</span>;
   if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{label(base) ?? ''}</span>;
   return (
     <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone} ${missing ? 'ring-1 ring-red-300' : ''}`}
-      title={pending ? '저장 전 — [결제 완료]를 눌러야 확정돼요' : paid ? '결제 완료로 확정됨' : '기본 결제 — 눌러서 고르기'}>
+      title={pending ? '저장 전 — [스케줄 변경 완료]로 저장, [결제 완료]로 확정' : paid?.confirmed ? '결제 완료로 확정됨' : paid ? '고른 결제 — [결제 완료]를 눌러야 확정돼요' : '기본 결제 — 눌러서 고르기'}>
       {text}
       <select value={paid ? (paid.note ? 'custom' : paid.method) : ''}
         onChange={async e => {

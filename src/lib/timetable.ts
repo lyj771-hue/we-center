@@ -298,13 +298,18 @@ export const PAY_METHODS: { key: PayMethod; label: string; short: string }[] = [
 ];
 
 /** 결제 체크 하나 — 직접 적은 결제는 method = 'other' + note */
-export interface PayEntry { method: PayMethod; note?: string }
+export interface PayEntry {
+  method: PayMethod;
+  note?: string;
+  /** true = [결제 완료]로 확정, false = 고르기만 함([스케줄 변경 완료]로 저장) */
+  confirmed?: boolean;
+}
 
 /** 그날 결제 체크 — "아이|시간" → 결제 */
 export async function getDayPayments(day: string): Promise<Map<string, PayEntry>> {
   const { data, error } = await supabase.from('lesson_payments').select('*').eq('day', day);
   if (error) throw error;
-  return new Map((data ?? []).map(r => [`${r.child_id}|${r.time}`, { method: r.method as PayMethod, note: (r.note as string | null) ?? undefined }]));
+  return new Map((data ?? []).map(r => [`${r.child_id}|${r.time}`, { method: r.method as PayMethod, note: (r.note as string | null) ?? undefined, confirmed: r.confirmed !== false }]));
 }
 
 /** 결제 체크 저장 / 지우기(entry = null) */
@@ -315,7 +320,7 @@ export async function setLessonPayment(childId: string, day: string, time: strin
     return;
   }
   const { error } = await supabase.from('lesson_payments').upsert(
-    { child_id: childId, day, time, teacher_id: teacherId, center, method: entry.method, note: entry.note ?? null },
+    { child_id: childId, day, time, teacher_id: teacherId, center, method: entry.method, note: entry.note ?? null, confirmed: !!entry.confirmed },
     { onConflict: 'child_id,day,time' },
   );
   if (error) throw error;
@@ -323,11 +328,11 @@ export async function setLessonPayment(childId: string, day: string, time: strin
 
 export interface PayCount { voucher: number; gusen: number; kkumideun: number; prepaid: number }
 
-/** 아이마다 사용 횟수 — 바우처·굳센·꿈이든은 이번 달, 선결제는 지금까지 */
+/** 아이마다 사용 횟수(확정된 결제만) — 바우처·굳센·꿈이든은 이번 달, 선결제는 지금까지 */
 export async function getPaymentCounts(monthStart: string, monthEnd: string): Promise<Map<string, PayCount>> {
   const [month, prepaid] = await Promise.all([
-    supabase.from('lesson_payments').select('child_id, method').gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'kkumideun']),
-    supabase.from('lesson_payments').select('child_id').eq('method', 'prepaid'),
+    supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'kkumideun']),
+    supabase.from('lesson_payments').select('child_id').eq('confirmed', true).eq('method', 'prepaid'),
   ]);
   if (month.error) throw month.error;
   if (prepaid.error) throw prepaid.error;
