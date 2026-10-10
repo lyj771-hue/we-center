@@ -713,7 +713,7 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
           </div>
           <div className="flex flex-wrap gap-1.5">
             <button onClick={saveFixedSeat} disabled={!!name.trim() && !child} className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white disabled:opacity-40`}>
-              {mode === 'day' ? '이 날부터 고정' : '저장'}
+              {mode === 'day' ? '이 날부터 반영' : '저장'}
             </button>
             <button onClick={onClose} className={`${chip} border-transparent text-[#888]`}>닫기</button>
           </div>
