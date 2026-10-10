@@ -293,10 +293,28 @@ export default function TimetablePage() {
       return n;
     });
   };
+  // 그날 진행된 수업 — 고정·빈타임에 아이가 있고(빈타임 아이가 있으면 그 아이), 결석·옮김이 아닌 명단 아이
+  const lessons = mode === 'day' ? shown.flatMap(t => rows.flatMap(time => {
+    const l = cellOf(view.fixed, t.id, time), rr = cellOf(view.open, t.id, time);
+    const c = rr.status === 'child' ? rr : l;
+    if (c.status !== 'child' || c.moved || c.absent || !c.childId) return [];
+    return [{ teacherId: t.id, time, childId: c.childId, base: defaultMethod(c.payment) }];
+  })) : [];
+  // 결제방식이 빈 수업(고른 것도 기본 결제도 없음) — 하나라도 있으면 [결제 완료]를 누를 수 없다
+  const missingPay = new Set(lessons.filter(x => !paidOf(x.childId, x.time) && !x.base).map(x => keyOf(x.childId, x.time)));
+  // 기본 결제 그대로인 수업 — [결제 완료]에서 기본 결제로 확정한다
+  const toConfirm = lessons.filter(x => x.base && !draft.has(keyOf(x.childId, x.time)) && !payments.has(keyOf(x.childId, x.time)));
+  const canPay = !missingPay.size && (draft.size > 0 || toConfirm.length > 0);
+
   const savePayments = async () => {
+    if (!canPay) return;
     setSavingPay(true);
     const failedKeys: string[] = [];
     const shownIds = new Set(shown.map(t => t.id));
+    for (const x of toConfirm) {
+      try { await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { method: x.base! }); }
+      catch { failedKeys.push(keyOf(x.childId, x.time)); }
+    }
     for (const [k, v] of draft) {
       if (!shownIds.has(v.teacherId)) continue;   // 숨긴 선생님 수업 결제는 반영하지 않는다
       try { await setLessonPayment(v.childId, day, v.time, v.teacherId, center, v.entry); }
@@ -455,6 +473,7 @@ export default function TimetablePage() {
                             {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved).map((c, i) => (
                               <PayCell key={i} cell={c} paid={c.childId ? paidOf(c.childId, time) : undefined}
                                 pending={!!c.childId && draft.has(keyOf(c.childId, time))}
+                                missing={!!c.childId && missingPay.has(keyOf(c.childId, time))}
                                 left={c.childId ? (m => remaining(c.childId!, m)) : undefined}
                                 onPay={c.childId ? e => pay(c.childId!, t.id, time, e) : undefined} />
                             ))}
@@ -484,11 +503,15 @@ export default function TimetablePage() {
           {mode === 'day' && (
             <>
               <span className="w-px h-6 bg-[#e5e5e5] mx-1" />
-              <span className="text-[12px] text-[#888]">{draft.size ? `저장 안 한 결제 체크 ${draft.size}건 — 파란 칸` : '결제방식을 다 고른 뒤 [결제 완료]'}</span>
+              <span className={`text-[12px] ${missingPay.size ? 'text-red-400' : 'text-[#888]'}`}>
+                {missingPay.size ? `결제방식이 빈 수업 ${missingPay.size}개 — 빨간 테두리 칸을 채워 주세요`
+                  : draft.size || toConfirm.length ? `확정할 결제 ${draft.size + toConfirm.length}건 (고른 것 ${draft.size} · 기본 결제 ${toConfirm.length})`
+                  : '결제가 모두 확정됐어요'}
+              </span>
               {draft.size > 0 && (
                 <button onClick={() => setDraft(new Map())} disabled={savingPay} className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
               )}
-              <button onClick={savePayments} disabled={!draft.size || savingPay}
+              <button onClick={savePayments} disabled={!canPay || savingPay}
                 className="text-[13px] border border-[#16a34a] bg-[#16a34a] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
                 {savingPay ? '저장 중…' : '결제 완료'}
               </button>
@@ -550,11 +573,13 @@ function CellText({ cell, label, muted }: { cell: CellView; label?: string; mute
 }
 
 /** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
-function PayCell({ cell, paid, pending, left, onPay }: {
+function PayCell({ cell, paid, pending, missing, left, onPay }: {
   cell: CellView;
   paid?: PayEntry;
   /** 저장 안 한 체크 */
   pending?: boolean;
+  /** 결제방식이 비어 있음 — 채워야 [결제 완료]를 누를 수 있다 */
+  missing?: boolean;
   left?: (m: PayMethod) => string | undefined;
   onPay?: (e: PayEntry | null) => void;
 }) {
@@ -569,7 +594,7 @@ function PayCell({ cell, paid, pending, left, onPay }: {
     : <span>{pending ? '체크 풀기' : (label(base) ?? '')}</span>;
   if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{label(base) ?? ''}</span>;
   return (
-    <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone}`}
+    <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone} ${missing ? 'ring-1 ring-red-300' : ''}`}
       title={pending ? '저장 전 — [결제 완료]를 눌러야 확정돼요' : paid ? '결제 완료로 확정됨' : '기본 결제 — 눌러서 고르기'}>
       {text}
       <select value={paid ? (paid.note ? 'custom' : paid.method) : ''}
