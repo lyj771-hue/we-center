@@ -298,7 +298,8 @@ export default function TimetablePage() {
     const l = cellOf(view.fixed, t.id, time), rr = cellOf(view.open, t.id, time);
     const c = rr.status === 'child' ? rr : l;
     if (c.status !== 'child' || c.moved || c.absent || !c.childId) return [];
-    return [{ teacherId: t.id, time, childId: c.childId, base: defaultMethod(c.payment) }];
+    // 빈타임 아이는 기본 결제 없이 비워 두고 직접 고른다
+    return [{ teacherId: t.id, time, childId: c.childId, base: rr.status === 'child' ? undefined : defaultMethod(c.payment) }];
   })) : [];
   // 결제방식이 빈 수업(고른 것도 기본 결제도 없음) — 하나라도 있으면 [결제 완료]를 누를 수 없다
   const missingPay = new Set(lessons.filter(x => !paidOf(x.childId, x.time) && !x.base).map(x => keyOf(x.childId, x.time)));
@@ -471,7 +472,7 @@ export default function TimetablePage() {
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
                             {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved).map((c, i) => (
-                              <PayCell key={i} cell={c} paid={c.childId ? paidOf(c.childId, time) : undefined}
+                              <PayCell key={i} cell={c} noBase={c === right} paid={c.childId ? paidOf(c.childId, time) : undefined}
                                 pending={!!c.childId && draft.has(keyOf(c.childId, time))}
                                 missing={!!c.childId && missingPay.has(keyOf(c.childId, time))}
                                 left={c.childId ? (m => remaining(c.childId!, m)) : undefined}
@@ -540,7 +541,7 @@ export default function TimetablePage() {
         <ChildPicker
           picking={picking}
           kids={children}
-          onPick={c => stage(picking, { status: 'child', childId: c.id, name: c.name, payment: c.payment, oral: !!c.oral, absent: false, moved: false })}
+          onPick={c => stage(picking, { status: 'child', childId: c.id, name: c.name, payment: '', oral: !!c.oral, absent: false, moved: false })}
           onSave={input => stage(picking, input)}
           onMore={() => { setEditing(picking); setPicking(null); }}
           onClose={() => setPicking(null)}
@@ -573,8 +574,10 @@ function CellText({ cell, label, muted }: { cell: CellView; label?: string; mute
 }
 
 /** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
-function PayCell({ cell, paid, pending, missing, left, onPay }: {
+function PayCell({ cell, noBase, paid, pending, missing, left, onPay }: {
   cell: CellView;
+  /** 빈타임 아이 — 기본 결제를 보여 주지 않고 비워 둔다 */
+  noBase?: boolean;
   paid?: PayEntry;
   /** 저장 안 한 체크 */
   pending?: boolean;
@@ -584,7 +587,7 @@ function PayCell({ cell, paid, pending, missing, left, onPay }: {
   onPay?: (e: PayEntry | null) => void;
 }) {
   if (cell.absent) return <span className="block text-[10px] text-[#c4c4cc]">결석</span>;
-  const base = defaultMethod(cell.payment);
+  const base = noBase ? undefined : defaultMethod(cell.payment);
   const label = (k?: PayMethod) => PAY_METHODS.find(m => m.key === k)?.label;
   const rest = paid && left?.(paid.method);
   // 단계 — 기본(그대로) / 파랑: 직접 고름(저장 전) / 빨강: 결제 완료로 확정
