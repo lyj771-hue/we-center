@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
+import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import {
   CENTERS, PAY_METHODS, ROW_LABEL, cellOf, deleteFixed, getDayAssigns, getDayPayments, getPaymentCounts, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
@@ -67,6 +67,8 @@ export default function TimetablePage() {
   const [assigns, setAssigns] = useState<{ added: string[]; removed: string[] }>({ added: [], removed: [] });
   const [board, setBoard] = useState<{ fixed: Map<string, CellView>; open: Map<string, CellView> }>({ fixed: new Map(), open: new Map() });
   const [editing, setEditing] = useState<Editing | null>(null);
+  // 그날이 공휴일인지 — 공휴일엔 요일 고정 수업을 비운다(그날 따로 넣은 칸·보호자 신청은 그대로)
+  const [holiday, setHoliday] = useState(false);
   const [picking, setPicking] = useState<Picking | null>(null);
   const [failed, setFailed] = useState('');
 
@@ -76,7 +78,11 @@ export default function TimetablePage() {
       setTeachers(t);
       setChildren(c);
       if (mode === 'day') {
-        setBoard(await getDayBoard(day, c, center));
+        const [b, hols] = await Promise.all([getDayBoard(day, c, center), getKoreanHolidays(day.slice(0, 4)).catch(() => [] as string[])]);
+        const isHoliday = hols.includes(day);
+        if (isHoliday) for (const [k, v] of b.fixed) if (v.source === 'fixed') b.fixed.delete(k);
+        setHoliday(isHoliday);
+        setBoard(b);
         setPayments(await getDayPayments(day).catch(() => new Map()));
         const ym = day.slice(0, 7);
         setCounts(await getPaymentCounts(`${ym}-01`, `${ym}-31`).catch(() => new Map()));
@@ -285,6 +291,7 @@ export default function TimetablePage() {
                 <th className={`${th} sticky left-0 z-10 bg-white w-16`}>시간</th>
                 <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : mode === 'day' ? 3 : 1), 0) || 1}>
                   {mode === 'day' ? `${DOW[d.getDay()]} / ${d.getMonth() + 1}월 ${d.getDate()}일` : `${DOW[weekday]}요일 고정 시간표`}
+                  {mode === 'day' && holiday && <span className="ml-2 text-[12px] text-red-400">공휴일 — 고정 수업 없음</span>}
                 </th>
               </tr>
               <tr>

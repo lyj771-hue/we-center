@@ -289,6 +289,23 @@ export async function getBusyTimes(teacherId: string, from: string, to: string):
   return data.busy ?? [];
 }
 
+/** 관리자: 대한민국 공휴일 날짜들 — 해마다 한 번만 불러 둔다 */
+const holidayCache = new Map<string, Promise<string[]>>();
+export function getKoreanHolidays(year: string): Promise<string[]> {
+  let p = holidayCache.get(year);
+  if (!p) {
+    p = (async () => {
+      const res = await fetch(`/api/calendar/holidays?${new URLSearchParams({ from: `${year}-01-01`, to: `${year}-12-31` })}`, { headers: await authHeader() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `오류 ${res.status}`);
+      return (data.holidays ?? []) as string[];
+    })();
+    p.catch(() => holidayCache.delete(year));
+    holidayCache.set(year, p);
+  }
+  return p;
+}
+
 /** 보호자: 내 신청 취소 신청 / 철회. 관리자: 취소 승인 */
 async function slotRpc(fn: 'request_cancel' | 'withdraw_cancel' | 'approve_cancel', slotId: string): Promise<string> {
   const { data, error } = await supabase.rpc(fn, { p_slot: slotId });
