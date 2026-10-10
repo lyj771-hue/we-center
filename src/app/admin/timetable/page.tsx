@@ -30,6 +30,15 @@ interface Editing {
   cell: CellView;
 }
 
+/** 아직 저장 안 한 시간표 변경 — [스케줄 변경 완료]에서 차례로 디비·캘린더에 반영한다.
+ *  day = 날짜별 칸, weekly = 날짜별 화면에서 "매주 고정으로 저장", fixed = 고정 시간표 칸.
+ *  auto = 선생님 빼기로 생긴 변경(다시 넣으면 같이 취소) */
+type Op =
+  | { kind: 'day'; teacherId: string; time: string; side: Side; input: CellInput | 'reset'; auto?: boolean }
+  | { kind: 'weekly'; teacherId: string; time: string; input: CellInput }
+  | { kind: 'fixed'; teacherId: string; time: string; input: CellInput | 'reset' };
+type AssignState = 'add' | 'off' | null;
+
 /** 빈타임 칸 아래로 여는 아이 고르기 — 칸 위치(rect)에 붙여 띄운다 */
 interface Picking extends Editing {
   rect: { left: number; top: number; bottom: number };
@@ -66,6 +75,12 @@ export default function TimetablePage() {
   // 그날만 이 센터에 더한 선생님(공휴일 등)·뺀 선생님
   const [assigns, setAssigns] = useState<{ added: string[]; removed: string[] }>({ added: [], removed: [] });
   const [board, setBoard] = useState<{ fixed: Map<string, CellView>; open: Map<string, CellView> }>({ fixed: new Map(), open: new Map() });
+  // 날짜별 화면: 그 요일 고정 수업 (칸을 "고정 시간표대로" 되돌릴 때 미리 보여 주려고)
+  const [base, setBase] = useState<Map<string, CellView>>(new Map());
+  // 저장 안 한 시간표 변경 · 선생님 빼기/더하기
+  const [ops, setOps] = useState<Map<string, Op>>(new Map());
+  const [assignDraft, setAssignDraft] = useState<Map<string, AssignState>>(new Map());
+  const [savingSched, setSavingSched] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
   // 그날이 공휴일인지 — 공휴일엔 요일 고정 수업을 비운다(그날 따로 넣은 칸·보호자 신청은 그대로)
   const [holiday, setHoliday] = useState(false);
@@ -83,6 +98,7 @@ export default function TimetablePage() {
         if (isHoliday) for (const [k, v] of b.fixed) if (v.source === 'fixed') b.fixed.delete(k);
         setHoliday(isHoliday);
         setBoard(b);
+        setBase(isHoliday ? new Map() : await getFixedBoard(parseYmd(day).getDay(), c, center).catch(() => new Map()));
         setPayments(await getDayPayments(day).catch(() => new Map()));
         const ym = day.slice(0, 7);
         setCounts(await getPaymentCounts(`${ym}-01`, `${ym}-31`).catch(() => new Map()));
@@ -97,18 +113,21 @@ export default function TimetablePage() {
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
 
-  // 저장 안 한 결제 체크가 있으면 다른 날·센터로 가기 전에 묻는다
+  // 저장 안 한 시간표 변경·결제 체크가 있으면 다른 날·센터로 가기 전에 묻는다
+  const unsaved = ops.size + assignDraft.size + draft.size;
   const guard = async (go: () => void) => {
-    if (draft.size && !(await askConfirm(`저장 안 한 결제 체크가 ${draft.size}건 있어요.\n저장하지 않고 넘어갈까요?`))) return;
+    if (unsaved && !(await askConfirm(`저장 안 한 변경이 ${unsaved}건 있어요.\n저장하지 않고 넘어갈까요?`))) return;
     setDraft(new Map());
+    setOps(new Map());
+    setAssignDraft(new Map());
     go();
   };
   useEffect(() => {
-    if (!draft.size) return;
+    if (!unsaved) return;
     const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
-  }, [draft.size]);
+  }, [unsaved]);
 
   // 칸을 고칠 때마다 그 칸만 구글 캘린더에 맞춘다(뒤에서). 실패하면 위에 알려 준다
   const [syncMsg, setSyncMsg] = useState('');
@@ -129,60 +148,132 @@ export default function TimetablePage() {
     }
   };
 
+  // 표에 보이는 칸 = 디비 칸 + 저장 안 한 변경. pend = 바뀐 칸("fixed|선생님|시간" / "open|…")
+  const preview = useCallback((i: CellInput): CellView => i.status === 'child'
+    ? { status: 'child', name: i.name, number: children.find(c => c.id === i.childId)?.number, payment: i.payment ?? '', oral: !!i.oral, absent: !!i.absent, moved: !!i.moved, note: i.note || undefined, childId: i.childId ?? undefined, source: 'override' }
+    : { status: i.status, payment: '', oral: false, absent: false, moved: false, source: 'override' }, [children]);
+  const view = useMemo(() => {
+    const fixed = new Map(board.fixed), open = new Map(board.open);
+    const pend = new Set<string>();
+    for (const o of ops.values()) {
+      const k = `${o.teacherId}|${o.time}`;
+      const side: Side = o.kind === 'day' ? o.side : 'fixed';
+      const target = side === 'open' ? open : fixed;
+      const v = o.input === 'reset' ? (o.kind === 'day' && side === 'fixed' ? base.get(k) : undefined) : preview(o.input);
+      if (v) target.set(k, v); else target.delete(k);
+      pend.add(`${side}|${k}`);
+    }
+    return { fixed, open, pend };
+  }, [board, ops, base, preview]);
+
+  // 그날 더한·뺀 선생님 = 디비 + 저장 안 한 변경
+  const dbAssign = (id: string): AssignState => assigns.removed.includes(id) ? 'off' : assigns.added.includes(id) ? 'add' : null;
+  const assignOf = (id: string): AssignState => assignDraft.has(id) ? assignDraft.get(id)! : dbAssign(id);
+
   // 이 센터·요일에 일하는 선생님 + 그날만 더한 선생님 + (혹시) 칸이 채워져 있는 선생님 − 그날만 뺀 선생님
   const wd = mode === 'day' ? parseYmd(day).getDay() : weekday;
-  const shown = useMemo(() => {
-    const hasCells = new Set([...board.fixed.keys(), ...board.open.keys()].map(k => k.split('|')[0]));
-    return teachers.filter(t => {
-      if (mode === 'day' && assigns.removed.includes(t.id)) return false;
-      return worksAt(t, center, wd) || (mode === 'day' && assigns.added.includes(t.id)) || hasCells.has(t.id);
-    });
-  }, [teachers, center, mode, wd, assigns, board]);
-  const addable = useMemo(() => teachers.filter(t => !shown.some(x => x.id === t.id)), [teachers, shown]);
-  // 그날만 더하기 / 빼기 — 원래 이 요일에 일하는 선생님은 빼면 'off', 다시 넣으면 원래대로. 그 밖의 선생님은 더하면 'add', 빼면 원래대로
-  const changeAssign = async (t: Teacher, on: boolean) => {
-    const regular = worksAt(t, center, wd);
-    // 칸이 들어 있는 선생님은 원래 요일이 아니어도 표에 보이므로, 뺄 때는 'off'로 숨긴다
-    const hasCells = [...board.fixed.keys(), ...board.open.keys()].some(k => k.startsWith(`${t.id}|`));
-    const state = on ? (regular ? null : 'add') : (regular || hasCells ? 'off' : null);
-    try {
-      await setDayAssign(day, t.id, center, state);
-      setAssigns(a => ({
-        added: state === 'add' ? [...a.added, t.id] : a.added.filter(x => x !== t.id),
-        removed: state === 'off' ? [...a.removed, t.id] : a.removed.filter(x => x !== t.id),
-      }));
-    } catch (e) {
-      showAlert(`저장하지 못했어요.\n${(e as Error).message}`);
-    }
-  };
-
+  const hasCellsOf = (id: string) => [...board.fixed.keys(), ...board.open.keys()].some(k => k.startsWith(`${id}|`));
+  const shown = teachers.filter(t => {
+    const st = mode === 'day' ? assignOf(t.id) : null;
+    if (st === 'off') return false;
+    return worksAt(t, center, wd) || st === 'add' || hasCellsOf(t.id);
+  });
+  const addable = teachers.filter(t => !shown.some(x => x.id === t.id));
+  const setAssign = (id: string, st: AssignState) => setAssignDraft(m => {
+    const n = new Map(m);
+    if (st === dbAssign(id)) n.delete(id); else n.set(id, st);
+    return n;
+  });
   const rows = useMemo(() => (mode === 'day' ? rowsForDay(day) : rowsForWeekday(weekday)), [mode, day, weekday]);
   const d = parseYmd(day);
 
-  const saveCell = async ({ teacher, time, side }: Editing, input: CellInput | 'reset', weekly?: boolean) => {
-    try {
-      if (weekly && input !== 'reset' && input.status === 'child') {
-        // 날짜별 화면에서 "매주 고정으로 저장" — 요일 고정 수업으로 넣고, 그날 따로 바꿔 둔 칸은 지운다
-        await saveFixed(d.getDay(), teacher.id, time, input, center);
-        await resetDayCell(day, teacher.id, time, 'fixed', center);
-        sync({ action: 'fixed', teacherId: teacher.id, weekday: d.getDay(), time, center });
-      } else if (mode === 'fixed') {
-        if (input === 'reset' || input.status !== 'child') await deleteFixed(weekday, teacher.id, time, center);
-        else await saveFixed(weekday, teacher.id, time, input, center);
-        sync({ action: 'fixed', teacherId: teacher.id, weekday, time, center });
-      } else if (input === 'reset') {
-        await resetDayCell(day, teacher.id, time, side, center);
-        sync({ action: 'cell', day, teacherId: teacher.id, time, side, center });
-      } else {
-        await saveDayCell(day, teacher.id, time, side, input, center);
-        sync({ action: 'cell', day, teacherId: teacher.id, time, side, center });
-      }
-      setEditing(null);
-      setPicking(null);
-      load();
-    } catch (e) {
-      showAlert(`저장하지 못했어요.\n${(e as Error).message}`);
+  // 칸 변경은 바로 저장하지 않고 쌓아 둔다
+  const opKey = (o: Op) => o.kind === 'fixed' ? `fixed|${o.teacherId}|${o.time}` : `day|${o.teacherId}|${o.time}|${o.kind === 'weekly' ? 'fixed' : o.side}`;
+  const putOps = (list: Op[]) => setOps(m => { const n = new Map(m); for (const o of list) n.set(opKey(o), o); return n; });
+  const stage = ({ teacher, time, side }: Editing, input: CellInput | 'reset', weekly?: boolean) => {
+    const o: Op = weekly && input !== 'reset' && input.status === 'child'
+      ? { kind: 'weekly', teacherId: teacher.id, time, input }
+      : mode === 'fixed' ? { kind: 'fixed', teacherId: teacher.id, time, input }
+      : { kind: 'day', teacherId: teacher.id, time, side, input };
+    putOps([o]);
+    setEditing(null);
+    setPicking(null);
+  };
+
+  // 그날 이 선생님 칸을 모두 비우는 변경들 — 고정 칸은 "이 날만 비우기", 그날 넣은 빈타임 칸은 지운다(보호자 신청은 그대로)
+  const clearDayOps = (tid: string, auto: boolean): Op[] => {
+    const out: Op[] = [];
+    for (const time of rows) {
+      const l = cellOf(view.fixed, tid, time);
+      if (l.status !== 'empty' && l.status !== 'none') out.push({ kind: 'day', teacherId: tid, time, side: 'fixed', input: { status: 'none' }, auto });
+      if (board.open.get(`${tid}|${time}`)?.source === 'override' || ops.has(`day|${tid}|${time}|open`))
+        out.push({ kind: 'day', teacherId: tid, time, side: 'open', input: 'reset', auto });
     }
+    return out;
+  };
+  // 선생님 시간표 비우기 — 날짜별: 그날 칸 모두 / 고정 시간표: 그 요일 고정 수업 모두
+  const clearTeacher = async (t: Teacher) => {
+    if (mode === 'fixed') {
+      if (!(await askConfirm(`${t.name} 선생님의 ${DOW[weekday]}요일 고정 수업을 모두 비울까요?\n[스케줄 변경 완료]를 눌러야 반영돼요.`))) return;
+      const list: Op[] = rows.filter(time => cellOf(view.fixed, t.id, time).status !== 'empty').map(time => ({ kind: 'fixed', teacherId: t.id, time, input: 'reset' }));
+      putOps(list);
+      return;
+    }
+    if (!(await askConfirm(`${t.name} 선생님의 이 날 시간표를 모두 비울까요?\n(보호자가 수업스케쥴로 신청한 칸은 그대로예요)\n[스케줄 변경 완료]를 눌러야 반영돼요.`))) return;
+    putOps(clearDayOps(t.id, false));
+    setDraft(dr => new Map([...dr].filter(([, v]) => v.teacherId !== t.id)));
+  };
+  // 그날만 빼기 — 표에서 숨기고 그날 칸도 모두 비운다. 결제 체크도 버린다
+  const hideTeacher = async (t: Teacher) => {
+    if (!(await askConfirm(`${t.name} 선생님을 이 날 시간표에서 뺄까요?\n그날 칸도 모두 비워져요(보호자 신청 칸은 그대로).\n[스케줄 변경 완료]를 누르기 전에는 [되돌리기]로 취소할 수 있어요.`))) return;
+    const st: AssignState = worksAt(t, center, wd) || hasCellsOf(t.id) ? 'off' : null;
+    setAssign(t.id, st);
+    putOps(clearDayOps(t.id, true));
+    setDraft(dr => new Map([...dr].filter(([, v]) => v.teacherId !== t.id)));
+  };
+  // 다시 넣기 — 저장 전에 뺐던 거면 빼기를 취소, 이미 빠진 선생님이면 그날 비운 칸을 고정 시간표대로 되돌린다
+  const showTeacher = (t: Teacher) => {
+    setAssign(t.id, worksAt(t, center, wd) ? null : 'add');
+    const autoKeys = [...ops].filter(([, o]) => o.teacherId === t.id && o.kind === 'day' && o.auto).map(([k]) => k);
+    if (autoKeys.length) { setOps(m => { const n = new Map(m); for (const k of autoKeys) n.delete(k); return n; }); return; }
+    if (dbAssign(t.id) === 'off') {
+      const list: Op[] = [];
+      for (const [k, v] of board.fixed) if (k.startsWith(`${t.id}|`) && v.source === 'override') list.push({ kind: 'day', teacherId: t.id, time: k.split('|')[1], side: 'fixed', input: 'reset', auto: true });
+      putOps(list);
+    }
+  };
+
+  const applyOp = async (o: Op) => {
+    if (o.kind === 'weekly') {
+      // 날짜별 화면에서 "매주 고정으로 저장" — 요일 고정 수업으로 넣고, 그날 따로 바꿔 둔 칸은 지운다
+      await saveFixed(d.getDay(), o.teacherId, o.time, o.input, center);
+      await resetDayCell(day, o.teacherId, o.time, 'fixed', center);
+      sync({ action: 'fixed', teacherId: o.teacherId, weekday: d.getDay(), time: o.time, center });
+    } else if (o.kind === 'fixed') {
+      if (o.input === 'reset' || o.input.status !== 'child') await deleteFixed(weekday, o.teacherId, o.time, center);
+      else await saveFixed(weekday, o.teacherId, o.time, o.input, center);
+      sync({ action: 'fixed', teacherId: o.teacherId, weekday, time: o.time, center });
+    } else {
+      if (o.input === 'reset') await resetDayCell(day, o.teacherId, o.time, o.side, center);
+      else await saveDayCell(day, o.teacherId, o.time, o.side, o.input, center);
+      sync({ action: 'cell', day, teacherId: o.teacherId, time: o.time, side: o.side, center });
+    }
+  };
+  const saveSchedule = async () => {
+    setSavingSched(true);
+    const failedOps: string[] = [];
+    const failedAssign: string[] = [];
+    for (const [k, o] of ops) {
+      try { await applyOp(o); } catch { failedOps.push(k); }
+    }
+    for (const [id, st] of assignDraft) {
+      try { await setDayAssign(day, id, center, st); } catch { failedAssign.push(id); }
+    }
+    setOps(m => new Map([...m].filter(([k]) => failedOps.includes(k))));
+    setAssignDraft(m => new Map([...m].filter(([id]) => failedAssign.includes(id))));
+    setSavingSched(false);
+    await load();
+    if (failedOps.length + failedAssign.length) showAlert(`${failedOps.length + failedAssign.length}건을 저장하지 못했어요. 다시 [스케줄 변경 완료]를 눌러 주세요.`);
   };
 
   // 수업 후 결제 체크 — 먼저 표에만 표시하고, [결제 완료]에서 한꺼번에 저장한다
@@ -204,11 +295,13 @@ export default function TimetablePage() {
   const savePayments = async () => {
     setSavingPay(true);
     const failedKeys: string[] = [];
+    const shownIds = new Set(shown.map(t => t.id));
     for (const [k, v] of draft) {
+      if (!shownIds.has(v.teacherId)) continue;   // 숨긴 선생님 수업 결제는 반영하지 않는다
       try { await setLessonPayment(v.childId, day, v.time, v.teacherId, center, v.entry); }
       catch { failedKeys.push(k); }
     }
-    setDraft(dr => new Map([...dr].filter(([k]) => failedKeys.includes(k))));
+    setDraft(dr => new Map([...dr].filter(([k, v]) => failedKeys.includes(k) && shownIds.has(v.teacherId))));
     setSavingPay(false);
     await load();
     if (failedKeys.length) showAlert(`${failedKeys.length}건을 저장하지 못했어요. 다시 [결제 완료]를 눌러 주세요.`);
@@ -259,7 +352,7 @@ export default function TimetablePage() {
               <button onClick={() => guard(() => setDay(x => addDays(x, 1)))} className="text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]" aria-label="다음날">›</button>
               <button onClick={() => guard(() => setDay(toYmd(new Date())))} className="text-[12px] text-[#888] underline underline-offset-2 ml-1">오늘</button>
               {addable.length > 0 && (
-                <select value="" onChange={e => { const t = teachers.find(x => x.id === e.target.value); if (t) changeAssign(t, true); }}
+                <select value="" onChange={e => { const t = teachers.find(x => x.id === e.target.value); if (t) showTeacher(t); }}
                   className="ml-2 text-[12px] border border-[#f59e0b] text-[#b45309] bg-white px-2 h-8" title="공휴일 등 그날만 이 센터에서 일하는 선생님">
                   <option value="">+ 이 날 선생님 추가</option>
                   {addable.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -269,7 +362,7 @@ export default function TimetablePage() {
           ) : (
             <div className="flex gap-1">
               {[1, 2, 3, 4, 5, 6].map(w => (
-                <button key={w} onClick={() => setWeekday(w)}
+                <button key={w} onClick={() => guard(() => setWeekday(w))}
                   className={`text-[13px] w-9 h-8 border ${weekday === w ? 'border-[#0a0a0a] bg-[#0a0a0a] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>{DOW[w]}</button>
               ))}
             </div>
@@ -280,7 +373,7 @@ export default function TimetablePage() {
             className="text-[12px] border border-[#0a0a0a] px-3 py-1.5 hover:bg-[#0a0a0a] hover:text-white disabled:opacity-50">
             {fullSyncing ? '캘린더에 반영 중…' : '구글 캘린더 전체 반영'}
           </button>
-          <span className="text-[11px] text-[#999]">칸을 고치면 그 칸은 자동으로 반영돼요. 처음 한 번, 또는 어긋났을 때 전체 반영을 눌러 주세요.</span>
+          <span className="text-[11px] text-[#999]">칸을 고친 뒤 아래 [스케줄 변경 완료]를 누르면 디비와 캘린더에 반영돼요. 어긋났을 때만 전체 반영을 눌러 주세요.</span>
           {syncMsg && <span className="text-[12px] text-red-400">{syncMsg}</span>}
         </div>
         {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — 시간표 SQL(supabase/timetable.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
@@ -304,14 +397,15 @@ export default function TimetablePage() {
                       className="inline-flex items-center gap-1 hover:opacity-70">
                       {t.name}<span className="text-[10px] text-[#aaa]">{folded.has(t.name) ? '▸' : '◂'}</span>
                     </button>
+                    {!folded.has(t.name) && (
+                      <button type="button" onClick={() => clearTeacher(t)}
+                        className="ml-1 text-[10px] rounded px-1 border text-[#a1a1aa] border-[#e4e4e7] hover:text-red-400"
+                        title={mode === 'day' ? '이 날 이 선생님 칸 모두 비우기' : '이 요일 고정 수업 모두 비우기'}>비우기</button>
+                    )}
                     {mode === 'day' && (
-                      <button type="button"
-                        onClick={async () => {
-                          const has = [...board.fixed.keys(), ...board.open.keys()].some(k => k.startsWith(`${t.id}|`));
-                          if (await askConfirm(`${t.name} 선생님을 이 날 시간표에서 뺄까요?${has ? '\n(이 날 칸에 들어 있는 아이들도 표에서 안 보여요)' : ''}\n위의 [+ 이 날 선생님 추가]로 다시 넣을 수 있어요.`)) changeAssign(t, false);
-                        }}
-                        className={`ml-1 text-[10px] rounded px-1 border ${assigns.added.includes(t.id) ? 'text-[#f59e0b] border-[#fcd34d]' : 'text-[#a1a1aa] border-[#e4e4e7] hover:text-red-400'}`}
-                        title="이 날만 시간표에서 빼기">✕ 빼기</button>
+                      <button type="button" onClick={() => hideTeacher(t)}
+                        className={`ml-1 text-[10px] rounded px-1 border ${assignOf(t.id) === 'add' ? 'text-[#f59e0b] border-[#fcd34d]' : 'text-[#a1a1aa] border-[#e4e4e7] hover:text-red-400'}`}
+                        title="이 날만 시간표에서 빼기 (칸도 비워져요)">✕ 빼기</button>
                     )}
                   </th>
                 ))}
@@ -334,18 +428,20 @@ export default function TimetablePage() {
                   <td className={`border border-[#d4d4d8] px-2 text-center sticky left-0 z-10 bg-white ${ROW_LABEL[time] ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
                   {shown.map(t => {
                     if (folded.has(t.name)) return <td key={t.id} className="border border-[#e4e4e7] bg-[#f4f4f5] w-6" />;
-                    const left = cellOf(board.fixed, t.id, time);
-                    const right = cellOf(board.open, t.id, time);
+                    const left = cellOf(view.fixed, t.id, time);
+                    const right = cellOf(view.open, t.id, time);
+                    const pendL = view.pend.has(`fixed|${t.id}|${time}`);
+                    const pendR = view.pend.has(`open|${t.id}|${time}`);
                     return (
                       <FragmentPair key={t.id}
                         left={
-                          <td className={`${td} min-w-[84px] ${mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
+                          <td className={`${td} min-w-[84px] ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
                             {/* 빈타임에 아이가 채워지면 옆 고정 칸은 회색으로 흐리게 */}
                             <CellText cell={left} label={ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} />
                           </td>
                         }
                         right={mode === 'day' ? (<>
-                          <td className={`${td} min-w-[84px] bg-[#fcfcfd]`} onClick={e => {
+                          <td className={`${td} min-w-[84px] ${pendR ? 'bg-[#fff6d5]' : 'bg-[#fcfcfd]'}`} onClick={e => {
                             // 보호자 신청 칸은 안내가 있는 창으로, 그 밖은 칸 아래로 아이 명단을 연다
                             if (right.source === 'booking') { setEditing({ teacher: t, time, side: 'open', cell: right }); return; }
                             const b = e.currentTarget.getBoundingClientRect();
@@ -372,20 +468,32 @@ export default function TimetablePage() {
           </table>
         </div>
 
-        {mode === 'day' && (
-          <div className="sticky bottom-0 z-20 flex items-center justify-end gap-3 bg-white/95 border-t border-[#eee] py-3 mt-2">
-            <span className="text-[12px] text-[#888]">
-              {draft.size ? `저장 안 한 결제 체크 ${draft.size}건 — 파란 칸` : '결제방식을 다 고른 뒤 [결제 완료]를 눌러 주세요.'}
-            </span>
-            {draft.size > 0 && (
-              <button onClick={() => setDraft(new Map())} disabled={savingPay} className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
-            )}
-            <button onClick={savePayments} disabled={!draft.size || savingPay}
-              className="text-[13px] border border-[#16a34a] bg-[#16a34a] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
-              {savingPay ? '저장 중…' : '결제 완료'}
-            </button>
-          </div>
-        )}
+        {/* 저장 버튼 — 시간표 변경과 결제 체크는 따로 확정한다 */}
+        <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 bg-white/95 border-t border-[#eee] py-3 mt-2">
+          <span className="text-[12px] text-[#888]">
+            {ops.size + assignDraft.size ? `저장 안 한 시간표 변경 ${ops.size + assignDraft.size}건 — 노란 칸` : '칸을 고친 뒤 [스케줄 변경 완료]를 눌러 주세요.'}
+          </span>
+          {ops.size + assignDraft.size > 0 && (
+            <button onClick={() => { setOps(new Map()); setAssignDraft(new Map()); }} disabled={savingSched} className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
+          )}
+          <button onClick={saveSchedule} disabled={!(ops.size + assignDraft.size) || savingSched}
+            className="text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
+            {savingSched ? '저장 중…' : '스케줄 변경 완료'}
+          </button>
+          {mode === 'day' && (
+            <>
+              <span className="w-px h-6 bg-[#e5e5e5] mx-1" />
+              <span className="text-[12px] text-[#888]">{draft.size ? `저장 안 한 결제 체크 ${draft.size}건 — 파란 칸` : '결제방식을 다 고른 뒤 [결제 완료]'}</span>
+              {draft.size > 0 && (
+                <button onClick={() => setDraft(new Map())} disabled={savingPay} className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
+              )}
+              <button onClick={savePayments} disabled={!draft.size || savingPay}
+                className="text-[13px] border border-[#16a34a] bg-[#16a34a] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
+                {savingPay ? '저장 중…' : '결제 완료'}
+              </button>
+            </>
+          )}
+        </div>
 
         <p className="text-[11px] text-[#999] mt-3 leading-[2]">
           칸을 누르면 고칠 수 있어요. 앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정
@@ -400,7 +508,7 @@ export default function TimetablePage() {
           dayLabel={mode === 'day' ? `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})` : `${DOW[weekday]}요일 고정`}
           kids={children}
           onClose={() => setEditing(null)}
-          onSave={(input, weekly) => saveCell(editing, input, weekly)}
+          onSave={(input, weekly) => stage(editing, input, weekly)}
         />
       )}
 
@@ -408,8 +516,8 @@ export default function TimetablePage() {
         <ChildPicker
           picking={picking}
           kids={children}
-          onPick={c => saveCell(picking, { status: 'child', childId: c.id, name: c.name, payment: c.payment, oral: !!c.oral, absent: false, moved: false })}
-          onSave={input => saveCell(picking, input)}
+          onPick={c => stage(picking, { status: 'child', childId: c.id, name: c.name, payment: c.payment, oral: !!c.oral, absent: false, moved: false })}
+          onSave={input => stage(picking, input)}
           onMore={() => { setEditing(picking); setPicking(null); }}
           onClose={() => setPicking(null)}
         />
