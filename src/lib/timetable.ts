@@ -20,7 +20,6 @@ export interface Child {
   kkumideunLimit?: number;
   prepaidTotal?: number;
   number?: number;
-  payment: string;
   memo?: string;
   /** 연결된 보호자 계정 — 계정 하나 = 아이 한 명 (홈페이지 가입 안 한 아이는 없음) */
   guardianUserId?: string;
@@ -85,14 +84,14 @@ export async function getChildren(): Promise<Child[]> {
   return (data ?? []).map(r => ({
     id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral, phoneLast4: r.phone_last4 ?? undefined,
     voucherLimit: r.voucher_limit ?? 0, gusenLimit: r.gusen_limit ?? 0, kkumideunLimit: r.kkumideun_limit ?? 0, prepaidTotal: r.prepaid_total ?? 0,
-    number: r.number ?? undefined, payment: r.payment ?? '', memo: r.memo ?? undefined,
+    number: r.number ?? undefined, memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
   }));
 }
 
 export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise<void> {
   const row = {
-    name: c.name.trim(), number: c.number ?? null, payment: c.payment.trim(), memo: c.memo?.trim() || null, oral: !!c.oral,
+    name: c.name.trim(), number: c.number ?? null, memo: c.memo?.trim() || null, oral: !!c.oral,
     phone_last4: c.phoneLast4 && /^\d{4}$/.test(c.phoneLast4) ? c.phoneLast4 : null,
     ...(c.voucherLimit !== undefined ? { voucher_limit: Math.max(0, Math.floor(c.voucherLimit) || 0) } : {}),
     ...(c.gusenLimit !== undefined ? { gusen_limit: Math.max(0, Math.floor(c.gusenLimit) || 0) } : {}),
@@ -208,7 +207,7 @@ export async function getDayBoard(day: string, children: Child[], center: Center
       const child = children.find(c => c.guardianUserId === s.booked_by) ?? (center ? byName.get(center) : undefined) ?? (p ? byName.get(p.nickname) : undefined);
       open.set(key(s.teacher_id, s.time), {
         ...blank, status: 'child', name: p?.nickname ?? '신청', subName: center && center !== p?.nickname ? center : undefined,
-        number: child?.number, payment: child?.payment ?? '', childId: child?.id, source: 'booking',
+        number: child?.number, payment: '', childId: child?.id, source: 'booking',
         note: s.cancel_state === 'requested' ? '취소 신청 중' : undefined,
       });
     }

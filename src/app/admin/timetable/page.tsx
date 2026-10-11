@@ -701,8 +701,7 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
 
   const pickName = (v: string) => {
     setName(v);
-    const c = kids.find(x => x.name === v.trim());
-    if (c) setPayment(c.payment);   // 결제는 아이 명단의 기본 결제를 따른다 (그날 결제는 표의 결제방식 칸에서)
+    // 결제는 아이가 아니라 이 자리(요일·시간)마다 정한다 — 아이를 바꿔도 결제방식은 그대로
   };
 
 
