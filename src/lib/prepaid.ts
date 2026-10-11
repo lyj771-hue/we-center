@@ -1,0 +1,61 @@
+import { supabase } from './supabaseClient';
+
+// 선결제 카드 — 충전(prepaid_charges)과 [결제 완료]로 확정된 선결제 사용(lesson_payments)을 날짜 순으로 늘어놓고 남은 횟수를 붙인다.
+// 표 구조는 supabase/prepaid-charges.sql 참고.
+
+export interface LedgerRow {
+  day: string;
+  kind: 'charge' | 'use';
+  /** 충전 = 충전한 횟수(+), 사용 = 그날 사용한 횟수 */
+  count: number;
+  memo?: string;
+  /** 충전 기록 id (관리자가 지울 때) */
+  chargeId?: string;
+  /** 이 줄까지의 남은 횟수 */
+  balance: number;
+}
+
+type Raw = Omit<LedgerRow, 'balance'>;
+
+/** 날짜 순(같은 날은 충전 먼저)으로 정렬하고 남은 횟수를 붙인다 */
+export function buildLedger(rows: Raw[]): LedgerRow[] {
+  const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day) || (a.kind === b.kind ? 0 : a.kind === 'charge' ? -1 : 1));
+  let bal = 0;
+  return sorted.map(r => {
+    bal += r.kind === 'charge' ? r.count : -r.count;
+    return { ...r, balance: bal };
+  });
+}
+
+/** 관리자: 아이 한 명의 카드 내역 */
+export async function getChildLedger(childId: string): Promise<LedgerRow[]> {
+  const [charges, uses] = await Promise.all([
+    supabase.from('prepaid_charges').select('id, day, count, memo').eq('child_id', childId),
+    supabase.from('lesson_payments').select('day').eq('child_id', childId).eq('method', 'prepaid').eq('confirmed', true),
+  ]);
+  if (charges.error) throw charges.error;
+  if (uses.error) throw uses.error;
+  const perDay = new Map<string, number>();
+  for (const u of uses.data ?? []) perDay.set(u.day as string, (perDay.get(u.day as string) ?? 0) + 1);
+  return buildLedger([
+    ...(charges.data ?? []).map(c => ({ day: c.day as string, kind: 'charge' as const, count: c.count as number, memo: (c.memo as string | null) ?? undefined, chargeId: c.id as string })),
+    ...[...perDay].map(([day, count]) => ({ day, kind: 'use' as const, count })),
+  ]);
+}
+
+/** 관리자: 충전 기록 넣기 / 지우기 (아이의 충전 총 횟수는 디비가 자동으로 맞춘다) */
+export async function addCharge(childId: string, day: string, count: number, memo?: string): Promise<void> {
+  const { error } = await supabase.from('prepaid_charges').insert({ child_id: childId, day, count, memo: memo?.trim() || null });
+  if (error) throw error;
+}
+export async function deleteCharge(id: string): Promise<void> {
+  const { error } = await supabase.from('prepaid_charges').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** 보호자: 내 아이 카드 내역 */
+export async function getMyLedger(): Promise<LedgerRow[]> {
+  const { data, error } = await supabase.rpc('my_prepaid_ledger');
+  if (error) throw error;
+  return buildLedger((data ?? []).map((r: { day: string; kind: 'charge' | 'use'; count: number; memo: string | null }) => ({ day: r.day, kind: r.kind, count: r.count, memo: r.memo ?? undefined })));
+}

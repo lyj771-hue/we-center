@@ -1,6 +1,8 @@
 'use client';
 
 import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
+import type { LedgerRow } from '@/lib/prepaid';
+import PrepaidCard from '@/components/PrepaidCard';
 import { addDays, parseYmd, thisMonday } from '@/lib/schedule';
 
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
@@ -23,11 +25,13 @@ export interface MyPageViewProps {
   setWeek: (fn: (w: string) => string) => void;
   weekLessons: MyLesson[];
   payments: MyPayment[];
+  /** 선결제 카드 내역 (충전·사용) */
+  ledger?: LedgerRow[];
   today: string;
   failed?: string;
 }
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, today, failed }: MyPageViewProps) {
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], today, failed }: MyPageViewProps) {
   // 결제 현황 — 쓰는 결제(제공·충전 횟수가 있거나 이미 쓴 것)만
   const payRows = payments.filter(p => p.total > 0 || p.used > 0);
 
@@ -80,6 +84,14 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
           </table>
         )}
       </section>
+
+      {/* 선결제 카드 — 센터 종이 카드처럼 충전·사용 내역과 남은 횟수 (선결제를 쓰는 아이만) */}
+      {ledger.length > 0 && (
+        <section id="prepaid" className={card}>
+          <h2 className="text-[17px] text-[#27272a] mb-4">선결제 카드</h2>
+          <PrepaidCard rows={ledger} memberCode={child?.memberCode} name={child?.childName} />
+        </section>
+      )}
 
       {/* 주별 시간표 */}
       <section className={card}>

@@ -6,6 +6,9 @@ import type { Child } from '@/lib/timetable';
 import type { PayCount } from '@/lib/timetable';
 import { deleteChild, getChildren, getFixedByChild, getPaymentCounts, linkChild, paymentColor, saveChild } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
+import type { LedgerRow } from '@/lib/prepaid';
+import { addCharge, deleteCharge, getChildLedger } from '@/lib/prepaid';
+import PrepaidCard from '@/components/PrepaidCard';
 
 // 회원 관리 — "아이 명단" 탭. 센터에 다니는 아이마다 회원 코드(W0001 …)가 있고,
 // 카카오로 가입한 보호자 계정과 1:1로 잇는다(보호자 계정 하나 = 아이 한 명). 고정 수업은 시간표 관리에서 고친다.
@@ -30,6 +33,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
   const [counts, setCounts] = useState<Map<string, PayCount>>(new Map());
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<string | null>(null);   // 아이 id, 'new' = 새 아이
+  const [cardFor, setCardFor] = useState<Child | null>(null);    // 선결제 카드 창을 연 아이
   const [form, setForm] = useState(emptyForm);
   const [failed, setFailed] = useState('');
 
@@ -64,7 +68,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
     if (!form.name.trim()) { showAlert('이름을 적어 주세요.'); return; }
     try {
       await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined, payment: form.payment, oral: form.oral, memo: form.memo, phoneLast4: form.phone,
-        voucherLimit: Number(form.vl) || 0, gusenLimit: Number(form.gl) || 0, kkumideunLimit: Number(form.kl) || 0, prepaidTotal: Number(form.pt) || 0 });
+        voucherLimit: Number(form.vl) || 0, gusenLimit: Number(form.gl) || 0, kkumideunLimit: Number(form.kl) || 0 });   // 선결제는 [충전] 기록으로만
       if (k && form.guardian !== (k.guardianUserId ?? '')) {
         await linkChild(k.id, form.guardian || null);
         onLinked();
@@ -133,8 +137,13 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                   const total = (k[c.limit] as number | undefined) ?? 0;
                   return (
                     <td key={c.key} className={`${td} text-[12px] text-center whitespace-nowrap tabular-nums ${total && used >= total ? 'text-[#e11d48]' : ''}`}>
-                      {/* 선결제는 남은 횟수, 바우처·굳센·꿈이든은 이번 달 사용 횟수 */}
-                      {total || used ? (c.key === 'prepaid' ? `${total - used}/${total}` : `${used}/${total}`) : <span className="text-[#ddd]">-</span>}
+                      {/* 선결제는 남은 횟수 + [충전](카드 내역), 바우처·굳센·꿈이든은 이번 달 사용 횟수 */}
+                      {c.key === 'prepaid' ? (
+                        <button type="button" onClick={() => setCardFor(k)} className="hover:underline" title="선결제 카드 보기 · 충전">
+                          {total || used ? `${total - used}/${total}` : <span className="text-[#bbb]">-</span>}
+                          <span className="ml-1 text-[11px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">충전</span>
+                        </button>
+                      ) : total || used ? `${used}/${total}` : <span className="text-[#ddd]">-</span>}
                     </td>
                   );
                 })}
@@ -151,6 +160,57 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
             ))}
           </tbody>
         </table>
+      </div>
+      {cardFor && <PrepaidModal child={cardFor} onClose={() => { setCardFor(null); load(); }} />}
+    </div>
+  );
+}
+
+/** 선결제 카드 창 — 카드 내역(충전·사용·남은 횟수)과 충전 넣기. 충전 줄 ✕ 로 잘못 넣은 기록을 지운다 */
+function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void }) {
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+  const [rows, setRows] = useState<LedgerRow[] | null>(null);
+  const [day, setDay] = useState(today);
+  const [count, setCount] = useState('');
+  const [memo, setMemo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => {
+    getChildLedger(child.id).then(setRows).catch(e => { setRows([]); showAlert(`불러오지 못했어요 — 선결제 SQL(supabase/prepaid-charges.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); });
+  }, [child.id]);
+  useEffect(() => { load(); }, [load]);
+
+  const charge = async () => {
+    const n = Number(count);
+    if (!n) { showAlert('충전 횟수를 적어 주세요.'); return; }
+    setBusy(true);
+    try { await addCharge(child.id, day, n, memo); setCount(''); setMemo(''); load(); }
+    catch (e) { showAlert(`충전하지 못했어요.\n${(e as Error).message}`); }
+    finally { setBusy(false); }
+  };
+  const remove = async (r: LedgerRow) => {
+    if (!r.chargeId || !(await askConfirm(`${r.day} 충전 ${r.count}회 기록을 지울까요?`))) return;
+    try { await deleteCharge(r.chargeId); load(); } catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }
+  };
+  const input = 'border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]';
+
+  return (
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
+      <div className="bg-[#f7f7f8] rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <p className="text-[15px] text-[#27272a]">{child.number ?? ''}{child.name} · 선결제 카드</p>
+          <button onClick={onClose} className="text-[13px] text-[#888]">닫기 ✕</button>
+        </div>
+        {rows === null ? <p className="text-[13px] text-[#aaa]">불러오는 중…</p> : <PrepaidCard rows={rows} memberCode={child.memberCode} name={child.name} onDelete={remove} />}
+        <div className="bg-white rounded-xl p-4 space-y-3">
+          <p className="text-[13px] text-[#555]">충전</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-[11px] text-[#999]">날짜<input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} className={`${input} block`} /></label>
+            <label className="text-[11px] text-[#999]">횟수<input value={count} inputMode="numeric" placeholder="50" onChange={e => setCount(e.target.value.replace(/[^\d-]/g, '').slice(0, 4))} className={`${input} block w-16 text-center`} /></label>
+            <label className="text-[11px] text-[#999] flex-1 min-w-[120px]">메모 (선택)<input value={memo} onChange={e => setMemo(e.target.value)} placeholder="예: 카드 남은 횟수 옮김" className={`${input} block w-full`} /></label>
+            <button onClick={charge} disabled={busy} className="text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-4 py-2 rounded-full disabled:opacity-50">충전</button>
+          </div>
+          <p className="text-[11px] text-[#aaa] leading-[1.7]">사용은 시간표 [결제 완료]에서 선결제로 확정한 수업이 자동으로 들어가요. 종이 카드에서 옮길 때는 지금 남은 횟수를 오늘 날짜로 충전하면 돼요. 잘못 넣은 충전은 카드의 ✕로 지워요(빼기는 −를 붙여 적어도 돼요).</p>
+        </div>
       </div>
     </div>
   );
@@ -199,9 +259,11 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
         <input value={form.payment} onChange={e => setForm(f => ({ ...f, payment: e.target.value }))} placeholder="b·e·c" className={`${input} w-14 text-center`}
           style={{ color: paymentColor(form.payment) }} />
       </td>
-      {PAY_COLS.map(c => (
+      {PAY_COLS.map(c => c.key === 'prepaid' ? (
+        <td key={c.key} className={`${td} text-center text-[11px] text-[#aaa]`}>[충전]으로</td>
+      ) : (
         <td key={c.key} className={`${td} text-center`}>
-          <input value={form[c.form]} inputMode="numeric" title={c.key === 'prepaid' ? '지금까지 충전한 횟수' : '한 달 제공 횟수'}
+          <input value={form[c.form]} inputMode="numeric" title="한 달 제공 횟수"
             onChange={e => setForm(f => ({ ...f, [c.form]: e.target.value.replace(/\D/g, '').slice(0, 3) }))} className={`${input} w-10 text-center`} />
         </td>
       ))}

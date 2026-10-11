@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { useMember } from '@/components/MemberContext';
 import MyPageView, { MYPAGE_CARD } from '@/components/MyPageView';
+import type { LedgerRow } from '@/lib/prepaid';
+import { getMyLedger } from '@/lib/prepaid';
 import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
 import { getMyChild, getMyLessons, getMyPayments } from '@/lib/mypage';
 import { addDays, thisMonday, toYmd } from '@/lib/schedule';
@@ -18,6 +20,7 @@ export default function MyPage() {
   const [week, setWeek] = useState(thisMonday());
   const [weekLessons, setWeekLessons] = useState<MyLesson[]>([]);
   const [payments, setPayments] = useState<MyPayment[]>([]);
+  const [ledger, setLedger] = useState<LedgerRow[]>([]);
   const [failed, setFailed] = useState('');
 
   const today = toYmd(new Date());
@@ -26,6 +29,7 @@ export default function MyPage() {
     try {
       const [c, w, p] = await Promise.all([getMyChild(), getMyLessons(week, addDays(week, 5)), getMyPayments()]);
       setChild(c); setWeekLessons(w); setPayments(p); setFailed('');
+      setLedger(await getMyLedger().catch(() => []));
     } catch (e) {
       setFailed((e as Error).message);
     }
@@ -50,6 +54,6 @@ export default function MyPage() {
 
   return wrap(
     <MyPageView child={child} nickname={profile?.nickname} approved={!!profile?.approvedAt} week={week} setWeek={setWeek}
-      weekLessons={weekLessons} payments={payments} today={today} failed={failed} />,
+      weekLessons={weekLessons} payments={payments} ledger={ledger} today={today} failed={failed} />,
   );
 }
