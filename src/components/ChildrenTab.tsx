@@ -135,6 +135,9 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                 {PAY_COLS.map(c => {
                   const used = counts.get(k.id)?.[c.key] ?? 0;
                   const total = (k[c.limit] as number | undefined) ?? 0;
+                  // 회원 관리에서 이 지원 항목을 체크한 보호자의 아이는 아직 안 썼어도 0/제공 횟수로 보여 준다
+                  const g = k.guardianUserId ? memberOf.get(k.guardianUserId) : undefined;
+                  const checked = c.key !== 'prepaid' && !!g?.[c.key];
                   return (
                     <td key={c.key} className={`${td} text-[12px] text-center whitespace-nowrap tabular-nums ${total && used >= total ? 'text-[#e11d48]' : ''}`}>
                       {/* 선결제는 남은 횟수 + [충전](카드 내역), 바우처·굳센·꿈이든은 이번 달 사용 횟수 */}
@@ -143,7 +146,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                           {total || used ? `${total - used}/${total}` : <span className="text-[#bbb]">-</span>}
                           <span className="ml-1 text-[11px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">충전</span>
                         </button>
-                      ) : total || used ? `${used}/${total}` : <span className="text-[#ddd]">-</span>}
+                      ) : total || used || checked ? `${used}/${total}` : <span className="text-[#ddd]">-</span>}
                     </td>
                   );
                 })}

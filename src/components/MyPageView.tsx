@@ -32,8 +32,9 @@ export interface MyPageViewProps {
 }
 
 export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], today, failed }: MyPageViewProps) {
-  // 결제 현황 — 쓰는 결제(제공·충전 횟수가 있거나 이미 쓴 것)만
-  const payRows = payments.filter(p => p.total > 0 || p.used > 0);
+  // 결제 현황 — 쓰는 결제만: 회원 관리에서 지원 항목을 체크했거나, 제공·충전 횟수가 있거나, 이미 쓴 것 (아직 안 썼으면 0회)
+  const checked = (m: MyPayment['method']) => m !== 'prepaid' && !!child?.supports[m];
+  const payRows = payments.filter(p => checked(p.method) || p.total > 0 || p.used > 0);
 
   const card = MYPAGE_CARD;
 
