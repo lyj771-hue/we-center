@@ -29,7 +29,8 @@ export default function PrepaidCard({ rows, name, editingId }: {
       <div className="relative">
         <p className="text-[14px] text-[#27272a]">WE 소아재활센터</p>
         <p className="text-[12px] text-[#999] mt-0.5 tabular-nums">
-          {name && <span className="text-[#555]">{name}</span>}
+          {/* 홈 화면 인사("○○님 오셨군요♥")와 같은 하트 */}
+          {name && <span className="text-[#555]">{name}님<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span></span>}
         </p>
         <div className="mt-3 grid grid-cols-[3fr_2.3fr_1.9fr_3.4fr] border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888]">
           <span>일자</span><span className="text-right">충전·사용</span><span className="text-right">잔여</span><span className="pl-3">메모</span>
