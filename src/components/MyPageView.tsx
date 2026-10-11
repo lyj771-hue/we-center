@@ -90,7 +90,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       {ledger.length > 0 && (
         <section id="prepaid" className={card}>
           <h2 className="text-[17px] text-[#27272a] mb-4">선결제 카드</h2>
-          <PrepaidCard rows={ledger} memberCode={child?.memberCode} name={child?.childName} />
+          <PrepaidCard rows={ledger} name={child?.childName} />
         </section>
       )}
 

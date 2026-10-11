@@ -9,9 +9,8 @@ const PER_PAGE = 3;
 // 선결제 카드 — 센터에서 쓰던 종이 카드 모양 그대로(일자 · 충전/사용 · 남은 횟수). 마이페이지와 회원 관리에서 같이 쓴다.
 // 메모가 있는 줄은 아래에 작게 메모를 보여 준다. 고치기·지우기는 회원 관리의 선결제 창 [수정]에서 한다.
 
-export default function PrepaidCard({ rows, memberCode, name, editingId }: {
+export default function PrepaidCard({ rows, name, editingId }: {
   rows: LedgerRow[];
-  memberCode?: string;
   name?: string;
   /** 관리자가 고치는 중인 기록 (노랗게) */
   editingId?: string;
@@ -30,7 +29,7 @@ export default function PrepaidCard({ rows, memberCode, name, editingId }: {
       <div className="relative">
         <p className="text-[17px] text-[#27272a]">WE 소아재활센터</p>
         <p className="text-[12px] text-[#999] mt-0.5 tabular-nums">
-          {memberCode && <>회원번호 {memberCode}</>}{name && <span className="ml-2 text-[#555]">{name}</span>}
+          {name && <span className="text-[#555]">{name}</span>}
         </p>
         <div className="mt-3 grid grid-cols-[1fr_1fr_1fr] border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888]">
           <span>일자</span><span className="text-right">충전 · 사용</span><span className="text-right">남은 횟수</span>
@@ -46,7 +45,8 @@ export default function PrepaidCard({ rows, memberCode, name, editingId }: {
                   {r.kind === 'charge' ? `+${r.count}` : `-${r.count}`}
                 </span>
                 <span className={`text-right ${r.balance <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.balance}</span>
-                {r.memo && <span className="col-span-3 -mt-0.5 font-sans text-[11px] leading-[1.4] text-[#999]">{r.memo}</span>}
+                {/* 예전 차감 기록의 기본 메모 "차감"은 줄 이름과 같아서 숨긴다 */}
+                {r.memo && r.memo !== '차감' && <span className="col-span-3 -mt-0.5 font-sans text-[11px] leading-[1.4] text-[#999]">{r.memo}</span>}
               </li>
             ))}
           </ul>

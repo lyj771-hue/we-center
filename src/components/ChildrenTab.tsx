@@ -144,7 +144,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                       {c.key === 'prepaid' ? (
                         <button type="button" onClick={() => setCardFor(k)} className="hover:underline" title="선결제 카드 — 충전 · 차감 · 수정">
                           {total || used ? `${total - used}/${total}` : <span className="text-[#bbb]">-</span>}
-                          <span className="ml-1 text-[11px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">충전·차감·수정</span>
+                          <span className="ml-1 text-[10px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">충전·차감·수정</span>
                         </button>
                       ) : total || used || checked ? `${used}/${total}` : <span className="text-[#ddd]">-</span>}
                     </td>
@@ -231,7 +231,7 @@ function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void })
   const input = 'border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]';
   const label = 'text-[11px] text-[#999]';
   const section = 'flex flex-wrap items-end gap-3';
-  const title = 'w-full text-[13px] text-[#555]';
+  const title = 'w-full text-[11px] text-[#777]';
 
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
@@ -240,7 +240,7 @@ function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void })
           <p className="text-[15px] text-[#27272a]">{child.number ?? ''}{child.name} · 선결제 카드</p>
           <button onClick={onClose} className="text-[13px] text-[#888]">닫기 ✕</button>
         </div>
-        {rows === null ? <p className="text-[13px] text-[#aaa]">불러오는 중…</p> : <PrepaidCard rows={rows} memberCode={child.memberCode} name={child.name} editingId={editId || undefined} />}
+        {rows === null ? <p className="text-[13px] text-[#aaa]">불러오는 중…</p> : <PrepaidCard rows={rows} name={child.name} editingId={editId || undefined} />}
 
         <div className="bg-white rounded-xl p-4 space-y-4">
           {/* 충전 */}
@@ -249,7 +249,7 @@ function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void })
             <label className={label}>날짜<input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} className={`${input} block`} /></label>
             <label className={label}>횟수<input value={count} inputMode="numeric" placeholder="50" onChange={e => setCount(e.target.value.replace(/\D/g, '').slice(0, 4))} className={`${input} block w-14 text-center`} /></label>
             <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={memo} onChange={e => setMemo(e.target.value)} placeholder="예: 카드 남은 횟수 옮김" className={`${input} block w-full`} /></label>
-            <button onClick={charge} disabled={busy} className="text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-4 py-2 rounded-full disabled:opacity-50">충전</button>
+            <button onClick={charge} disabled={busy} className="text-[12px] border border-[var(--brand)] bg-[var(--brand)] text-white px-3.5 py-1.5 rounded-full disabled:opacity-50">충전</button>
           </div>
 
           {/* 차감 */}
@@ -258,7 +258,7 @@ function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void })
             <label className={label}>날짜<input type="date" value={useDay} onChange={e => e.target.value && setUseDay(e.target.value)} className={`${input} block`} /></label>
             <label className={label}>횟수<input value={useCount} inputMode="numeric" onChange={e => setUseCount(e.target.value.replace(/\D/g, '').slice(0, 3))} className={`${input} block w-14 text-center`} /></label>
             <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={useMemo} onChange={e => setUseMemo(e.target.value)} placeholder="예: 10/7 수업" className={`${input} block w-full`} /></label>
-            <button onClick={deduct} disabled={busy} className="text-[13px] border border-[#e11d48] text-[#e11d48] px-4 py-2 rounded-full hover:bg-red-50 disabled:opacity-50">차감</button>
+            <button onClick={deduct} disabled={busy} className="text-[12px] border border-[#e11d48] text-[#e11d48] px-3.5 py-1.5 rounded-full hover:bg-red-50 disabled:opacity-50">차감</button>
           </div>
 
           {/* 수정 */}
@@ -280,8 +280,8 @@ function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void })
                 <label className={label}>{editing.kind === 'charge' ? '충전' : '차감'} 횟수<input value={eCount} inputMode="numeric" onChange={e => setECount(e.target.value.replace(/\D/g, '').slice(0, 4))} className={`${input} block w-14 text-center`} /></label>
                 <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={eMemo} onChange={e => setEMemo(e.target.value)} className={`${input} block w-full`} /></label>
                 <div className="flex gap-1.5">
-                  <button onClick={saveEdit} disabled={busy} className="text-[13px] border border-[#0a0a0a] bg-[#0a0a0a] text-white px-4 py-2 rounded-full disabled:opacity-50">수정</button>
-                  <button onClick={removeEdit} disabled={busy} className="text-[13px] border border-[#ddd] text-red-400 px-3 py-2 rounded-full disabled:opacity-50">삭제</button>
+                  <button onClick={saveEdit} disabled={busy} className="text-[12px] border border-[#0a0a0a] bg-[#0a0a0a] text-white px-3.5 py-1.5 rounded-full disabled:opacity-50">수정</button>
+                  <button onClick={removeEdit} disabled={busy} className="text-[12px] border border-[#ddd] text-red-400 px-3 py-1.5 rounded-full disabled:opacity-50">삭제</button>
                 </div>
               </>
             )}
