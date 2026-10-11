@@ -11,15 +11,17 @@ export interface LedgerRow {
   memo?: string;
   /** 충전 기록 id (관리자가 지울 때) */
   chargeId?: string;
+  /** 넣은 시각 — 같은 날 여러 줄이면 이 순서로 */
+  at?: string;
   /** 이 줄까지의 남은 횟수 */
   balance: number;
 }
 
 type Raw = Omit<LedgerRow, 'balance'>;
 
-/** 날짜 순(같은 날은 충전 먼저)으로 정렬하고 남은 횟수를 붙인다 */
+/** 날짜 순(같은 날은 넣은 시각 순)으로 정렬하고 남은 횟수를 붙인다 */
 export function buildLedger(rows: Raw[]): LedgerRow[] {
-  const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day) || (a.kind === b.kind ? 0 : a.kind === 'charge' ? -1 : 1));
+  const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day) || (a.at && b.at ? a.at.localeCompare(b.at) : 0));
   let bal = 0;
   return sorted.map(r => {
     bal += r.kind === 'charge' ? r.count : -r.count;
@@ -30,20 +32,24 @@ export function buildLedger(rows: Raw[]): LedgerRow[] {
 /** 관리자: 아이 한 명의 카드 내역 */
 export async function getChildLedger(childId: string): Promise<LedgerRow[]> {
   const [charges, uses] = await Promise.all([
-    supabase.from('prepaid_charges').select('id, day, count, memo').eq('child_id', childId),
-    supabase.from('lesson_payments').select('day').eq('child_id', childId).eq('method', 'prepaid').eq('confirmed', true),
+    supabase.from('prepaid_charges').select('id, day, count, memo, created_at').eq('child_id', childId),
+    supabase.from('lesson_payments').select('day, created_at').eq('child_id', childId).eq('method', 'prepaid').eq('confirmed', true),
   ]);
   if (charges.error) throw charges.error;
   if (uses.error) throw uses.error;
-  const perDay = new Map<string, number>();
-  for (const u of uses.data ?? []) perDay.set(u.day as string, (perDay.get(u.day as string) ?? 0) + 1);
+  // 사용은 날짜마다 한 줄 — 시각은 그날 마지막 확정 시각
+  const perDay = new Map<string, { count: number; at: string }>();
+  for (const u of uses.data ?? []) {
+    const p = perDay.get(u.day as string) ?? { count: 0, at: '' };
+    perDay.set(u.day as string, { count: p.count + 1, at: (u.created_at as string) > p.at ? (u.created_at as string) : p.at });
+  }
   return buildLedger([
     // 충전 기록의 − 횟수는 관리자가 직접 넣은 차감(임시) — 사용 줄로 보여 준다
     ...(charges.data ?? []).map(c => {
       const n = c.count as number;
-      return { day: c.day as string, kind: n < 0 ? 'use' as const : 'charge' as const, count: Math.abs(n), memo: (c.memo as string | null) ?? undefined, chargeId: c.id as string };
+      return { day: c.day as string, kind: n < 0 ? 'use' as const : 'charge' as const, count: Math.abs(n), memo: (c.memo as string | null) ?? undefined, chargeId: c.id as string, at: c.created_at as string };
     }),
-    ...[...perDay].map(([day, count]) => ({ day, kind: 'use' as const, count })),
+    ...[...perDay].map(([day, v]) => ({ day, kind: 'use' as const, count: v.count, at: v.at })),
   ]);
 }
 
@@ -66,8 +72,8 @@ export async function deleteCharge(id: string): Promise<void> {
 export async function getMyLedger(): Promise<LedgerRow[]> {
   const { data, error } = await supabase.rpc('my_prepaid_ledger');
   if (error) throw error;
-  return buildLedger((data ?? []).map((r: { day: string; kind: 'charge' | 'use'; count: number; memo: string | null }) =>
+  return buildLedger((data ?? []).map((r: { day: string; kind: 'charge' | 'use'; count: number; memo: string | null; at?: string | null }) =>
     r.kind === 'charge' && r.count < 0
-      ? { day: r.day, kind: 'use' as const, count: -r.count, memo: r.memo ?? undefined }   // 관리자가 직접 넣은 차감
-      : { day: r.day, kind: r.kind, count: r.count, memo: r.memo ?? undefined }));
+      ? { day: r.day, kind: 'use' as const, count: -r.count, memo: r.memo ?? undefined, at: r.at ?? undefined }   // 관리자가 직접 넣은 차감
+      : { day: r.day, kind: r.kind, count: r.count, memo: r.memo ?? undefined, at: r.at ?? undefined }));
 }

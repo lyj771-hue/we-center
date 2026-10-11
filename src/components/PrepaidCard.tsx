@@ -24,29 +24,29 @@ export default function PrepaidCard({ rows, name, editingId }: {
   const shown = rows.slice(Math.max(0, end - PER_PAGE), end);
   const md = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
   return (
-    <div className="relative mx-auto max-w-[360px] rounded-[16px] border border-[#e4e4e7] bg-white px-5 pt-5 pb-4 shadow-[0_2px_10px_rgba(0,0,0,0.06)] overflow-hidden">
+    <div className="relative mx-auto max-w-[380px] rounded-[16px] border border-[#e4e4e7] bg-white px-5 pt-5 pb-4 shadow-[0_2px_10px_rgba(0,0,0,0.06)] overflow-hidden">
       <img src="/logo-we.jpg" alt="" aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 w-40 -translate-x-1/2 -translate-y-1/2 opacity-[0.06]" />
       <div className="relative">
-        <p className="text-[17px] text-[#27272a]">WE 소아재활센터</p>
+        <p className="text-[14px] text-[#27272a]">WE 소아재활센터</p>
         <p className="text-[12px] text-[#999] mt-0.5 tabular-nums">
           {name && <span className="text-[#555]">{name}</span>}
         </p>
-        <div className="mt-3 grid grid-cols-[1fr_1fr_1fr] border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888]">
-          <span>일자</span><span className="text-right">충전 · 사용</span><span className="text-right">남은 횟수</span>
+        <div className="mt-3 grid grid-cols-[3fr_2.3fr_1.9fr_3.4fr] border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888]">
+          <span>일자</span><span className="text-right">충전·사용</span><span className="text-right">남은</span><span className="pl-3">메모</span>
         </div>
         {rows.length === 0 ? (
           <p className="py-6 text-center text-[13px] text-[#bbb]">아직 충전·사용 내역이 없어요.</p>
         ) : (
           <ul className="py-1 font-mono text-[14px] tabular-nums">
             {shown.map((r, i) => (
-              <li key={i} className={`grid grid-cols-[1fr_1fr_1fr] items-center py-1 ${editingId && r.chargeId === editingId ? 'bg-[#fff6d5] -mx-2 px-2 rounded' : ''}`}>
+              <li key={i} className={`grid grid-cols-[3fr_2.3fr_1.9fr_3.4fr] items-center py-1 ${editingId && r.chargeId === editingId ? 'bg-[#fff6d5] -mx-2 px-2 rounded' : ''}`}>
                 <span className="text-[#444]">{md(r.day)}{r.kind === 'use' && <span className="ml-1 text-[11px] text-[#aaa]">사용</span>}</span>
                 <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : 'text-[#555]'}`}>
                   {r.kind === 'charge' ? `+${r.count}` : `-${r.count}`}
                 </span>
                 <span className={`text-right ${r.balance <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.balance}</span>
-                {/* 예전 차감 기록의 기본 메모 "차감"은 줄 이름과 같아서 숨긴다 */}
-                {r.memo && r.memo !== '차감' && <span className="col-span-3 -mt-0.5 font-sans text-[11px] leading-[1.4] text-[#999]">{r.memo}</span>}
+                {/* 메모는 남은 횟수 오른쪽 — 예전 차감 기록의 기본 메모 "차감"은 줄 이름과 같아서 숨긴다 */}
+                <span className="pl-3 font-sans text-[11px] leading-[1.3] text-[#999] break-keep">{r.memo && r.memo !== '차감' ? r.memo : ''}</span>
               </li>
             ))}
           </ul>
