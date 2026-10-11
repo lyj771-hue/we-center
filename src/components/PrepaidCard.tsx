@@ -30,7 +30,7 @@ export default function PrepaidCard({ rows, name, editingId }: {
         <p className="text-[14px] text-[#27272a]">WE 소아재활센터</p>
         <p className="text-[12px] text-[#999] mt-0.5 tabular-nums">
           {/* 홈 화면 인사("○○님 오셨군요♥")와 같은 하트 */}
-          {name && <span className="text-[#555]">{name}님<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span></span>}
+          {name && <span className="text-[#555]">{name} 님<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span></span>}
         </p>
         <div className="mt-3 grid grid-cols-[3fr_2.3fr_1.9fr_3.4fr] border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888]">
           <span>일자</span><span className="text-right">충전·사용</span><span className="text-right">잔여</span><span className="pl-3">메모</span>
@@ -43,7 +43,7 @@ export default function PrepaidCard({ rows, name, editingId }: {
               <li key={i} className={`grid grid-cols-[3fr_2.3fr_1.9fr_3.4fr] items-center py-1 ${editingId && r.chargeId === editingId ? 'bg-[#fff6d5] -mx-2 px-2 rounded' : ''}`}>
                 <span className="text-[#444]">{md(r.day)}</span>
                 <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : r.kind === 'adjust' ? 'text-[#b45309]' : 'text-[#555]'}`}>
-                  {r.kind === 'charge' ? `+${r.count}` : r.kind === 'use' ? `-${r.count}` : <><span className="font-sans text-[10px] mr-0.5">수정</span>{r.count > 0 ? `+${r.count}` : r.count}</>}
+                  {r.kind === 'charge' ? `+${r.count}` : r.kind === 'use' ? `-${r.count}` : (r.count > 0 ? `+${r.count}` : r.count)}
                 </span>
                 <span className={`text-right ${r.balance <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.balance}</span>
                 {/* 메모는 남은 횟수 오른쪽 — 예전 차감 기록의 기본 메모 "차감"은 줄 이름과 같아서 숨긴다 */}
