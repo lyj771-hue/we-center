@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
+import Portal from '@/components/Portal';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
@@ -535,25 +536,25 @@ export default function TimetablePage() {
       </div>
 
       {editing && (
-        <CellEditor
+        <Portal><CellEditor
           editing={editing}
           mode={mode}
           dayLabel={mode === 'day' ? `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})` : `${DOW[weekday]}요일 고정`}
           kids={children}
           onClose={() => setEditing(null)}
           onSave={(input, weekly) => stage(editing, input, weekly)}
-        />
+        /></Portal>
       )}
 
       {picking && (
-        <ChildPicker
+        <Portal><ChildPicker
           picking={picking}
           kids={children}
           onPick={c => stage(picking, { status: 'child', childId: c.id, name: c.name, payment: '', oral: !!c.oral, absent: false, moved: false })}
           onSave={input => stage(picking, input)}
           onMore={() => { setEditing(picking); setPicking(null); }}
           onClose={() => setPicking(null)}
-        />
+        /></Portal>
       )}
     </div>
   );

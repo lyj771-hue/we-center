@@ -9,6 +9,7 @@ import type { Member } from '@/lib/types';
 import type { LedgerRow } from '@/lib/prepaid';
 import { addCharge, deleteCharge, getChildLedger } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
+import Portal from '@/components/Portal';
 
 // 회원 관리 — "아이 명단" 탭. 센터에 다니는 아이마다 회원 코드(W0001 …)가 있고,
 // 카카오로 가입한 보호자 계정과 1:1로 잇는다(보호자 계정 하나 = 아이 한 명). 고정 수업은 시간표 관리에서 고친다.
@@ -164,7 +165,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
           </tbody>
         </table>
       </div>
-      {cardFor && <PrepaidModal child={cardFor} onClose={() => { setCardFor(null); load(); }} />}
+      {cardFor && <Portal><PrepaidModal child={cardFor} onClose={() => { setCardFor(null); load(); }} /></Portal>}
     </div>
   );
 }
