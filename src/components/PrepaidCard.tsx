@@ -3,21 +3,17 @@
 import { useEffect, useState } from 'react';
 import type { LedgerRow } from '@/lib/prepaid';
 
-/** 한 쪽에 보이는 줄 수 — 1쪽이 가장 최근 */
+/** 한 쪽에 보이는 줄 수 — 1쪽이 가장 최근 3줄 */
 const PER_PAGE = 3;
 
 // 선결제 카드 — 센터에서 쓰던 종이 카드 모양 그대로(일자 · 충전/사용 · 남은 횟수). 마이페이지와 회원 관리에서 같이 쓴다.
-// onEdit·onDelete 를 넘기면(관리자) 충전·차감 기록 줄에 [수정]·✕ 가 생긴다.
-// 시간표 [결제 완료]로 들어온 사용 줄은 여기서 고치지 않는다(시간표에서 고친다).
+// 메모가 있는 줄은 아래에 작게 메모를 보여 준다. 고치기·지우기는 회원 관리의 선결제 창 [수정]에서 한다.
 
-export default function PrepaidCard({ rows, memberCode, name, onEdit, onDelete, editingId }: {
+export default function PrepaidCard({ rows, memberCode, name, editingId }: {
   rows: LedgerRow[];
   memberCode?: string;
   name?: string;
-  /** 관리자: 충전·차감 기록 고치기 / 지우기 */
-  onEdit?: (row: LedgerRow) => void;
-  onDelete?: (row: LedgerRow) => void;
-  /** 고치는 중인 기록 */
+  /** 관리자가 고치는 중인 기록 (노랗게) */
   editingId?: string;
 }) {
   const left = rows.length ? rows[rows.length - 1].balance : 0;
@@ -46,30 +42,26 @@ export default function PrepaidCard({ rows, memberCode, name, onEdit, onDelete, 
             {shown.map((r, i) => (
               <li key={i} className={`grid grid-cols-[1fr_1fr_1fr] items-center py-1 ${editingId && r.chargeId === editingId ? 'bg-[#fff6d5] -mx-2 px-2 rounded' : ''}`}>
                 <span className="text-[#444]">{md(r.day)}{r.kind === 'use' && <span className="ml-1 text-[11px] text-[#aaa]">사용</span>}</span>
-                <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : 'text-[#555]'}`} title={r.memo}>
+                <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : 'text-[#555]'}`}>
                   {r.kind === 'charge' ? `+${r.count}` : `-${r.count}`}
-                  {onEdit && r.chargeId && (
-                    <button type="button" onClick={() => onEdit(r)} className="ml-1 font-sans text-[10px] text-[#999] border border-[#e4e4e7] rounded px-1 hover:text-[var(--brand)]">수정</button>
-                  )}
-                  {onDelete && r.chargeId && (
-                    <button type="button" onClick={() => onDelete(r)} aria-label="이 기록 지우기" className="ml-1 text-[11px] text-[#ccc] hover:text-red-400">✕</button>
-                  )}
                 </span>
                 <span className={`text-right ${r.balance <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.balance}</span>
+                {r.memo && <span className="col-span-3 -mt-0.5 font-sans text-[11px] leading-[1.4] text-[#999]">{r.memo}</span>}
               </li>
             ))}
           </ul>
         )}
+        {/* 쪽 번호 — 1쪽이 가장 최근 3줄(쪽 안에서는 날짜 순), 2쪽은 그 전 3줄 … */}
         {pages > 1 && (
           <div className="flex items-center justify-center gap-1 pt-1 pb-1 text-[12px]">
-            <button type="button" onClick={() => setPage(p => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1}
-              className="w-7 h-7 rounded-full text-[#888] hover:bg-[#f4f4f5] disabled:opacity-30" aria-label="이전 내역">‹</button>
-            {Array.from({ length: pages }, (_, i) => pages - 1 - i).map(i => (
-              <button key={i} type="button" onClick={() => setPage(i)}
-                className={`min-w-7 h-7 px-1.5 rounded-full tabular-nums ${page === i ? 'bg-[var(--brand)] text-white' : 'text-[#888] hover:bg-[#f4f4f5]'}`}>{pages - i}</button>
-            ))}
             <button type="button" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-              className="w-7 h-7 rounded-full text-[#888] hover:bg-[#f4f4f5] disabled:opacity-30" aria-label="최근 내역">›</button>
+              className="w-7 h-7 rounded-full text-[#888] hover:bg-[#f4f4f5] disabled:opacity-30" aria-label="앞 쪽(최근)">‹</button>
+            {Array.from({ length: pages }, (_, i) => (
+              <button key={i} type="button" onClick={() => setPage(i)}
+                className={`min-w-7 h-7 px-1.5 rounded-full tabular-nums ${page === i ? 'bg-[var(--brand)] text-white' : 'text-[#888] hover:bg-[#f4f4f5]'}`}>{i + 1}</button>
+            ))}
+            <button type="button" onClick={() => setPage(p => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1}
+              className="w-7 h-7 rounded-full text-[#888] hover:bg-[#f4f4f5] disabled:opacity-30" aria-label="뒤 쪽(지난 내역)">›</button>
           </div>
         )}
         <p className="mt-2 border-t border-dashed border-[#bbb] pt-2 text-right text-[14px] text-[#27272a]">
