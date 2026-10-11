@@ -32,7 +32,7 @@ export default function PrepaidCard({ rows, name, editingId }: {
           {name && <span className="text-[#555]">{name}</span>}
         </p>
         <div className="mt-3 grid grid-cols-[3fr_2.3fr_1.9fr_3.4fr] border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888]">
-          <span>일자</span><span className="text-right">충전·사용</span><span className="text-right">남은</span><span className="pl-3">메모</span>
+          <span>일자</span><span className="text-right">충전·사용</span><span className="text-right">잔여</span><span className="pl-3">메모</span>
         </div>
         {rows.length === 0 ? (
           <p className="py-6 text-center text-[13px] text-[#bbb]">아직 충전·사용 내역이 없어요.</p>
@@ -64,8 +64,8 @@ export default function PrepaidCard({ rows, name, editingId }: {
               className="w-7 h-7 rounded-full text-[#888] hover:bg-[#f4f4f5] disabled:opacity-30" aria-label="뒤 쪽(지난 내역)">›</button>
           </div>
         )}
-        <p className="mt-2 border-t border-dashed border-[#bbb] pt-2 text-right text-[14px] text-[#27272a]">
-          남은 횟수 <span className={`text-[20px] tabular-nums ${left <= 0 ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>{left}</span>회
+        <p className="mt-2 border-t border-dashed border-[#bbb] pt-2 text-right text-[13px] text-[#27272a]">
+          잔여 <span className={`text-[16px] tabular-nums ${left <= 0 ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>{left}</span>회
         </p>
       </div>
     </div>
