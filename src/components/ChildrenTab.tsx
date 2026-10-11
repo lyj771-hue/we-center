@@ -106,7 +106,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
               <th className={th}>이름</th>
               <th className={th}>뒷번호</th>
               <th className={th}>기본 결제</th>
-              {PAY_COLS.map(c => <th key={c.key} className={`${th} text-center`}>{c.label}<span className="block text-[10px] text-[#bbb]">{c.key === 'prepaid' ? '사용/충전' : '이번 달'}</span></th>)}
+              {PAY_COLS.map(c => <th key={c.key} className={`${th} text-center`}>{c.label}<span className="block text-[10px] text-[#bbb]">{c.key === 'prepaid' ? '남은/충전' : '이번 달 사용/제공'}</span></th>)}
               <th className={th}>고정 수업</th>
               <th className={th}>연결된 보호자 계정</th>
               <th className={th}>메모</th>
@@ -133,7 +133,8 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                   const total = (k[c.limit] as number | undefined) ?? 0;
                   return (
                     <td key={c.key} className={`${td} text-[12px] text-center whitespace-nowrap tabular-nums ${total && used >= total ? 'text-[#e11d48]' : ''}`}>
-                      {total || used ? `${used}/${total}` : <span className="text-[#ddd]">-</span>}
+                      {/* 선결제는 남은 횟수, 바우처·굳센·꿈이든은 이번 달 사용 횟수 */}
+                      {total || used ? (c.key === 'prepaid' ? `${total - used}/${total}` : `${used}/${total}`) : <span className="text-[#ddd]">-</span>}
                     </td>
                   );
                 })}

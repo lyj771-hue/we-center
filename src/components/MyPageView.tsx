@@ -53,20 +53,27 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         {!child?.memberCode && <p className="text-[13px] text-[#999] mt-2">아직 센터 회원 정보와 연결되지 않았어요. 연결되면 시간표가 보여요.</p>}
       </section>
 
-      {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용/제공, 선결제는 지금까지 사용/충전 */}
+      {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용 횟수(매월 1일 0부터), 선결제는 남은 횟수 */}
       <section className={card}>
         <h2 className="text-[17px] text-[#27272a] mb-1">결제 현황</h2>
-        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든은 {monthNo}월 기준, 선결제는 충전한 횟수 기준이에요.</p>
+        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든은 {monthNo}월에 사용한 횟수예요(매월 1일에 새로 세요). 선결제는 남은 횟수예요.</p>
         {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
           <table className="w-full text-[15px]">
             <tbody>
               {payRows.map(p => (
                 <tr key={p.method} className="border-t border-[#f0f0f0] first:border-t-0">
                   <td className="py-2.5">{PAY_ROW_LABEL[p.method]}</td>
-                  <td className={`py-2.5 text-right tabular-nums ${p.total && p.used >= p.total ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
-                    {p.used} <span className="text-[#bbb]">/</span> {p.total}
-                    <span className="text-[12px] text-[#999] ml-1">회</span>
-                  </td>
+                  {p.method === 'prepaid' ? (
+                    <td className={`py-2.5 text-right tabular-nums ${p.total - p.used <= 0 ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
+                      <span className="text-[12px] text-[#999] mr-1">남은</span>{p.total - p.used}<span className="text-[12px] text-[#999] ml-1">회</span>
+                      <span className="block text-[11px] text-[#bbb]">충전 {p.total} · 사용 {p.used}</span>
+                    </td>
+                  ) : (
+                    <td className={`py-2.5 text-right tabular-nums ${p.total && p.used >= p.total ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
+                      <span className="text-[12px] text-[#999] mr-1">이번 달</span>{p.used}<span className="text-[12px] text-[#999] ml-1">회 사용</span>
+                      {p.total > 0 && <span className="block text-[11px] text-[#bbb]">한 달 {p.total}회</span>}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
