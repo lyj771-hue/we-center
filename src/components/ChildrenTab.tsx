@@ -142,9 +142,9 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                     <td key={c.key} className={`${td} text-[12px] text-center whitespace-nowrap tabular-nums ${total && used >= total ? 'text-[#e11d48]' : ''}`}>
                       {/* 선결제는 남은 횟수 + [충전](카드 내역), 바우처·굳센·꿈이든은 이번 달 사용 횟수 */}
                       {c.key === 'prepaid' ? (
-                        <button type="button" onClick={() => setCardFor(k)} className="hover:underline" title="선결제 카드 보기 · 충전">
+                        <button type="button" onClick={() => setCardFor(k)} className="hover:underline" title="선결제 카드 — 충전 · 차감 · 수정">
                           {total || used ? `${total - used}/${total}` : <span className="text-[#bbb]">-</span>}
-                          <span className="ml-1 text-[11px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">충전</span>
+                          <span className="ml-1 text-[11px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">충전·차감·수정</span>
                         </button>
                       ) : total || used || checked ? `${used}/${total}` : <span className="text-[#ddd]">-</span>}
                     </td>
