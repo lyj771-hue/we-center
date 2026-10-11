@@ -5,8 +5,8 @@ import { supabase } from './supabaseClient';
 
 export interface LedgerRow {
   day: string;
-  kind: 'charge' | 'use';
-  /** 충전 = 충전한 횟수(+), 사용 = 그날 사용한 횟수 */
+  kind: 'charge' | 'use' | 'adjust';
+  /** 충전 = 충전한 횟수(+), 사용 = 그날 사용한 횟수, 수정 = 남은 횟수를 맞추느라 더하거나 뺀 횟수(±) */
   count: number;
   memo?: string;
   /** 충전 기록 id (관리자가 지울 때) */
@@ -24,7 +24,7 @@ export function buildLedger(rows: Raw[]): LedgerRow[] {
   const sorted = [...rows].sort((a, b) => a.day.localeCompare(b.day) || (a.at && b.at ? a.at.localeCompare(b.at) : 0));
   let bal = 0;
   return sorted.map(r => {
-    bal += r.kind === 'charge' ? r.count : -r.count;
+    bal += r.kind === 'use' ? -r.count : r.count;
     return { ...r, balance: bal };
   });
 }
@@ -32,7 +32,7 @@ export function buildLedger(rows: Raw[]): LedgerRow[] {
 /** 관리자: 아이 한 명의 카드 내역 */
 export async function getChildLedger(childId: string): Promise<LedgerRow[]> {
   const [charges, uses] = await Promise.all([
-    supabase.from('prepaid_charges').select('id, day, count, memo, created_at').eq('child_id', childId),
+    supabase.from('prepaid_charges').select('*').eq('child_id', childId),
     supabase.from('lesson_payments').select('day, created_at').eq('child_id', childId).eq('method', 'prepaid').eq('confirmed', true),
   ]);
   if (charges.error) throw charges.error;
@@ -44,23 +44,20 @@ export async function getChildLedger(childId: string): Promise<LedgerRow[]> {
     perDay.set(u.day as string, { count: p.count + 1, at: (u.created_at as string) > p.at ? (u.created_at as string) : p.at });
   }
   return buildLedger([
-    // 충전 기록의 − 횟수는 관리자가 직접 넣은 차감(임시) — 사용 줄로 보여 준다
+    // 충전 기록: adjust = [수정](남은 횟수 맞춤, ±), − 횟수 = 관리자가 직접 넣은 차감(임시) — 사용 줄로
     ...(charges.data ?? []).map(c => {
       const n = c.count as number;
-      return { day: c.day as string, kind: n < 0 ? 'use' as const : 'charge' as const, count: Math.abs(n), memo: (c.memo as string | null) ?? undefined, chargeId: c.id as string, at: c.created_at as string };
+      const base = { day: c.day as string, memo: (c.memo as string | null) ?? undefined, chargeId: c.id as string, at: c.created_at as string };
+      if (c.adjust) return { ...base, kind: 'adjust' as const, count: n };
+      return { ...base, kind: n < 0 ? 'use' as const : 'charge' as const, count: Math.abs(n) };
     }),
     ...[...perDay].map(([day, v]) => ({ day, kind: 'use' as const, count: v.count, at: v.at })),
   ]);
 }
 
 /** 관리자: 충전 기록 넣기 / 지우기 (아이의 충전 총 횟수는 디비가 자동으로 맞춘다) */
-export async function addCharge(childId: string, day: string, count: number, memo?: string): Promise<void> {
-  const { error } = await supabase.from('prepaid_charges').insert({ child_id: childId, day, count, memo: memo?.trim() || null });
-  if (error) throw error;
-}
-/** 관리자: 충전·차감 기록 고치기 (차감은 − 횟수) */
-export async function updateCharge(id: string, day: string, count: number, memo?: string): Promise<void> {
-  const { error } = await supabase.from('prepaid_charges').update({ day, count, memo: memo?.trim() || null }).eq('id', id);
+export async function addCharge(childId: string, day: string, count: number, memo?: string, adjust = false): Promise<void> {
+  const { error } = await supabase.from('prepaid_charges').insert({ child_id: childId, day, count, memo: memo?.trim() || null, ...(adjust ? { adjust: true } : {}) });
   if (error) throw error;
 }
 export async function deleteCharge(id: string): Promise<void> {
@@ -72,7 +69,7 @@ export async function deleteCharge(id: string): Promise<void> {
 export async function getMyLedger(): Promise<LedgerRow[]> {
   const { data, error } = await supabase.rpc('my_prepaid_ledger');
   if (error) throw error;
-  return buildLedger((data ?? []).map((r: { day: string; kind: 'charge' | 'use'; count: number; memo: string | null; at?: string | null }) =>
+  return buildLedger((data ?? []).map((r: { day: string; kind: 'charge' | 'use' | 'adjust'; count: number; memo: string | null; at?: string | null }) =>
     r.kind === 'charge' && r.count < 0
       ? { day: r.day, kind: 'use' as const, count: -r.count, memo: r.memo ?? undefined, at: r.at ?? undefined }   // 관리자가 직접 넣은 차감
       : { day: r.day, kind: r.kind, count: r.count, memo: r.memo ?? undefined, at: r.at ?? undefined }));

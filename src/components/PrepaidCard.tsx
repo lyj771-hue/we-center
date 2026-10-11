@@ -40,9 +40,9 @@ export default function PrepaidCard({ rows, name, editingId }: {
           <ul className="py-1 font-mono text-[14px] tabular-nums">
             {shown.map((r, i) => (
               <li key={i} className={`grid grid-cols-[3fr_2.3fr_1.9fr_3.4fr] items-center py-1 ${editingId && r.chargeId === editingId ? 'bg-[#fff6d5] -mx-2 px-2 rounded' : ''}`}>
-                <span className="text-[#444]">{md(r.day)}{r.kind === 'use' && <span className="ml-1 text-[11px] text-[#aaa]">사용</span>}</span>
-                <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : 'text-[#555]'}`}>
-                  {r.kind === 'charge' ? `+${r.count}` : `-${r.count}`}
+                <span className="text-[#444]">{md(r.day)}</span>
+                <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : r.kind === 'adjust' ? 'text-[#b45309]' : 'text-[#555]'}`}>
+                  {r.kind === 'charge' ? `+${r.count}` : r.kind === 'use' ? `-${r.count}` : <><span className="font-sans text-[10px] mr-0.5">수정</span>{r.count > 0 ? `+${r.count}` : r.count}</>}
                 </span>
                 <span className={`text-right ${r.balance <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.balance}</span>
                 {/* 메모는 남은 횟수 오른쪽 — 예전 차감 기록의 기본 메모 "차감"은 줄 이름과 같아서 숨긴다 */}
