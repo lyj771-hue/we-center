@@ -7,7 +7,7 @@ import type { PayCount } from '@/lib/timetable';
 import { deleteChild, getChildren, getFixedByChild, getPaymentCounts, linkChild, saveChild } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 import type { LedgerRow } from '@/lib/prepaid';
-import { addCharge, deleteCharge, getChildLedger } from '@/lib/prepaid';
+import { addCharge, deleteCharge, getChildLedger, updateCharge } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import Portal from '@/components/Portal';
 
@@ -177,6 +177,17 @@ function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void })
   const [count, setCount] = useState('');
   const [memo, setMemo] = useState('');
   const [busy, setBusy] = useState(false);
+  // 임시 차감 — 시간표 [결제 완료]로 쓰기 전까지 종이 카드처럼 직접 빼기 (충전 기록에 − 횟수로 남는다)
+  const [useDay, setUseDay] = useState(today);
+  const [useCount, setUseCount] = useState('1');
+  // 고치는 중인 기록 — 충전이면 위 충전 칸, 차감이면 아래 차감 칸에 채워서 [수정 저장]
+  const [editRow, setEditRow] = useState<LedgerRow | null>(null);
+  const startEdit = (r: LedgerRow) => {
+    setEditRow(r);
+    if (r.kind === 'charge') { setDay(r.day); setCount(String(r.count)); setMemo(r.memo ?? ''); }
+    else { setUseDay(r.day); setUseCount(String(r.count)); }
+  };
+  const cancelEdit = () => { setEditRow(null); setDay(today); setCount(''); setMemo(''); setUseDay(today); setUseCount('1'); };
   const load = useCallback(() => {
     getChildLedger(child.id).then(setRows).catch(e => { setRows([]); showAlert(`불러오지 못했어요 — 선결제 SQL(supabase/prepaid-charges.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); });
   }, [child.id]);
@@ -186,13 +197,29 @@ function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void })
     const n = Number(count);
     if (!n) { showAlert('충전 횟수를 적어 주세요.'); return; }
     setBusy(true);
-    try { await addCharge(child.id, day, n, memo); setCount(''); setMemo(''); load(); }
+    try {
+      if (editRow?.kind === 'charge' && editRow.chargeId) await updateCharge(editRow.chargeId, day, n, memo);
+      else await addCharge(child.id, day, n, memo);
+      cancelEdit(); load();
+    }
     catch (e) { showAlert(`충전하지 못했어요.\n${(e as Error).message}`); }
     finally { setBusy(false); }
   };
+  const deduct = async () => {
+    const n = Number(useCount);
+    if (!n || n < 0) { showAlert('차감 횟수를 적어 주세요.'); return; }
+    setBusy(true);
+    try {
+      if (editRow?.kind === 'use' && editRow.chargeId) await updateCharge(editRow.chargeId, useDay, -n, editRow.memo ?? '차감');
+      else await addCharge(child.id, useDay, -n, '차감');
+      cancelEdit(); load();
+    }
+    catch (e) { showAlert(`차감하지 못했어요.\n${(e as Error).message}`); }
+    finally { setBusy(false); }
+  };
   const remove = async (r: LedgerRow) => {
-    if (!r.chargeId || !(await askConfirm(`${r.day} 충전 ${r.count}회 기록을 지울까요?`))) return;
-    try { await deleteCharge(r.chargeId); load(); } catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }
+    if (!r.chargeId || !(await askConfirm(`${r.day} ${r.kind === 'charge' ? '충전' : '차감'} ${r.count}회 기록을 지울까요?`))) return;
+    try { await deleteCharge(r.chargeId); if (editRow?.chargeId === r.chargeId) cancelEdit(); load(); } catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }
   };
   const input = 'border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]';
 
@@ -203,16 +230,28 @@ function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void })
           <p className="text-[15px] text-[#27272a]">{child.number ?? ''}{child.name} · 선결제 카드</p>
           <button onClick={onClose} className="text-[13px] text-[#888]">닫기 ✕</button>
         </div>
-        {rows === null ? <p className="text-[13px] text-[#aaa]">불러오는 중…</p> : <PrepaidCard rows={rows} memberCode={child.memberCode} name={child.name} onDelete={remove} />}
+        {rows === null ? <p className="text-[13px] text-[#aaa]">불러오는 중…</p> : <PrepaidCard rows={rows} memberCode={child.memberCode} name={child.name} onEdit={startEdit} onDelete={remove} editingId={editRow?.chargeId} />}
         <div className="bg-white rounded-xl p-4 space-y-3">
-          <p className="text-[13px] text-[#555]">충전</p>
+          <p className="text-[13px] text-[#555]">충전{editRow?.kind === 'charge' && <span className="ml-2 text-[11px] text-[#b45309]">{editRow.day} 충전 기록 고치는 중</span>}</p>
           <div className="flex flex-wrap items-end gap-3">
             <label className="text-[11px] text-[#999]">날짜<input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} className={`${input} block`} /></label>
             <label className="text-[11px] text-[#999]">횟수<input value={count} inputMode="numeric" placeholder="50" onChange={e => setCount(e.target.value.replace(/[^\d-]/g, '').slice(0, 4))} className={`${input} block w-16 text-center`} /></label>
             <label className="text-[11px] text-[#999] flex-1 min-w-[120px]">메모 (선택)<input value={memo} onChange={e => setMemo(e.target.value)} placeholder="예: 카드 남은 횟수 옮김" className={`${input} block w-full`} /></label>
-            <button onClick={charge} disabled={busy} className="text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-4 py-2 rounded-full disabled:opacity-50">충전</button>
+            <button onClick={charge} disabled={busy || editRow?.kind === 'use'} className="text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-4 py-2 rounded-full disabled:opacity-50">
+              {editRow?.kind === 'charge' ? '수정 저장' : '충전'}
+            </button>
+            {editRow?.kind === 'charge' && <button onClick={cancelEdit} className="text-[13px] text-[#888] px-2 py-2">취소</button>}
           </div>
-          <p className="text-[11px] text-[#aaa] leading-[1.7]">사용은 시간표 [결제 완료]에서 선결제로 확정한 수업이 자동으로 들어가요. 종이 카드에서 옮길 때는 지금 남은 횟수를 오늘 날짜로 충전하면 돼요. 잘못 넣은 충전은 카드의 ✕로 지워요(빼기는 −를 붙여 적어도 돼요).</p>
+          <div className="flex flex-wrap items-end gap-3 pt-3 border-t border-[#f0f0f0]">
+            <span className="text-[13px] text-[#555] self-center">차감 <span className="text-[11px] text-[#aaa]">(임시)</span>{editRow?.kind === 'use' && <span className="block text-[11px] text-[#b45309]">{editRow.day} 차감 고치는 중</span>}</span>
+            <label className="text-[11px] text-[#999]">날짜<input type="date" value={useDay} onChange={e => e.target.value && setUseDay(e.target.value)} className={`${input} block`} /></label>
+            <label className="text-[11px] text-[#999]">횟수<input value={useCount} inputMode="numeric" onChange={e => setUseCount(e.target.value.replace(/\D/g, '').slice(0, 3))} className={`${input} block w-12 text-center`} /></label>
+            <button onClick={deduct} disabled={busy || editRow?.kind === 'charge'} className="text-[13px] border border-[#e11d48] text-[#e11d48] px-4 py-2 rounded-full hover:bg-red-50 disabled:opacity-50">
+              {editRow?.kind === 'use' ? '수정 저장' : '차감'}
+            </button>
+            {editRow?.kind === 'use' && <button onClick={cancelEdit} className="text-[13px] text-[#888] px-2 py-2">취소</button>}
+          </div>
+          <p className="text-[11px] text-[#aaa] leading-[1.7]">사용은 시간표 [결제 완료]에서 선결제로 확정한 수업이 자동으로 들어가요. 종이 카드에서 옮길 때는 지금 남은 횟수를 오늘 날짜로 충전하면 돼요. 잘못 넣은 충전·차감은 카드의 [수정]으로 고치거나 ✕로 지워요.</p>
         </div>
       </div>
     </div>

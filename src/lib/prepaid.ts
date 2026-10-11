@@ -38,7 +38,11 @@ export async function getChildLedger(childId: string): Promise<LedgerRow[]> {
   const perDay = new Map<string, number>();
   for (const u of uses.data ?? []) perDay.set(u.day as string, (perDay.get(u.day as string) ?? 0) + 1);
   return buildLedger([
-    ...(charges.data ?? []).map(c => ({ day: c.day as string, kind: 'charge' as const, count: c.count as number, memo: (c.memo as string | null) ?? undefined, chargeId: c.id as string })),
+    // 충전 기록의 − 횟수는 관리자가 직접 넣은 차감(임시) — 사용 줄로 보여 준다
+    ...(charges.data ?? []).map(c => {
+      const n = c.count as number;
+      return { day: c.day as string, kind: n < 0 ? 'use' as const : 'charge' as const, count: Math.abs(n), memo: (c.memo as string | null) ?? undefined, chargeId: c.id as string };
+    }),
     ...[...perDay].map(([day, count]) => ({ day, kind: 'use' as const, count })),
   ]);
 }
@@ -46,6 +50,11 @@ export async function getChildLedger(childId: string): Promise<LedgerRow[]> {
 /** 관리자: 충전 기록 넣기 / 지우기 (아이의 충전 총 횟수는 디비가 자동으로 맞춘다) */
 export async function addCharge(childId: string, day: string, count: number, memo?: string): Promise<void> {
   const { error } = await supabase.from('prepaid_charges').insert({ child_id: childId, day, count, memo: memo?.trim() || null });
+  if (error) throw error;
+}
+/** 관리자: 충전·차감 기록 고치기 (차감은 − 횟수) */
+export async function updateCharge(id: string, day: string, count: number, memo?: string): Promise<void> {
+  const { error } = await supabase.from('prepaid_charges').update({ day, count, memo: memo?.trim() || null }).eq('id', id);
   if (error) throw error;
 }
 export async function deleteCharge(id: string): Promise<void> {
@@ -57,5 +66,8 @@ export async function deleteCharge(id: string): Promise<void> {
 export async function getMyLedger(): Promise<LedgerRow[]> {
   const { data, error } = await supabase.rpc('my_prepaid_ledger');
   if (error) throw error;
-  return buildLedger((data ?? []).map((r: { day: string; kind: 'charge' | 'use'; count: number; memo: string | null }) => ({ day: r.day, kind: r.kind, count: r.count, memo: r.memo ?? undefined })));
+  return buildLedger((data ?? []).map((r: { day: string; kind: 'charge' | 'use'; count: number; memo: string | null }) =>
+    r.kind === 'charge' && r.count < 0
+      ? { day: r.day, kind: 'use' as const, count: -r.count, memo: r.memo ?? undefined }   // 관리자가 직접 넣은 차감
+      : { day: r.day, kind: r.kind, count: r.count, memo: r.memo ?? undefined }));
 }

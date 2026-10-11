@@ -3,13 +3,18 @@
 import type { LedgerRow } from '@/lib/prepaid';
 
 // 선결제 카드 — 센터에서 쓰던 종이 카드 모양 그대로(일자 · 충전/사용 · 남은 횟수). 마이페이지와 회원 관리에서 같이 쓴다.
-// onDelete 를 넘기면(관리자) 충전 줄에 ✕ 가 생긴다.
+// onEdit·onDelete 를 넘기면(관리자) 충전·차감 기록 줄에 [수정]·✕ 가 생긴다.
+// 시간표 [결제 완료]로 들어온 사용 줄은 여기서 고치지 않는다(시간표에서 고친다).
 
-export default function PrepaidCard({ rows, memberCode, name, onDelete }: {
+export default function PrepaidCard({ rows, memberCode, name, onEdit, onDelete, editingId }: {
   rows: LedgerRow[];
   memberCode?: string;
   name?: string;
+  /** 관리자: 충전·차감 기록 고치기 / 지우기 */
+  onEdit?: (row: LedgerRow) => void;
   onDelete?: (row: LedgerRow) => void;
+  /** 고치는 중인 기록 */
+  editingId?: string;
 }) {
   const left = rows.length ? rows[rows.length - 1].balance : 0;
   const md = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
@@ -29,12 +34,15 @@ export default function PrepaidCard({ rows, memberCode, name, onDelete }: {
         ) : (
           <ul className="py-1 font-mono text-[14px] tabular-nums">
             {rows.map((r, i) => (
-              <li key={i} className="grid grid-cols-[1fr_1fr_1fr] items-center py-1">
+              <li key={i} className={`grid grid-cols-[1fr_1fr_1fr] items-center py-1 ${editingId && r.chargeId === editingId ? 'bg-[#fff6d5] -mx-2 px-2 rounded' : ''}`}>
                 <span className="text-[#444]">{md(r.day)}{r.kind === 'use' && <span className="ml-1 text-[11px] text-[#aaa]">사용</span>}</span>
                 <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : 'text-[#555]'}`} title={r.memo}>
                   {r.kind === 'charge' ? `+${r.count}` : `-${r.count}`}
-                  {r.kind === 'charge' && onDelete && r.chargeId && (
-                    <button type="button" onClick={() => onDelete(r)} aria-label="이 충전 기록 지우기" className="ml-1 text-[11px] text-[#ccc] hover:text-red-400">✕</button>
+                  {onEdit && r.chargeId && (
+                    <button type="button" onClick={() => onEdit(r)} className="ml-1 font-sans text-[10px] text-[#999] border border-[#e4e4e7] rounded px-1 hover:text-[var(--brand)]">수정</button>
+                  )}
+                  {onDelete && r.chargeId && (
+                    <button type="button" onClick={() => onDelete(r)} aria-label="이 기록 지우기" className="ml-1 text-[11px] text-[#ccc] hover:text-red-400">✕</button>
                   )}
                 </span>
                 <span className={`text-right ${r.balance <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.balance}</span>
