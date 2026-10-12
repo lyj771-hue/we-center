@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import type { Child } from '@/lib/timetable';
 import type { PayCount } from '@/lib/timetable';
-import { deleteChild, getChildren, getFixedByChild, getMonthUsage, getPaymentCounts, linkChild, saveChild, setChildUses, setMonthUsage, type UsesKey, type LessonKind, LESSON_KINDS, kindLabel } from '@/lib/timetable';
+import { deleteChild, getChildren, getFixedByChild, getMonthUsage, getPaymentCounts, linkChild, saveChild, setChildUses, setMonthUsage, type UsesKey, type LessonKind, kindLabel } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 import { saveMemberProfile } from '@/lib/store';
 import type { LedgerRow } from '@/lib/prepaid';
@@ -45,6 +45,7 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
   const [failed, setFailed] = useState('');
   // "이번 달 사용" 칸들 접기/펼치기
   const [showMonth, setShowMonth] = useState(true);
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
   // 이번 달 사용 횟수를 직접 적은 값
   const [manual, setManual] = useState<Map<string, Partial<Record<UsesKey, number>>>>(new Map());
   const monthStart = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; })();
@@ -71,12 +72,6 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
   const memberOf = useMemo(() => new Map(members.map(m => [m.userId, m])), [members]);
   // 이번 달 사용 횟수 — 직접 적은 값이 있으면 그 값, 없으면 [결제 완료]로 확정된 횟수
   const usedOf = (k: Child, key: MonthKey) => manual.get(k.id)?.[key] ?? counts.get(k.id)?.[key] ?? 0;
-  // 수업 종류 기본값 (운동 / 구강 / -) — 바로 저장
-  const changeKind = async (k: Child, kind: LessonKind) => {
-    setKids(list => list.map(x => (x.id === k.id ? { ...x, lessonKind: kind } : x)));
-    try { await saveChild({ ...k, lessonKind: kind }); }
-    catch (e) { showAlert(`저장하지 못했어요 — SQL(supabase/lesson-kind.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); load(); }
-  };
   const toggleUses = async (k: Child, key: UsesKey, on: boolean) => {
     setKids(list => list.map(x => (x.id === k.id ? { ...x, uses: { ...(x.uses ?? { voucher: false, gusen: false, kkumideun: false, woojin: false, subsidy: false, prepaid: false }), [key]: on } } : x)));
     try {
@@ -104,12 +99,12 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
 
   // 내려받기 — 지금 화면의 명단(찾기 적용) 그대로
   const exportSheet = (): Sheet => {
-    const head = ['회원 코드', '이름', '수업', '번호', '뒷번호', '승인 여부', '연결된 보호자', ...USES.map(u => u.label), ...MONTH_COLS.map(u => `${u.label} 이번 달 사용`), '선결제 잔여/충전', '고정 수업', '메모'];
+    const head = ['회원 코드', '이름', '번호', '뒷번호', '승인 여부', '연결된 보호자', ...USES.map(u => u.label), ...MONTH_COLS.map(u => `${u.label} 이번 달 사용`), '선결제 잔여/충전', '고정 수업', '메모'];
     const rows = list.map(k => {
       const pc = counts.get(k.id);
       const ck = (key: UsesKey) => (k.uses?.[key] ? 'O' : '');
       return [
-        k.memberCode ?? '', k.name, kindLabel(k.lessonKind) || '-', k.number ?? 1, k.phoneLast4 ?? '', approvalOf(k),
+        k.memberCode ?? '', k.name, k.number ?? 1, k.phoneLast4 ?? '', approvalOf(k),
         k.guardianUserId ? memberOf.get(k.guardianUserId)?.nickname ?? '연결됨' : '',
         ...USES.map(u => ck(u.key)),
         ...MONTH_COLS.map(u => usedOf(k, u.key)),
@@ -118,10 +113,26 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
         k.memo ?? '',
       ];
     });
-    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 5, 7, 8, 12, ...USES.map(() => 7), ...MONTH_COLS.map(() => 10), 12, 40, 20] };
+    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 7, 8, 12, ...USES.map(() => 7), ...MONTH_COLS.map(() => 10), 12, 40, 20] };
   };
   const stamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };
-  const list = kids.filter(k => !q.trim() || `${k.memberCode} ${k.name}${k.number ?? ''}`.includes(q.trim()));
+  // 정렬 — 머리글을 누르면 오름차순 → 내림차순 → 원래대로(회원 코드 순)
+  const sortVal = (k: Child, key: string): string | number => {
+    if (key === 'name') return `${k.name}${String(k.number ?? 1).padStart(3, '0')}`;
+    if (key.startsWith('uses:')) return k.uses?.[key.slice(5) as UsesKey] ? 1 : 0;
+    if (key.startsWith('month:')) return usedOf(k, key.slice(6) as MonthKey);
+    if (key === 'prepaid') return (k.prepaidTotal ?? 0) - (counts.get(k.id)?.prepaid ?? 0);
+    return k.memberCode ?? '';
+  };
+  const filtered = kids.filter(k => !q.trim() || `${k.memberCode} ${k.name}${k.number ?? ''}`.includes(q.trim()));
+  const list = sort ? [...filtered].sort((a, b) => {
+    const x = sortVal(a, sort.key), y = sortVal(b, sort.key);
+    const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ko');
+    return (sort.dir === 'asc' ? c : -c) || (a.memberCode ?? '').localeCompare(b.memberCode ?? '');
+  }) : filtered;
+  const sortBy = (key: string) => setSort(cur => (!cur || cur.key !== key ? { key, dir: 'asc' } : cur.dir === 'asc' ? { key, dir: 'desc' } : null));
+  const arrow = (key: string) => <span className={`ml-0.5 text-[9px] ${sort?.key === key ? 'text-[var(--brand)]' : 'text-[#ddd]'}`}>{sort?.key === key ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}</span>;
+  const sortTh = 'cursor-pointer select-none hover:text-[#555]';
 
   const start = (k?: Child) => {
     setEditing(k ? k.id : 'new');
@@ -177,11 +188,10 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
             <tr className="border-b border-[#e5e5e5]">
               <th className={th}>카카오계정번호</th>
               <th className={th}>회원 코드</th>
-              <th className={th}>이름</th>
-              <th className={`${th} text-center`} title="이 아이 수업 종류 기본값 — 시간표에 넣을 때 처음 골라져요">수업</th>
+              <th className={`${th} ${sortTh}`} onClick={() => sortBy('name')} title="이름순 정렬">이름{arrow('name')}</th>
               <th className={`${th} text-center`} title="같은 이름 구분 번호 — 없으면 1">번호</th>
               <th className={th}>뒷번호</th>
-              {USES.map(c => <th key={c.key} className={`${th} text-center`} title={`${c.label}를 쓰는 아이면 체크`}>{c.label}</th>)}
+              {USES.map(c => <th key={c.key} className={`${th} text-center ${sortTh}`} onClick={() => sortBy(`uses:${c.key}`)} title={`${c.label}를 쓰는 아이면 체크 · 눌러서 정렬`}>{c.label}{arrow(`uses:${c.key}`)}</th>)}
               <th className={`${th} text-center px-1`}>
                 <button type="button" onClick={() => setShowMonth(v => !v)} aria-expanded={showMonth}
                   title={showMonth ? '이번 달 사용 칸 접기' : '이번 달 사용 칸 펼치기'}
@@ -189,8 +199,8 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
                   이번 달 사용 {showMonth ? '◂' : '▸'}
                 </button>
               </th>
-              {showMonth && MONTH_COLS.map(c => <th key={c.key} className={`${th} text-center`} title="이번 달 사용 횟수 — 직접 고쳐 적을 수 있어요(비우면 [결제 완료]로 센 횟수)">{c.label}<span className="block text-[10px] text-[#bbb]">이번 달 사용</span></th>)}
-              <th className={`${th} text-center`}>선결제<span className="block text-[10px] text-[#bbb]">잔여/충전</span></th>
+              {showMonth && MONTH_COLS.map(c => <th key={c.key} className={`${th} text-center ${sortTh}`} onClick={() => sortBy(`month:${c.key}`)} title="이번 달 사용 횟수 — 직접 고쳐 적을 수 있어요(비우면 [결제 완료]로 센 횟수) · 눌러서 정렬">{c.label}{arrow(`month:${c.key}`)}<span className="block text-[10px] text-[#bbb]">이번 달 사용</span></th>)}
+              <th className={`${th} text-center ${sortTh}`} onClick={() => sortBy('prepaid')} title="선결제 잔여순 정렬">선결제{arrow('prepaid')}<span className="block text-[10px] text-[#bbb]">잔여/충전</span></th>
               <th className={th}>고정 수업</th>
               <th className={th}>연결된 보호자 계정</th>
               <th className={th}>승인 여부</th>
@@ -211,12 +221,6 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
                 <td className={`${td} text-[12px] text-[#999] whitespace-nowrap tabular-nums`}>{k.guardianUserId ? memberOf.get(k.guardianUserId)?.kakaoId || '-' : <span className="text-[#ddd]">-</span>}</td>
                 <td className={`${td} text-[12px] text-[#888] whitespace-nowrap tabular-nums`}>{k.memberCode}</td>
                 <td className={`${td} whitespace-nowrap`}>{k.name}</td>
-                <td className={`${td} text-center`}>
-                  <select value={k.lessonKind ?? ''} onChange={e => changeKind(k, (e.target.value || null) as LessonKind)} aria-label={`${k.name} 수업`}
-                    className={`text-[12px] border border-[#e5e5e5] bg-white px-1.5 py-0.5 ${k.lessonKind ? 'text-[#27272a]' : 'text-[#bbb]'}`}>
-                    {LESSON_KINDS.map(o => <option key={o.label} value={o.key ?? ''}>{o.label}</option>)}
-                  </select>
-                </td>
                 {/* 같은 이름 구분 번호 — 비어 있으면 1 (시간표에는 번호가 있는 아이만 이름 앞에 붙는다) */}
                 <td className={`${td} text-center text-[13px] tabular-nums ${k.number ? '' : 'text-[#aaa]'}`}>{k.number ?? 1}</td>
                 <td className={`${td} text-[12px] whitespace-nowrap tabular-nums`}>{k.phoneLast4 ?? <span className="text-[#ccc]">-</span>}</td>
@@ -392,7 +396,6 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, showMon
       <td className={td}>
         <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="이름" className={`${input} w-24`} autoFocus />
       </td>
-      <td className={`${td} text-center text-[11px] text-[#ccc]`}>-</td>
       <td className={`${td} text-center`}>
         <input value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value.replace(/\D/g, '') }))} placeholder="1" className={`${input} w-10 text-center`} />
       </td>

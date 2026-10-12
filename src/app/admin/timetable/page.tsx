@@ -273,6 +273,14 @@ export default function TimetablePage() {
     setPicking(null);
   };
 
+  // 표에서 이름 옆 수업 종류 바꾸기 — 고정 수업이면 이 날부터(날짜별) / 오늘부터(고정 시간표), 그날 칸이면 그날만
+  const changeKind = (e: Editing, kind: LessonKind) => {
+    const c = e.cell;
+    if (c.status !== 'child') return;
+    const input: CellInput = { status: 'child', childId: c.childId ?? null, name: c.name, payment: c.payment, kind, absent: c.absent, moved: c.moved, note: c.note };
+    stage(e, input, mode === 'day' && e.side === 'fixed' && c.source === 'fixed');
+  };
+
   // 그날 이 선생님 칸을 모두 비우는 변경들 — 고정 칸은 "이 날만 비우기", 그날 넣은 빈타임 칸은 지운다(보호자 신청은 그대로)
   const clearDayOps = (tid: string, auto: boolean): Op[] => {
     const out: Op[] = [];
@@ -545,7 +553,8 @@ export default function TimetablePage() {
                         left={
                           <td className={`${td} min-w-[84px] ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
                             {/* 빈타임에 아이가 채워지면 옆 고정 칸은 회색으로 흐리게 */}
-                            <CellText cell={left} label={ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} />
+                            <CellText cell={left} label={ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'}
+                              onKind={k => changeKind({ teacher: t, time, side: 'fixed', cell: left }, k)} />
                           </td>
                         }
                         right={mode === 'day' ? (<>
@@ -555,7 +564,8 @@ export default function TimetablePage() {
                             const b = e.currentTarget.getBoundingClientRect();
                             setPicking({ teacher: t, time, side: 'open', cell: right, rect: { left: b.left, top: b.top, bottom: b.bottom } });
                           }}>
-                            <CellText cell={right} label={ROW_LABEL[time]} />
+                            <CellText cell={right} label={ROW_LABEL[time]}
+                              onKind={right.source === 'booking' ? undefined : k => changeKind({ teacher: t, time, side: 'open', cell: right }, k)} />
                           </td>
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
@@ -645,7 +655,7 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
 }
 
 /** 칸 글자 — 3김채현 처럼 (숫자 + 이름) */
-function CellText({ cell, label, muted }: { cell: CellView; label?: string; muted?: boolean }) {
+function CellText({ cell, label, muted, onKind }: { cell: CellView; label?: string; muted?: boolean; onKind?: (k: LessonKind) => void }) {
   if (cell.status === 'empty' || cell.status === 'none') {
     return label ? <span className="text-[#c4c4cc]">{label}</span> : null;
   }
@@ -654,7 +664,14 @@ function CellText({ cell, label, muted }: { cell: CellView; label?: string; mute
   return (
     <span title={cell.note} className={`${muted ? 'text-[#8a8a93]' : 'text-[#27272a]'} ${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-50' : ''}`}>
       {cell.name}{cell.number ?? ''}
-      {kindLabel(cell.kind) && <span className="ml-0.5 text-[9px] text-[#71717a]">{kindLabel(cell.kind)}</span>}
+      {/* 수업 종류 — 이름 옆에서 바로 고른다 (운동 / 구강 / -) */}
+      {onKind ? (
+        <select value={cell.kind ?? ''} onClick={e => e.stopPropagation()} onChange={e => onKind((e.target.value || null) as LessonKind)}
+          aria-label={`${cell.name} 수업 종류`} title="수업 종류"
+          className={`ml-1 appearance-none bg-transparent text-[10px] leading-none rounded px-0.5 py-0.5 border cursor-pointer ${cell.kind ? 'border-[#d4d4d8] text-[#52525b]' : 'border-dashed border-[#e4e4e7] text-[#c4c4cc]'}`}>
+          {LESSON_KINDS.map(o => <option key={o.label} value={o.key ?? ''}>{o.label}</option>)}
+        </select>
+      ) : kindLabel(cell.kind) && <span className="ml-0.5 text-[9px] text-[#71717a]">{kindLabel(cell.kind)}</span>}
       {cell.absent && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">결석</span>}
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
