@@ -65,7 +65,6 @@ export default function DashboardPage() {
   const shown = teachers.filter(t => grid.has(t.id) || center === 'all' || t.centers.includes(center));
   const unknown = grid.has('?');
   const cellMax = Math.max(1, ...[...grid.values()].flatMap(m => [...m.values()]));
-  const teacherMax = Math.max(1, ...shown.map(t => totalOf(t.id)));
   const [y, m] = month.split('-').map(Number);
 
   const sheet = (): Sheet => ({
@@ -132,7 +131,7 @@ export default function DashboardPage() {
               <tr className="border-b border-[#eee] bg-[#fafafa]">
                 <th className={`${th} text-left sticky left-0 bg-[#fafafa]`}>선생님</th>
                 {METHODS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
-                <th className={`${th} text-left min-w-[160px]`}>합계</th>
+                <th className={`${th} text-center`}>합계</th>
               </tr>
             </thead>
             <tbody>
@@ -149,20 +148,14 @@ export default function DashboardPage() {
                         </td>
                       );
                     })}
-                    <td className="px-3 py-2">
-                      {/* 합계 — 막대(가장 많은 선생님 기준) + 숫자 */}
-                      <span className="flex items-center gap-2" title={`${t.name} 합계 ${total}회`}>
-                        <span className="h-2.5 rounded-r-[4px] bg-[var(--brand)]" style={{ width: `${(total / teacherMax) * 100}px`, minWidth: total ? 4 : 0 }} />
-                        <span className="tabular-nums text-[13px] text-[#27272a]">{total}</span>
-                      </span>
-                    </td>
+                    <td className="px-3 py-2 text-center tabular-nums text-[13px] text-[#27272a]" title={`${t.name} 합계 ${total}회`}>{total}</td>
                   </tr>
                 );
               })}
               <tr className="bg-[#fafafa]">
                 <td className="px-3 py-2.5 text-[13px] text-[#888] sticky left-0 bg-[#fafafa]">합계</td>
                 {METHODS.map(x => <td key={x.key} className="px-1 py-2.5 text-center tabular-nums text-[13px] text-[#555]">{methodTotal(x.key)}</td>)}
-                <td className="px-3 py-2.5 tabular-nums text-[13px] text-[#27272a]">{done.length}</td>
+                <td className="px-3 py-2.5 text-center tabular-nums text-[13px] text-[#27272a]">{done.length}</td>
               </tr>
             </tbody>
           </table>
