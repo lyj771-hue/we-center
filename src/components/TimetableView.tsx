@@ -609,7 +609,7 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
                         {kc.status === 'child' && !locked(kc) && kc.source !== 'booking' ? (
                           <select value={kc.kind ?? ''} onChange={e => changeKind({ teacher: t, time, side: kSide, cell: kc }, (e.target.value || null) as LessonKind)}
                             aria-label={`${kc.name} 수업 종류`} title="수업 종류 (운동 / 구강 / -)"
-                            className={`w-full appearance-none bg-transparent text-center text-[11px] cursor-pointer outline-none ${kc.kind ? 'text-[#52525b]' : 'text-[#d4d4d8]'} ${view.pend.has(`${kSide}|${t.id}|${time}`) ? 'bg-[#fff6d5]' : ''}`}>
+                            className={`w-full appearance-none bg-transparent text-center [text-align-last:center] px-0 text-[11px] cursor-pointer outline-none ${kc.kind ? 'text-[#52525b]' : 'text-[#d4d4d8]'} ${view.pend.has(`${kSide}|${t.id}|${time}`) ? 'bg-[#fff6d5]' : ''}`}>
                             {LESSON_KINDS.map(o => <option key={o.label} value={o.key ?? ''}>{o.label}</option>)}
                           </select>
                         ) : kc.status === 'child' && !locked(kc) ? <span className="text-[11px] text-[#71717a]">{kindLabel(kc.kind)}</span> : null}
