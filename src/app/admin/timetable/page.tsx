@@ -7,10 +7,10 @@ import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFi
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
-import type { CellInput, CellView, Center, Child, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
+import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import {
-  CENTERS, PAY_METHODS, ROW_LABEL, cellOf, deleteFixed, getDayAssigns, getDayPayments, getPaymentCounts, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
-  rowsForDay, rowsForWeekday, saveDayCell, saveFixed, syncTimetable,
+  CENTERS, LESSON_KINDS, PAY_METHODS, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getPaymentCounts, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
+  rowsForDay, rowsForWeekday, saveDayCell, syncTimetable,
 } from '@/lib/timetable';
 
 // 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임 | 결제방식] 세 칸.
@@ -147,7 +147,7 @@ export default function TimetablePage() {
     const hols = await getKoreanHolidays(String(y)).catch(() => [] as string[]);
     const label = (k?: PayMethod) => PAY_METHODS.find(x => x.key === k)?.label ?? '';
     const txt = (c: CellView) => c.status === 'undecided' ? '?' : c.status === 'off' ? '수업 안 함' : c.status !== 'child' ? ''
-      : `${c.name ?? ''}${c.number ?? ''}${c.absent ? ' 결석' : ''}${c.moved ? ' 옮김' : ''}${c.source === 'booking' ? ' (신청)' : ''}`;
+      : `${c.name ?? ''}${c.number ?? ''}${kindLabel(c.kind) ? ` ${kindLabel(c.kind)}` : ''}${c.absent ? ' 결석' : ''}${c.moved ? ' 옮김' : ''}${c.source === 'booking' ? ' (신청)' : ''}`;
     const perDay: Record<string, Cell[][]> = {};
     for (let i = 0; i < days.length; i += 4) {
       await Promise.all(days.slice(i, i + 4).map(async dd => {
@@ -221,7 +221,7 @@ export default function TimetablePage() {
 
   // 표에 보이는 칸 = 디비 칸 + 저장 안 한 변경. pend = 바뀐 칸("fixed|선생님|시간" / "open|…")
   const preview = useCallback((i: CellInput): CellView => i.status === 'child'
-    ? { status: 'child', name: i.name, number: children.find(c => c.id === i.childId)?.number, payment: i.payment ?? '', oral: !!i.oral, absent: !!i.absent, moved: !!i.moved, note: i.note || undefined, childId: i.childId ?? undefined, source: 'override' }
+    ? { status: 'child', name: i.name, number: children.find(c => c.id === i.childId)?.number, payment: i.payment ?? '', oral: i.kind !== undefined ? i.kind === 'oral' : !!i.oral, kind: i.kind ?? (i.oral ? 'oral' : null), absent: !!i.absent, moved: !!i.moved, note: i.note || undefined, childId: i.childId ?? undefined, source: 'override' }
     : { status: i.status, payment: '', oral: false, absent: false, moved: false, source: 'override' }, [children]);
   const view = useMemo(() => {
     const fixed = new Map(board.fixed), open = new Map(board.open);
@@ -322,9 +322,11 @@ export default function TimetablePage() {
       await resetDayCell(day, o.teacherId, o.time, 'fixed', center);
       await syncTimetable({ action: 'fixedFrom', from: day, teacherId: o.teacherId, weekday: d.getDay(), time: o.time, center, input: o.input });
     } else if (o.kind === 'fixed') {
-      if (o.input === 'reset' || o.input.status !== 'child') await deleteFixed(weekday, o.teacherId, o.time, center);
-      else await saveFixed(weekday, o.teacherId, o.time, o.input, center);
-      sync({ action: 'fixed', teacherId: o.teacherId, weekday, time: o.time, center, start: o.start });
+      // 고정 시간표에서 고친 것도 오늘부터 앞으로만 (지난 날짜·캘린더 지난 일정은 그대로) — 아이·수업 종류·결제방식 모두
+      await syncTimetable({
+        action: 'fixedFrom', from: toYmd(new Date()), teacherId: o.teacherId, weekday, time: o.time, center,
+        input: o.input === 'reset' || o.input.status !== 'child' ? null : o.input,
+      });
     } else {
       if (o.input === 'reset') await resetDayCell(day, o.teacherId, o.time, o.side, center);
       else await saveDayCell(day, o.teacherId, o.time, o.side, o.input, center);
@@ -628,7 +630,7 @@ export default function TimetablePage() {
         <Portal><ChildPicker
           picking={picking}
           kids={children}
-          onPick={c => stage(picking, { status: 'child', childId: c.id, name: c.name, payment: '', oral: !!c.oral, absent: false, moved: false })}
+          onPick={c => stage(picking, { status: 'child', childId: c.id, name: c.name, payment: '', kind: c.lessonKind ?? null, absent: false, moved: false })}
           onSave={input => stage(picking, input)}
           onMore={() => { setEditing(picking); setPicking(null); }}
           onClose={() => setPicking(null)}
@@ -652,6 +654,7 @@ function CellText({ cell, label, muted }: { cell: CellView; label?: string; mute
   return (
     <span title={cell.note} className={`${muted ? 'text-[#8a8a93]' : 'text-[#27272a]'} ${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-50' : ''}`}>
       {cell.name}{cell.number ?? ''}
+      {kindLabel(cell.kind) && <span className="ml-0.5 text-[9px] text-[#71717a]">{kindLabel(cell.kind)}</span>}
       {cell.absent && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">결석</span>}
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
@@ -778,7 +781,8 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
     return k ? disp(k) : cell.name ?? '';
   });
   const [payment, setPayment] = useState(cell.payment);
-  const [oral, setOral] = useState(cell.oral);
+  // 수업 종류 — 운동 / 구강 / 없음. 아이를 고르면 그 아이 기본값으로
+  const [kind, setKind] = useState<LessonKind>(cell.kind ?? (cell.oral ? 'oral' : null));
   const [absent, setAbsent] = useState(cell.absent);
   const [moved, setMoved] = useState(cell.moved);
   const [note, setNote] = useState(cell.note ?? '');
@@ -786,14 +790,17 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
 
   const pickName = (v: string) => {
     setName(v);
-    // 결제는 아이가 아니라 이 자리(요일·시간)마다 정한다 — 아이를 바꿔도 결제방식은 그대로
+    // 결제는 아이가 아니라 이 자리(요일·시간)마다 정한다 — 아이를 바꿔도 결제방식은 그대로.
+    // 수업 종류는 다른 아이로 바꿀 때 그 아이 기본값으로
+    const c = kids.find(x => disp(x) === v.trim());
+    if (c && c.id !== cell.childId) setKind(c.lessonKind ?? null);
   };
 
 
   const save = () => {
     // (빈타임 칸) 이름을 비우고 저장 — 원래대로
     if (!name.trim()) { onSave('reset'); return; }
-    onSave({ status: 'child', childId: child?.id ?? null, name: child?.name ?? name.trim(), payment, oral, absent, moved, note });
+    onSave({ status: 'child', childId: child?.id ?? null, name: child?.name ?? name.trim(), payment, kind, absent, moved, note });
   };
 
   const isBooking = cell.source === 'booking';
@@ -808,7 +815,7 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
         onSave(mode === 'day' ? { status: 'none' } : 'reset', mode === 'day');
         return;
       }
-      onSave({ status: 'child', childId: child?.id ?? null, name: child?.name ?? name.trim(), payment, oral, absent: false, moved: false }, mode === 'day');
+      onSave({ status: 'child', childId: child?.id ?? null, name: child?.name ?? name.trim(), payment, kind, absent: false, moved: false }, mode === 'day');
     };
     return (
       <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
@@ -824,7 +831,11 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
           </label>
           {name.trim() && !child && <p className="text-[11px] text-red-400 -mt-2">아이 명단에 없는 이름이에요. 명단에서 골라 주세요.</p>}
           <div className="flex items-center gap-4 text-[13px]">
-            <label className="flex items-center gap-1.5"><input type="checkbox" checked={oral} onChange={e => setOral(e.target.checked)} />구강</label>
+            <label className="flex items-center gap-1.5">수업
+              <select value={kind ?? ''} onChange={e => setKind((e.target.value || null) as LessonKind)} className="border border-[#ddd] px-2 py-1 text-[13px] bg-white">
+                {LESSON_KINDS.map(k => <option key={k.label} value={k.key ?? ''}>{k.label}</option>)}
+              </select>
+            </label>
             <label className="flex items-center gap-1.5">
               결제방식
               <select value={base ?? ''} onChange={e => setPayment(PAY_METHODS.find(m => m.key === e.target.value)?.short ?? '')}
@@ -836,11 +847,11 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
           </div>
           <div className="flex flex-wrap gap-1.5">
             <button onClick={saveFixedSeat} disabled={!!name.trim() && !child} className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white disabled:opacity-40`}>
-              {mode === 'day' ? '이 날부터 반영' : '저장'}
+              {mode === 'day' ? '이 날부터 반영' : '오늘부터 반영'}
             </button>
             <button onClick={onClose} className={`${chip} border-transparent text-[#888]`}>닫기</button>
           </div>
-          {mode === 'day' && <p className="text-[11px] text-[#aaa] leading-[1.7]">[스케줄 변경 완료]를 누르면 {dayLabel}부터 매주 이렇게 바뀌고, 선생님 구글 캘린더도 그날부터 바뀌어요. 지난 날짜는 그대로 남아요.</p>}
+          <p className="text-[11px] text-[#aaa] leading-[1.7]">[스케줄 변경 완료]를 누르면 {mode === 'day' ? dayLabel : '오늘'}부터 매주 이렇게(아이·수업·결제방식) 바뀌고, 선생님 구글 캘린더도 그날부터 바뀌어요. 지난 날짜는 그대로 남아요.</p>
         </div>
       </div>
     );
@@ -871,7 +882,11 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
         {child?.number !== undefined && <p className="text-[11px] text-[#999] -mt-2">아이 명단: {child.number}{child.name}</p>}
 
         <div className="flex flex-wrap gap-3 text-[13px]">
-          <label className="flex items-center gap-1.5"><input type="checkbox" checked={oral} onChange={e => setOral(e.target.checked)} />구강(S)</label>
+          <label className="flex items-center gap-1.5">수업
+              <select value={kind ?? ''} onChange={e => setKind((e.target.value || null) as LessonKind)} className="border border-[#ddd] px-2 py-1 text-[13px] bg-white">
+                {LESSON_KINDS.map(k => <option key={k.label} value={k.key ?? ''}>{k.label}</option>)}
+              </select>
+            </label>
           {mode === 'day' && <label className="flex items-center gap-1.5"><input type="checkbox" checked={absent} onChange={e => setAbsent(e.target.checked)} />결석(x)</label>}
           {mode === 'day' && <label className="flex items-center gap-1.5"><input type="checkbox" checked={moved} onChange={e => setMoved(e.target.checked)} />다른 선생님에게 옮김</label>}
         </div>

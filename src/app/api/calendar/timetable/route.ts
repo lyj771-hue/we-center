@@ -40,7 +40,8 @@ function lessonText(r: Row, child: Row | undefined, kind: '고정' | '빈타임'
   const name = (r.name as string) || (child?.name as string) || '';
   const pay = (r.payment as string) || '';
   const code = (child?.member_code as string) || undefined;
-  const summary = `${r.oral ? 'S' : ''}${name}${child?.number ?? ''}${pay}${absent ? ' 결석' : ''}`;   // 이름 뒤에 동명이인 숫자
+  const kindText = r.kind === 'exercise' ? '운동' : r.kind === 'oral' || (r.kind == null && r.oral) ? '구강' : '';
+  const summary = `${name}${child?.number ?? ''}${kindText ? ` ${kindText}` : ''}${pay ? ` ${pay}` : ''}${absent ? ' 결석' : ''}`;   // 이름 뒤에 동명이인 숫자·수업 종류
   const lines = [`WE 소아재활센터${centerName && centerName !== '은평' ? ` ${centerName}` : ''} ${kind} 수업`];
   if (code) lines.push(`회원 코드 ${code}`);
   if (pay) lines.push(`결제 ${pay.split('').map(c => PAY[c] ?? c).join('/')}`);
@@ -161,7 +162,7 @@ export async function POST(request: Request) {
     if (body.action === 'fixedFrom') {
       const { from, teacherId, weekday, time, input } = body as {
         from: string; teacherId: string; weekday: number; time: string;
-        input: { childId?: string | null; name?: string; payment?: string; oral?: boolean } | null;
+        input: { childId?: string | null; name?: string; payment?: string; oral?: boolean; kind?: 'exercise' | 'oral' | null } | null;
       };
       const center = (body.center as string) ?? 'eunpyeong';
       const cal = calOf.get(teacherId);
@@ -176,7 +177,7 @@ export async function POST(request: Request) {
         const rows: Row[] = [];
         for (let d = firstDayFor(weekday, startOf(old)); d < from; d = ymd(new Date(new Date(`${d}T00:00:00Z`).getTime() + 7 * 86400000))) {
           if (has.has(d) || holidays.includes(d)) continue;
-          rows.push({ center, day: d, teacher_id: teacherId, time, side: 'fixed', status: 'child', child_id: old.child_id, name: old.name, payment: old.payment, oral: old.oral, absent: false, moved: false });
+          rows.push({ center, day: d, teacher_id: teacherId, time, side: 'fixed', status: 'child', child_id: old.child_id, name: old.name, payment: old.payment, oral: old.oral, ...(old.kind !== undefined ? { kind: old.kind } : {}), absent: false, moved: false });
         }
         if (rows.length) {
           const { error } = await db.from('board_cells').insert(rows);
@@ -192,7 +193,10 @@ export async function POST(request: Request) {
 
       // 3) 새 고정 수업 (이름을 비우면 이 날부터 고정 수업 없음)
       if (input && (input.name ?? '').trim()) {
-        const row = { center, weekday, teacher_id: teacherId, time, child_id: input.childId ?? null, name: input.name!.trim(), payment: (input.payment ?? '').trim(), oral: !!input.oral, start_date: from };
+        const row = {
+          center, weekday, teacher_id: teacherId, time, child_id: input.childId ?? null, name: input.name!.trim(), payment: (input.payment ?? '').trim(),
+          oral: input.kind !== undefined ? input.kind === 'oral' : !!input.oral, ...(input.kind !== undefined ? { kind: input.kind } : {}), start_date: from,
+        };
         const { error } = await db.from('fixed_lessons').upsert(row, { onConflict: 'center,teacher_id,weekday,time' });
         if (error) throw new Error(error.message);
         if (cal) {

@@ -255,6 +255,7 @@ export default function MembersPage() {
               <th className={th}>뒷번호</th>
               <th className={th}>설명</th>
               {filter !== 'waiting' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
+              {filter !== 'waiting' && <th className={`${th} text-center`}>선결제</th>}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
               <th className={th}><span className="sr-only">관리</span></th>
             </tr>
@@ -299,6 +300,23 @@ export default function MembersPage() {
                         onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />
                     </td>
                   ))}
+                  {filter !== 'waiting' && (
+                    <td className={`${td} text-center`}>
+                      {/* 선결제 — 아이 명단의 체크와 같은 칸(연결된 아이가 있어야 체크할 수 있다) */}
+                      <input type="checkbox" checked={!!kidOf(m.userId)?.uses?.prepaid} disabled={!kidOf(m.userId)}
+                        title={kidOf(m.userId) ? '선결제를 쓰는 아이' : '아이 명단과 연결된 뒤에 체크할 수 있어요'}
+                        onChange={async e => {
+                          const k = kidOf(m.userId);
+                          if (!k) return;
+                          const on = e.target.checked;
+                          try {
+                            await setChildUses(k.id, 'prepaid', on);
+                            setKids(list => list.map(x => (x.id === k.id && x.uses ? { ...x, uses: { ...x.uses, prepaid: on } } : x)));
+                          } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
+                        }}
+                        className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
+                    </td>
+                  )}
                   {SHOW_PREPAID && (
                   <td className={`${td} whitespace-nowrap`}>
                     {on ? (

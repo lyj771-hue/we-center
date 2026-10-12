@@ -10,8 +10,10 @@ export interface Child {
   /** 회원 코드 (W0001 …) — 가입한 보호자 계정과 이을 때 쓴다 */
   memberCode?: string;
   name: string;
-  /** 구강 수업 아이 (S) */
+  /** 구강 수업 아이 (예전 칸 — lessonKind 와 맞춘다) */
   oral?: boolean;
+  /** 이 아이 수업 종류 기본값 — 시간표에 넣을 때 처음 고른다 */
+  lessonKind?: LessonKind;
   /** 대표 보호자 전화번호 뒷 4자리 */
   phoneLast4?: string;
   /** 한 달 제공 횟수(0 = 안 씀) — 바우처·굳센·꿈이든. 선결제는 지금까지 충전한 횟수 */
@@ -26,6 +28,13 @@ export interface Child {
   /** 쓰는 결제 (아이 명단 체크박스) */
   uses?: UsesFlags;
 }
+
+/** 수업 종류 — 운동 / 구강 / 없음(null, "-") */
+export type LessonKind = 'exercise' | 'oral' | null;
+export const LESSON_KINDS: { key: LessonKind; label: string }[] = [{ key: 'exercise', label: '운동' }, { key: 'oral', label: '구강' }, { key: null, label: '-' }];
+export const kindLabel = (k?: LessonKind) => (k === 'exercise' ? '운동' : k === 'oral' ? '구강' : '');
+/** 칸·고정 수업 줄 → 수업 종류 (kind 가 없던 예전 줄은 구강 체크로) */
+const kindOf = (r: Record<string, unknown>): LessonKind => (r.kind === 'exercise' || r.kind === 'oral' ? r.kind : r.oral ? 'oral' : null);
 
 export type UsesKey = 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid';
 export type UsesFlags = Record<UsesKey, boolean>;
@@ -42,6 +51,8 @@ export interface CellView {
   number?: number;
   payment: string;
   oral: boolean;
+  /** 수업 종류 (운동 / 구강 / 없음) */
+  kind?: LessonKind;
   absent: boolean;
   moved: boolean;
   note?: string;
@@ -58,6 +69,7 @@ export interface CellInput {
   name?: string;
   payment?: string;
   oral?: boolean;
+  kind?: LessonKind;
   absent?: boolean;
   moved?: boolean;
   note?: string;
@@ -90,7 +102,7 @@ export async function getChildren(): Promise<Child[]> {
   const { data, error } = await supabase.from('children').select('*').order('name');
   if (error) throw error;
   return (data ?? []).map(r => ({
-    id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral, phoneLast4: r.phone_last4 ?? undefined,
+    id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral, lessonKind: r.lesson_kind === 'exercise' || r.lesson_kind === 'oral' ? r.lesson_kind : r.oral ? 'oral' : null, phoneLast4: r.phone_last4 ?? undefined,
     voucherLimit: r.voucher_limit ?? 0, gusenLimit: r.gusen_limit ?? 0, kkumideunLimit: r.kkumideun_limit ?? 0, prepaidTotal: r.prepaid_total ?? 0,
     number: r.number ?? undefined, memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
@@ -125,6 +137,7 @@ export async function setMonthUsage(childId: string, month: string, method: Uses
 export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise<void> {
   const row = {
     name: c.name.trim(), number: c.number ?? null, memo: c.memo?.trim() || null, oral: !!c.oral,
+    ...(c.lessonKind !== undefined ? { lesson_kind: c.lessonKind, oral: c.lessonKind === 'oral' } : {}),
     phone_last4: c.phoneLast4 && /^\d{4}$/.test(c.phoneLast4) ? c.phoneLast4 : null,
     ...(c.voucherLimit !== undefined ? { voucher_limit: Math.max(0, Math.floor(c.voucherLimit) || 0) } : {}),
     ...(c.gusenLimit !== undefined ? { gusen_limit: Math.max(0, Math.floor(c.gusenLimit) || 0) } : {}),
@@ -147,15 +160,15 @@ export async function linkChild(childId: string, userId: string | null): Promise
 }
 
 /** 아이별 고정 수업 — 아이 id → ["월 14:00 이정길 b", …] */
-export async function getFixedByChild(): Promise<Map<string, { weekday: number; time: string; teacher: string; payment: string; oral: boolean }[]>> {
-  const { data, error } = await supabase.from('fixed_lessons').select('child_id, weekday, time, payment, oral, teachers(name, sort_order)').order('weekday').order('time');
+export async function getFixedByChild(): Promise<Map<string, { weekday: number; time: string; teacher: string; payment: string; oral: boolean; kind: LessonKind }[]>> {
+  const { data, error } = await supabase.from('fixed_lessons').select('*, teachers(name, sort_order)').order('weekday').order('time');
   if (error) throw error;
-  const m = new Map<string, { weekday: number; time: string; teacher: string; payment: string; oral: boolean }[]>();
+  const m = new Map<string, { weekday: number; time: string; teacher: string; payment: string; oral: boolean; kind: LessonKind }[]>();
   for (const r of data ?? []) {
     if (!r.child_id) continue;
     const t = r.teachers as unknown as { name: string } | null;
     const list = m.get(r.child_id) ?? [];
-    list.push({ weekday: r.weekday, time: r.time, teacher: t?.name ?? '', payment: r.payment ?? '', oral: !!r.oral });
+    list.push({ weekday: r.weekday, time: r.time, teacher: t?.name ?? '', payment: r.payment ?? '', oral: !!r.oral, kind: kindOf(r) });
     m.set(r.child_id, list);
   }
   return m;
@@ -180,6 +193,7 @@ function fromRow(r: Row, source: CellView['source'], children: Map<string, Child
     number: child?.number,
     payment: (r.payment as string) ?? '',
     oral: !!r.oral,
+    kind: kindOf(r),
     absent: !!r.absent,
     moved: !!r.moved,
     note: (r.note as string) ?? undefined,
@@ -261,7 +275,8 @@ const toRow = (c: CellInput) => ({
   child_id: c.childId ?? null,
   name: c.name?.trim() || null,
   payment: c.payment?.trim() ?? '',
-  oral: !!c.oral,
+  oral: c.kind !== undefined ? c.kind === 'oral' : !!c.oral,
+  ...(c.kind !== undefined ? { kind: c.kind } : {}),
   absent: !!c.absent,
   moved: !!c.moved,
   note: c.note?.trim() || null,
@@ -285,7 +300,8 @@ export async function resetDayCell(day: string, teacherId: string, time: string,
 /** 요일 고정 수업 저장 */
 export async function saveFixed(weekday: number, teacherId: string, time: string, c: CellInput, center: Center = 'eunpyeong'): Promise<void> {
   const { error } = await supabase.from('fixed_lessons').upsert(
-    { center, weekday, teacher_id: teacherId, time, child_id: c.childId ?? null, name: c.name?.trim() ?? '', payment: c.payment?.trim() ?? '', oral: !!c.oral },
+    { center, weekday, teacher_id: teacherId, time, child_id: c.childId ?? null, name: c.name?.trim() ?? '', payment: c.payment?.trim() ?? '',
+      oral: c.kind !== undefined ? c.kind === 'oral' : !!c.oral, ...(c.kind !== undefined ? { kind: c.kind } : {}) },
     { onConflict: 'center,teacher_id,weekday,time' },
   );
   if (error) throw error;

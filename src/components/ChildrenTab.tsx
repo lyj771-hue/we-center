@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import type { Child } from '@/lib/timetable';
 import type { PayCount } from '@/lib/timetable';
-import { deleteChild, getChildren, getFixedByChild, getMonthUsage, getPaymentCounts, linkChild, saveChild, setChildUses, setMonthUsage, type UsesKey } from '@/lib/timetable';
+import { deleteChild, getChildren, getFixedByChild, getMonthUsage, getPaymentCounts, linkChild, saveChild, setChildUses, setMonthUsage, type UsesKey, type LessonKind, LESSON_KINDS, kindLabel } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 import { saveMemberProfile } from '@/lib/store';
 import type { LedgerRow } from '@/lib/prepaid';
@@ -20,8 +20,8 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 // 고정 자리 결제 글자 → 이름 (표에는 영어 글자 대신 이름으로)
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈이든', 선: '선결제', 카: '신용카드', 현: '현금' };
 
-type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean };
-const emptyForm = { name: '', number: '', oral: false, memo: '', guardian: '', phone: '', vl: '0', gl: '0', kl: '0', pt: '0' };
+type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean; kind: LessonKind };
+const emptyForm = { name: '', number: '', memo: '', guardian: '', phone: '', vl: '0', gl: '0', kl: '0', pt: '0' };
 
 // 결제 칸 — 쓰는 결제 체크(바우처·굳센·꿈이든·선결제), 이번 달 사용 횟수(바우처·굳센·꿈이든, 직접 적을 수 있음), 선결제 잔여
 const USES: { key: UsesKey; label: string }[] = [
@@ -68,6 +68,12 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
   const memberOf = useMemo(() => new Map(members.map(m => [m.userId, m])), [members]);
   // 이번 달 사용 횟수 — 직접 적은 값이 있으면 그 값, 없으면 [결제 완료]로 확정된 횟수
   const usedOf = (k: Child, key: MonthKey) => manual.get(k.id)?.[key] ?? counts.get(k.id)?.[key] ?? 0;
+  // 수업 종류 기본값 (운동 / 구강 / -) — 바로 저장
+  const changeKind = async (k: Child, kind: LessonKind) => {
+    setKids(list => list.map(x => (x.id === k.id ? { ...x, lessonKind: kind } : x)));
+    try { await saveChild({ ...k, lessonKind: kind }); }
+    catch (e) { showAlert(`저장하지 못했어요 — SQL(supabase/lesson-kind.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); load(); }
+  };
   const toggleUses = async (k: Child, key: UsesKey, on: boolean) => {
     setKids(list => list.map(x => (x.id === k.id ? { ...x, uses: { ...(x.uses ?? { voucher: false, gusen: false, kkumideun: false, woojin: false, subsidy: false, prepaid: false }), [key]: on } } : x)));
     try {
@@ -95,12 +101,12 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
 
   // 내려받기 — 지금 화면의 명단(찾기 적용) 그대로
   const exportSheet = (): Sheet => {
-    const head = ['회원 코드', '이름', '번호', '구강', '뒷번호', '승인 여부', '연결된 보호자', ...USES.map(u => u.label), ...MONTH_COLS.map(u => `${u.label} 이번 달 사용`), '선결제 잔여/충전', '고정 수업', '메모'];
+    const head = ['회원 코드', '이름', '수업', '번호', '뒷번호', '승인 여부', '연결된 보호자', ...USES.map(u => u.label), ...MONTH_COLS.map(u => `${u.label} 이번 달 사용`), '선결제 잔여/충전', '고정 수업', '메모'];
     const rows = list.map(k => {
       const pc = counts.get(k.id);
       const ck = (key: UsesKey) => (k.uses?.[key] ? 'O' : '');
       return [
-        k.memberCode ?? '', k.name, k.number ?? 1, k.oral ? '구강' : '', k.phoneLast4 ?? '', approvalOf(k),
+        k.memberCode ?? '', k.name, kindLabel(k.lessonKind) || '-', k.number ?? 1, k.phoneLast4 ?? '', approvalOf(k),
         k.guardianUserId ? memberOf.get(k.guardianUserId)?.nickname ?? '연결됨' : '',
         ...USES.map(u => ck(u.key)),
         ...MONTH_COLS.map(u => usedOf(k, u.key)),
@@ -116,14 +122,15 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
 
   const start = (k?: Child) => {
     setEditing(k ? k.id : 'new');
-    setForm(k ? { name: k.name, number: k.number?.toString() ?? '', oral: !!k.oral, memo: k.memo ?? '', guardian: k.guardianUserId ?? '', phone: k.phoneLast4 ?? '',
+    setForm(k ? { name: k.name, number: k.number?.toString() ?? '', memo: k.memo ?? '', guardian: k.guardianUserId ?? '', phone: k.phoneLast4 ?? '',
       vl: String(k.voucherLimit ?? 0), gl: String(k.gusenLimit ?? 0), kl: String(k.kkumideunLimit ?? 0), pt: String(k.prepaidTotal ?? 0) } : emptyForm);
   };
 
   const save = async (k?: Child) => {
     if (!form.name.trim()) { showAlert('이름을 적어 주세요.'); return; }
     try {
-      await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined,   // 빈칸 = 번호 없음(1로 보임, 시간표엔 숫자가 안 붙는다) oral: form.oral, memo: form.memo, phoneLast4: form.phone,
+      // 번호 빈칸 = 번호 없음(1로 보임, 시간표엔 숫자가 안 붙는다)
+      await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined, oral: k?.oral, memo: form.memo, phoneLast4: form.phone,
         voucherLimit: Number(form.vl) || 0, gusenLimit: Number(form.gl) || 0, kkumideunLimit: Number(form.kl) || 0 });   // 선결제는 [충전] 기록으로만
       if (k && form.guardian !== (k.guardianUserId ?? '')) {
         await linkChild(k.id, form.guardian || null);
@@ -168,6 +175,7 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
               <th className={th}>카카오계정번호</th>
               <th className={th}>회원 코드</th>
               <th className={th}>이름</th>
+              <th className={`${th} text-center`} title="이 아이 수업 종류 기본값 — 시간표에 넣을 때 처음 골라져요">수업</th>
               <th className={`${th} text-center`} title="같은 이름 구분 번호 — 없으면 1">번호</th>
               <th className={th}>뒷번호</th>
               {USES.map(c => <th key={c.key} className={`${th} text-center`} title={`${c.label}를 쓰는 아이면 체크`}>{c.label}</th>)}
@@ -192,7 +200,13 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
               <tr key={k.id} className="border-b border-[#f0f0f0]">
                 <td className={`${td} text-[12px] text-[#999] whitespace-nowrap tabular-nums`}>{k.guardianUserId ? memberOf.get(k.guardianUserId)?.kakaoId || '-' : <span className="text-[#ddd]">-</span>}</td>
                 <td className={`${td} text-[12px] text-[#888] whitespace-nowrap tabular-nums`}>{k.memberCode}</td>
-                <td className={`${td} whitespace-nowrap`}>{k.name}{k.oral && <span className="ml-1 text-[11px] text-[#999]">구강</span>}</td>
+                <td className={`${td} whitespace-nowrap`}>{k.name}</td>
+                <td className={`${td} text-center`}>
+                  <select value={k.lessonKind ?? ''} onChange={e => changeKind(k, (e.target.value || null) as LessonKind)} aria-label={`${k.name} 수업`}
+                    className={`text-[12px] border border-[#e5e5e5] bg-white px-1.5 py-0.5 ${k.lessonKind ? 'text-[#27272a]' : 'text-[#bbb]'}`}>
+                    {LESSON_KINDS.map(o => <option key={o.label} value={o.key ?? ''}>{o.label}</option>)}
+                  </select>
+                </td>
                 {/* 같은 이름 구분 번호 — 비어 있으면 1 (시간표에는 번호가 있는 아이만 이름 앞에 붙는다) */}
                 <td className={`${td} text-center text-[13px] tabular-nums ${k.number ? '' : 'text-[#aaa]'}`}>{k.number ?? 1}</td>
                 <td className={`${td} text-[12px] whitespace-nowrap tabular-nums`}>{k.phoneLast4 ?? <span className="text-[#ccc]">-</span>}</td>
@@ -341,7 +355,7 @@ function FixedList({ items }: { items: Fixed[] }) {
     <span className="flex flex-wrap gap-1">
       {items.map((f, i) => (
         <span key={i} className="whitespace-nowrap border border-[#eee] rounded px-1.5 py-0.5">
-          {DOW[f.weekday]} {f.time} {f.teacher}{f.oral ? ' 구강' : ''}{PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)] ? ` · ${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)]}` : ''}
+          {DOW[f.weekday]} {f.time} {f.teacher}{kindLabel(f.kind) ? ` ${kindLabel(f.kind)}` : ''}{PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)] ? ` · ${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)]}` : ''}
         </span>
       ))}
     </span>
@@ -365,8 +379,8 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
       <td className={`${td} text-[12px] text-[#888]`}>{code}</td>
       <td className={td}>
         <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="이름" className={`${input} w-24`} autoFocus />
-        <label className="flex items-center gap-1 text-[11px] text-[#888] mt-1"><input type="checkbox" checked={form.oral} onChange={e => setForm(f => ({ ...f, oral: e.target.checked }))} />구강</label>
       </td>
+      <td className={`${td} text-center text-[11px] text-[#ccc]`}>-</td>
       <td className={`${td} text-center`}>
         <input value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value.replace(/\D/g, '') }))} placeholder="1" className={`${input} w-10 text-center`} />
       </td>
