@@ -4,14 +4,14 @@
 // ─────────────────────────────────────────────
 
 export const SITE = {
-  name: 'WE 소아재활센터',
+  name: 'We 소아재활센터',
   description: '아이들의 더 나은 내일을 위한 We 소아재활센터',
-  footerCopy: '© {year} WE 센터',
+  footerCopy: '© {year} We 센터',
 };
 
 // ── 홈 (/) ────────────────────────────────────
 export const HOME = {
-  eyebrow: 'WE 소아재활센터',
+  eyebrow: 'We 소아재활센터',
   headline: ['아이의 가능성을', '함께 열어갑니다.'],
   body: [
     'We는 아이와 부모, 그리고 재활사가',
@@ -114,7 +114,7 @@ export const WE_THOUGHTS = {
 export const NOTICES = {
   eyebrow: '공지사항',
   heading: '센터 소식과 안내',
-  subtext: 'WE 소아재활센터의 새로운 소식을 전합니다.',
+  subtext: 'We 소아재활센터의 새로운 소식을 전합니다.',
 };
 
 // ── 기타 (/etc) ───────────────────────────────

@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       const { data: p } = await db.from('profiles').select('nickname, center_nickname').eq('user_id', slot.booked_by).maybeSingle();
       const who = p?.center_nickname || p?.nickname || b?.nickname || '보호자';
       const state = slot.cancel_state === 'requested' ? ' (취소 신청 중)' : '';
-      await upsertLesson(calendarId, slotId, slot.day, slot.time, `${who} 수업${state}`, `${b?.label ?? ''}\nWE 소아재활센터 수업스케쥴에서 신청`);
+      await upsertLesson(calendarId, slotId, slot.day, slot.time, `${who} 수업${state}`, `${b?.label ?? ''}\nWe 소아재활센터 수업스케쥴에서 신청`);
       return Response.json({ synced: 'upsert' });
     }
     await removeLesson(calendarId, slotId);

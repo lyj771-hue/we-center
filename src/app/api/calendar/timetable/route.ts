@@ -42,7 +42,7 @@ function lessonText(r: Row, child: Row | undefined, kind: '고정' | '빈타임'
   const code = (child?.member_code as string) || undefined;
   const kindText = r.kind === 'exercise' ? '운동' : r.kind === 'oral' || (r.kind == null && r.oral) ? '구강' : '';
   const summary = `${name}${child?.number ?? ''}${kindText ? ` ${kindText}` : ''}${pay ? ` ${pay}` : ''}${absent ? ' 결석' : ''}`;   // 이름 뒤에 동명이인 숫자·수업 종류
-  const lines = [`WE 소아재활센터${centerName && centerName !== '은평' ? ` ${centerName}` : ''} ${kind} 수업`];
+  const lines = [`We 소아재활센터${centerName && centerName !== '은평' ? ` ${centerName}` : ''} ${kind} 수업`];
   if (code) lines.push(`회원 코드 ${code}`);
   if (pay) lines.push(`결제 ${pay.split('').map(c => PAY[c] ?? c).join('/')}`);
   if (r.note) lines.push(`메모 ${r.note}`);

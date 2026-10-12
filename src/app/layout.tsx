@@ -42,7 +42,7 @@ const blackHanSans = Black_Han_Sans({
 });
 
 export const metadata: Metadata = {
-  title: { default: 'WE 소아재활센터', template: '%s | WE 재활센터' },
+  title: { default: 'We 소아재활센터', template: '%s | We 재활센터' },
   description: '아이들의 더 나은 내일을 위한 We 소아재활센터',
 };
 
