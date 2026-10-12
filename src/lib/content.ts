@@ -6,7 +6,7 @@
 export const SITE = {
   name: 'WE 소아재활센터',
   description: '아이들의 더 나은 내일을 위한 We 소아재활센터',
-  footerCopy: '© {year} WE 소아재활센터',
+  footerCopy: '© {year} WE 센터',
 };
 
 // ── 홈 (/) ────────────────────────────────────

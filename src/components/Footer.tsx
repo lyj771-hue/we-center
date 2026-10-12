@@ -19,7 +19,7 @@ export default function Footer() {
           </span>
         ))}
       </p>
-      <p className="mt-2 tracking-widest">© {new Date().getFullYear()} WE 소아재활센터</p>
+      <p className="mt-2 tracking-widest">© {new Date().getFullYear()} WE 센터</p>
     </footer>
   );
 }
