@@ -31,7 +31,6 @@ export default function UsageCard({ label, rows, name, used, limit }: {
     <div className="relative mx-auto max-w-[380px] rounded-[16px] border border-[#e4e4e7] bg-white px-5 pt-5 pb-4 shadow-[0_2px_10px_rgba(0,0,0,0.06)] overflow-hidden">
       <img src="/logo-we.jpg" alt="" aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 w-40 -translate-x-1/2 -translate-y-1/2 opacity-[0.06]" />
       <div className="relative">
-        <p className="text-[14px] text-[#27272a]">WE 소아재활센터 <span className="text-[var(--brand)]">{label}</span></p>
         <p className="text-[12px] text-[#999] mt-0.5">
           {name && <span className="text-[#555]">{name} 님<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span></span>}
         </p>

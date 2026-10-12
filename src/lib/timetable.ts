@@ -421,3 +421,17 @@ export async function setDayAssign(day: string, teacherId: string, center: Cente
     : await q.delete().match({ day, teacher_id: teacherId, center });
   if (error) throw error;
 }
+
+/** 시간표(테스트) — 이 아이의 결제 기록·그날 칸·이번 달 사용 횟수를 모두 지운다. 지운 칸을 돌려준다(캘린더 맞추기용) */
+export async function clearChildTestData(childId: string): Promise<{ day: string; teacher_id: string; time: string; side: 'fixed' | 'open'; center: Center }[]> {
+  const { data: cells, error: e0 } = await supabase.from('board_cells').select('day, teacher_id, time, side, center').eq('child_id', childId);
+  if (e0) throw e0;
+  const [a, b, c] = await Promise.all([
+    supabase.from('lesson_payments').delete().eq('child_id', childId),
+    supabase.from('board_cells').delete().eq('child_id', childId),
+    supabase.from('child_month_usage').delete().eq('child_id', childId),
+  ]);
+  for (const r of [a, b]) if (r.error) throw r.error;
+  void c;   // 표가 없어도(SQL 전) 괜찮다
+  return (cells ?? []) as { day: string; teacher_id: string; time: string; side: 'fixed' | 'open'; center: Center }[];
+}

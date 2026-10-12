@@ -79,11 +79,11 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
             const dd = parseYmd(d);
             return (
               <div key={d} className={`flex gap-3 py-3 ${d === today ? 'bg-[#f8fbff] -mx-3 px-3 rounded-lg' : ''}`}>
-                <div className="w-[64px] shrink-0 text-[13px] text-[#71717b] pt-0.5 whitespace-nowrap">{DOW[dd.getDay()]} <span className="text-[#b4b4bb]">{dd.getMonth() + 1}/{dd.getDate()}</span></div>
+                <div className="w-[60px] shrink-0 text-[12px] text-[#71717b] pt-0.5 whitespace-nowrap">{DOW[dd.getDay()]} <span className="text-[#b4b4bb]">{dd.getMonth() + 1}/{dd.getDate()}</span></div>
                 <div className="flex-1 space-y-1.5">
-                  {list.length === 0 && <span className="text-[13px] text-[#d4d4d8]">수업 없음</span>}
+                  {list.length === 0 && <span className="text-[12px] text-[#d4d4d8]">수업 없음</span>}
                   {list.map((l, i) => (
-                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] ${l.moved || l.status === 'cancelled' ? 'text-[#bbb] line-through' : 'text-[#27272a]'}`}>
+                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] ${l.moved || l.status === 'cancelled' ? 'text-[#bbb] line-through' : 'text-[#27272a]'}`}>
                       <span className="tabular-nums">{l.time}</span>
                       <span>{l.teacher} 선생님</span>
                       {l.oral && <span className="text-[11px] text-[#8b5cf6]">구강</span>}
@@ -102,8 +102,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       </section>
       {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용 횟수(매월 1일 0부터), 선결제는 남은 횟수 */}
       <section className={card}>
-        <h2 className="text-[17px] text-[#27272a] mb-1">결제 현황</h2>
-        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든·우진학교·지원금은 {monthNo}월에 사용한 횟수예요(매월 1일에 새로 세요). 선결제는 남은 횟수예요.</p>
+        <h2 className="text-[17px] text-[#27272a] mb-3">결제 현황</h2>
         {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
           <table className="w-full text-[15px]">
             <tbody>
