@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { askConfirm, showAlert } from '@/lib/dialog';
-import type { Child } from '@/lib/timetable';
+import type { Center, Child } from '@/lib/timetable';
 import type { PayCount } from '@/lib/timetable';
 import { deleteChild, getChildren, getFixedByChild, getPaymentCounts, linkChild, saveChild, setChildUses, setChildBalance, type UsesKey, type LessonKind, kindLabel } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
@@ -21,7 +21,7 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈이든', 선: '선결제', 카: '신용카드', 현: '현금' };
 
 type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean; kind: LessonKind };
-const emptyForm = { name: '', number: '', memo: '', guardian: '', phone: '', vl: '0', gl: '0', kl: '0', pt: '0' };
+const emptyForm = { center: 'eunpyeong' as Center, name: '', number: '', memo: '', guardian: '', phone: '', vl: '0', gl: '0', kl: '0', pt: '0' };
 
 // 결제 칸 — 쓰는 결제 체크(바우처·굳센·꿈이든·선결제), 이번 달 사용 횟수(바우처·굳센·꿈이든, 직접 적을 수 있음), 선결제 잔여
 const USES: { key: UsesKey; label: string }[] = [
@@ -34,7 +34,7 @@ const BALANCES: { key: 'woojin' | 'subsidy'; label: string }[] = [{ key: 'woojin
 // 회원 관리(승인 탭)의 지원 항목과 같은 것 — 둘 중 어디서 체크해도 양쪽이 같이 바뀐다
 const PROFILE_KEYS: MonthKey[] = ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy'];
 
-export default function ChildrenTab({ members, onLinked, onMembersChanged }: { members: Member[]; onLinked: () => void; onMembersChanged: () => void }) {
+export default function ChildrenTab({ members, center, onLinked, onMembersChanged }: { members: Member[]; center: Center; onLinked: () => void; onMembersChanged: () => void }) {
   const [kids, setKids] = useState<Child[]>([]);
   const [fixed, setFixed] = useState<Map<string, Fixed[]>>(new Map());
   const [counts, setCounts] = useState<Map<string, PayCount>>(new Map());
@@ -116,7 +116,8 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
     if (key.startsWith('bal:')) return balOf(k, key.slice(4) as 'woojin' | 'subsidy');
     return k.memberCode ?? '';
   };
-  const filtered = kids.filter(k => !q.trim() || `${k.memberCode} ${k.name}${k.number ?? ''}`.includes(q.trim()));
+  // 이 센터 아이만
+  const filtered = kids.filter(k => (k.center ?? 'eunpyeong') === center).filter(k => !q.trim() || `${k.memberCode} ${k.name}${k.number ?? ''}`.includes(q.trim()));
   const list = sort ? [...filtered].sort((a, b) => {
     const x = sortVal(a, sort.key), y = sortVal(b, sort.key);
     const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ko');
@@ -128,15 +129,15 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
 
   const start = (k?: Child) => {
     setEditing(k ? k.id : 'new');
-    setForm(k ? { name: k.name, number: k.number?.toString() ?? '', memo: k.memo ?? '', guardian: k.guardianUserId ?? '', phone: k.phoneLast4 ?? '',
-      vl: String(k.voucherLimit ?? 0), gl: String(k.gusenLimit ?? 0), kl: String(k.kkumideunLimit ?? 0), pt: String(k.prepaidTotal ?? 0) } : emptyForm);
+    setForm(k ? { center: k.center ?? 'eunpyeong', name: k.name, number: k.number?.toString() ?? '', memo: k.memo ?? '', guardian: k.guardianUserId ?? '', phone: k.phoneLast4 ?? '',
+      vl: String(k.voucherLimit ?? 0), gl: String(k.gusenLimit ?? 0), kl: String(k.kkumideunLimit ?? 0), pt: String(k.prepaidTotal ?? 0) } : { ...emptyForm, center });   // 새 아이는 이 센터로
   };
 
   const save = async (k?: Child) => {
     if (!form.name.trim()) { showAlert('이름을 적어 주세요.'); return; }
     try {
       // 번호 빈칸 = 번호 없음(1로 보임, 시간표엔 숫자가 안 붙는다)
-      await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined, oral: k?.oral, memo: form.memo, phoneLast4: form.phone,
+      await saveChild({ id: k?.id, center: form.center, name: form.name, number: form.number ? Number(form.number) : undefined, oral: k?.oral, memo: form.memo, phoneLast4: form.phone,
         voucherLimit: Number(form.vl) || 0, gusenLimit: Number(form.gl) || 0, kkumideunLimit: Number(form.kl) || 0 });   // 선결제는 [충전] 기록으로만
       if (k && form.guardian !== (k.guardianUserId ?? '')) {
         await linkChild(k.id, form.guardian || null);
@@ -377,6 +378,11 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
       <td className={`${td} text-[12px] text-[#888]`}>{code}</td>
       <td className={td}>
         <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="이름" className={`${input} w-24`} autoFocus />
+        {/* 센터 — 다른 센터로 옮길 때 */}
+        <select value={form.center} onChange={e => setForm(f => ({ ...f, center: e.target.value as Center }))} className="mt-1 block text-[11px] border border-[#ddd] bg-white px-1 py-0.5">
+          <option value="eunpyeong">수색</option>
+          <option value="uijeongbu">의정부</option>
+        </select>
       </td>
       <td className={`${td} text-center`}>
         <input value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value.replace(/\D/g, '') }))} placeholder="1" className={`${input} w-10 text-center`} />

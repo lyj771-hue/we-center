@@ -75,19 +75,22 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
+  // 다니는 센터 — 수색(은평) / 의정부
+  const [center, setCenter] = useState<'eunpyeong' | 'uijeongbu' | ''>('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const ready = !!name.trim() && /^\d{4}$/.test(phone);
+  const ready = !!name.trim() && /^\d{4}$/.test(phone) && !!center;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const child = name.trim();
     if (!child) { setError('아이 이름을 적어 주세요.'); return; }
     if (!/^\d{4}$/.test(phone)) { setError('대표 보호자 전화번호 뒷 4자리를 숫자로 적어 주세요.'); return; }
-    if (!(await askConfirm(`아이 이름: ${child}\n전화번호 뒷자리: ${phone}${code.trim() ? `\n회원 코드: ${code.trim().toUpperCase()}` : ''}\n\n이대로 가입할까요?\n(아이 이름은 나중에 센터에서만 바꿀 수 있어요)`))) return;
+    if (!center) { setError('다니는 센터를 골라 주세요.'); return; }
+    if (!(await askConfirm(`센터: ${center === 'uijeongbu' ? '의정부' : '수색'}\n아이 이름: ${child}\n전화번호 뒷자리: ${phone}${code.trim() ? `\n회원 코드: ${code.trim().toUpperCase()}` : ''}\n\n이대로 가입할까요?\n(아이 이름은 나중에 센터에서만 바꿀 수 있어요)`))) return;
     setSaving(true);
     try {
-      await createMyProfile(userId, child, phone);
+      await createMyProfile(userId, child, phone, center);
       if (code.trim()) {
         const r = await claimChild(code.trim());
         if (r !== 'ok') {
@@ -122,6 +125,15 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
           센터에서 받은 회원 코드가 있으면 같이 적어 주세요.
         </p>
         <form onSubmit={submit} className="space-y-4">
+          <div>
+            <span className={label}>다니는 센터 <span className="text-[#e11d48]">*</span></span>
+            <div className="flex gap-2 mt-1.5">
+              {([['eunpyeong', '수색'], ['uijeongbu', '의정부']] as const).map(([k, l]) => (
+                <button key={k} type="button" onClick={() => { setCenter(k); setError(''); }}
+                  className={`flex-1 py-2 text-[14px] border rounded-full ${center === k ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#ddd] text-[#555] hover:bg-[#f8f8f8]'}`}>{l}</button>
+              ))}
+            </div>
+          </div>
           <label className="block">
             <span className={label}>아이 이름 <span className="text-[#e11d48]">*</span></span>
             <input type="text" value={name} maxLength={20} autoFocus placeholder="예: 김민준"

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { showAlert } from '@/lib/dialog';
-import type { Child, MonthUse, PayCount } from '@/lib/timetable';
+import type { Center, Child, MonthUse, PayCount } from '@/lib/timetable';
 import { getChildren, getMonthNotes, getMonthUses, getPaymentCounts, setMonthNote } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
@@ -20,7 +20,7 @@ const shiftMonth = (ym: string, n: number) => { const [y, m] = ym.split('-').map
 const fmtDate = (iso?: string) => { if (!iso) return ''; const d = new Date(iso); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; };
 const won = (n?: number) => (n ? `${n.toLocaleString('ko-KR')}원` : '');
 
-export default function PaymentsTab({ members }: { members: Member[] }) {
+export default function PaymentsTab({ members, center }: { members: Member[]; center: Center }) {
   const [month, setMonth] = useState(thisMonth);
   const [kids, setKids] = useState<Child[]>([]);
   const [uses, setUses] = useState<Map<string, MonthUse>>(new Map());
@@ -49,7 +49,7 @@ export default function PaymentsTab({ members }: { members: Member[] }) {
   // 기본은 결제를 쓰는 아이(체크·사용·잔액·메모가 있는 아이)만, [모두 보기]면 전부
   const active = (k: Child) => Object.values(k.uses ?? {}).some(Boolean) || USE_COLS.some(c => (uses.get(k.id)?.[c.key] ?? 0) > 0)
     || (k.prepaidTotal ?? 0) > 0 || !!k.woojinBalance || !!k.subsidyBalance || !!notes.get(k.id);
-  const list = kids.filter(k => (showAll || active(k)) && (!q.trim() || `${k.memberCode} ${k.name}${k.number ?? ''}`.includes(q.trim())));
+  const list = kids.filter(k => (k.center ?? 'eunpyeong') === center && (showAll || active(k)) && (!q.trim() || `${k.memberCode} ${k.name}${k.number ?? ''}`.includes(q.trim())));
 
   const saveNote = async (k: Child, text: string) => {
     if (text.trim() === (notes.get(k.id) ?? '')) return;

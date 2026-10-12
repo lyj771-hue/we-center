@@ -27,6 +27,8 @@ export interface Child {
   guardianUserId?: string;
   /** 쓰는 결제 (아이 명단 체크박스) */
   uses?: UsesFlags;
+  /** 다니는 센터 — 수색(은평) / 의정부 */
+  center?: Center;
   /** 우진학교·지원금 남은 금액(원) — 관리자가 적는다 */
   woojinBalance?: number;
   subsidyBalance?: number;
@@ -110,6 +112,7 @@ export async function getChildren(): Promise<Child[]> {
     number: r.number ?? undefined, memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
     woojinBalance: r.woojin_balance ?? 0, subsidyBalance: r.subsidy_balance ?? 0,
+    center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
     uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
   }));
 }
@@ -148,6 +151,7 @@ export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise
   const row = {
     name: c.name.trim(), number: c.number ?? null, memo: c.memo?.trim() || null, oral: !!c.oral,
     ...(c.lessonKind !== undefined ? { lesson_kind: c.lessonKind, oral: c.lessonKind === 'oral' } : {}),
+    ...(c.center ? { center: c.center } : {}),
     phone_last4: c.phoneLast4 && /^\d{4}$/.test(c.phoneLast4) ? c.phoneLast4 : null,
     ...(c.voucherLimit !== undefined ? { voucher_limit: Math.max(0, Math.floor(c.voucherLimit) || 0) } : {}),
     ...(c.gusenLimit !== undefined ? { gusen_limit: Math.max(0, Math.floor(c.gusenLimit) || 0) } : {}),
@@ -237,7 +241,7 @@ export async function getDayBoard(day: string, children: Child[], center: Center
     // 고정 수업은 시작일(start_date, 2026-10-01부터) 이후 날짜에만
     supabase.from('fixed_lessons').select('*').eq('weekday', weekday).eq('center', center).lte('start_date', day),
     supabase.from('board_cells').select('*').eq('day', day).eq('center', center),
-    supabase.from('slots').select('id, teacher_id, time, booked_by, cancel_state').eq('day', day).not('booked_by', 'is', null),
+    supabase.from('slots').select('*, schedules(*)').eq('day', day).not('booked_by', 'is', null),
     supabase.from('teachers').select('id, centers'),
   ]);
   if (fixedRes.error) throw fixedRes.error;
@@ -252,7 +256,7 @@ export async function getDayBoard(day: string, children: Child[], center: Center
   for (const r of fixedRes.data ?? []) fixed.set(key(r.teacher_id, r.time), fromRow({ ...r, status: 'child' }, 'fixed', byId));
 
   // 보호자 신청 — 보호자 닉네임(관리자 닉네임이 다르면 아래 작게). 아이 명단에서 그 보호자의 아이(또는 관리자 닉네임과 같은 이름)를 찾아 결제 글자를 붙인다
-  const booked = (slotsRes.data ?? []).filter(sl => (slotCenter.get(sl.teacher_id) ?? 'eunpyeong') === center);
+  const booked = (slotsRes.data ?? []).filter(sl => ((sl.schedules as { center?: string } | null)?.center ?? slotCenter.get(sl.teacher_id) ?? 'eunpyeong') === center);
   if (booked.length) {
     const ids = [...new Set(booked.map(s => s.booked_by as string))];
     const { data: ps } = await supabase.from('profiles').select('user_id, nickname, center_nickname').in('user_id', ids);

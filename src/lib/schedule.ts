@@ -58,6 +58,8 @@ export interface Schedule {
   notice: string;
   holidays: Holiday[];
   createdAt: string;
+  /** 어느 센터 스케쥴인지 — 'eunpyeong'(수색) / 'uijeongbu'(의정부) */
+  center: 'eunpyeong' | 'uijeongbu';
   slots: Slot[];
   bookings: Booking[];
 }
@@ -182,16 +184,17 @@ export interface ScheduleSummary {
   days?: string[];
   title: string;
   createdAt: string;
+  center: 'eunpyeong' | 'uijeongbu';
 }
 
 type ScheduleRow = {
-  id: string; week_start: string; days: unknown; title: string; notice: string; holidays: unknown; created_at: string;
+  id: string; week_start: string; days: unknown; title: string; notice: string; holidays: unknown; created_at: string; center?: string;
 };
 
 /** 스케쥴 목록 — 최신 주가 위 */
 export async function listSchedules(): Promise<ScheduleSummary[]> {
   const { data, error } = await supabase
-    .from('schedules').select('id, week_start, days, title, created_at')
+    .from('schedules').select('*')
     .order('week_start', { ascending: false }).order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(r => ({
@@ -200,6 +203,7 @@ export async function listSchedules(): Promise<ScheduleSummary[]> {
     days: Array.isArray(r.days) && r.days.length ? (r.days as string[]) : undefined,
     title: r.title,
     createdAt: r.created_at,
+    center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
   }));
 }
 
@@ -239,6 +243,7 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
     notice: row.notice,
     holidays: (row.holidays ?? []) as Holiday[],
     createdAt: row.created_at,
+    center: row.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
     slots: (slotsRes.data ?? [])
       .map(s => ({
         id: s.id, teacherId: s.teacher_id, day: s.day, time: s.time,
@@ -332,6 +337,8 @@ export interface ScheduleDraft {
   title: string;
   notice: string;
   holidays: Holiday[];
+  /** 센터 — 새로 올릴 때만 쓴다 */
+  center?: 'eunpyeong' | 'uijeongbu';
   /** 올릴 칸들 (선생님·날짜·시간) */
   slots: { teacherId: string; day: string; time: string }[];
 }
@@ -352,7 +359,7 @@ export async function saveSchedule(draft: ScheduleDraft, existing?: Schedule): P
     const { error } = await supabase.from('schedules').update(head).eq('id', id);
     if (error) throw error;
   } else {
-    const { data, error } = await supabase.from('schedules').insert(head).select('id').single();
+    const { data, error } = await supabase.from('schedules').insert({ ...head, ...(draft.center ? { center: draft.center } : {}) }).select('id').single();
     if (error) throw error;
     id = data.id as string;
   }

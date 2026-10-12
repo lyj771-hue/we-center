@@ -28,6 +28,10 @@ export default function ScheduleListPage() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
+  // 센터 — 보호자는 가입할 때 고른 센터 스케쥴만, 관리자는 탭으로 고른다
+  const [tab, setTab] = useState<'eunpyeong' | 'uijeongbu'>('eunpyeong');
+  const center = isAdmin ? tab : profile?.center ?? 'eunpyeong';
+  const shownItems = items.filter(s => s.center === center);
 
   const load = useCallback(async () => {
     try {
@@ -63,13 +67,20 @@ export default function ScheduleListPage() {
         {creating ? (
           <ScheduleEditor
             teachers={teachers}
+            center={center}
             onTeachersChanged={async () => setTeachers(await getScheduleTeachers())}
             onClose={id => { setCreating(false); if (id) router.push(`/schedule/${id}`); }}
           />
         ) : (
           <section>
             <div className="flex items-center justify-between mb-10">
-              <p className="text-[11px] tracking-[0.2em] text-[#aaa]">총 {items.length}건</p>
+              <div className="flex items-center gap-3">
+                {isAdmin ? ([['eunpyeong', '수색'], ['uijeongbu', '의정부']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setTab(k)}
+                    className={`text-[14px] px-3 py-1 border-b-2 ${tab === k ? 'border-[var(--brand)] text-[var(--brand)]' : 'border-transparent text-[#999] hover:text-[#333]'}`}>{l}</button>
+                )) : <span className="text-[13px] text-[var(--brand)]">{center === 'uijeongbu' ? '의정부' : '수색'}</span>}
+                <p className="text-[11px] tracking-[0.2em] text-[#aaa]">총 {shownItems.length}건</p>
+              </div>
               {isAdmin && (
                 <button onClick={() => setCreating(true)}
                   className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors">
@@ -78,13 +89,13 @@ export default function ScheduleListPage() {
               )}
             </div>
 
-            {loaded && items.length === 0 ? (
+            {loaded && shownItems.length === 0 ? (
               <div className="py-24 text-center text-sm text-[#ccc] tracking-widest">아직 올라온 수업 스케쥴이 없어요</div>
             ) : (
               <div className="divide-y divide-[#f0f0f0]">
-                {items.map((s, i) => (
+                {shownItems.map((s, i) => (
                   <div key={s.id} className={`group flex items-center gap-5 py-4 hover:bg-[#fafafa] -mx-5 md:-mx-8 px-5 md:px-8 transition-colors ${isPast(s) ? 'opacity-50' : ''}`}>
-                    <span className="text-[11px] text-[#ccc] w-7 shrink-0 tabular-nums">{String(items.length - i).padStart(2, '0')}</span>
+                    <span className="text-[11px] text-[#ccc] w-7 shrink-0 tabular-nums">{String(shownItems.length - i).padStart(2, '0')}</span>
                     <Link href={`/schedule/${s.id}`} className="flex-1 min-w-0 block">
                       <span className="text-[14px] leading-[1.8] group-hover:underline underline-offset-2 block truncate">{s.title}</span>
                       <span className="text-[12px] leading-[2] pb-0.5 text-[#999] block truncate mt-1">{scheduleRange(s)}</span>

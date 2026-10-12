@@ -57,10 +57,11 @@ function defaultMethod(payment: string | undefined): PayMethod | undefined {
 }
 
 /** testChildName 을 주면 "시간표(테스트)" — 그 아이 수업만 보이고 고칠 수 있다(저장은 실제 디비). 다른 아이 칸은 잠긴다 */
-export default function TimetableView({ testChildName }: { testChildName?: string } = {}) {
+/** fixedCenter 를 주면 그 센터(수색/의정부) 시간표만 — 센터 탭을 숨긴다 */
+export default function TimetableView({ testChildName, fixedCenter }: { testChildName?: string; fixedCenter?: Center } = {}) {
   const { isAdmin } = useAdmin();
   const [mode, setMode] = useState<Mode>('day');
-  const [center, setCenter] = useState<Center>('eunpyeong');
+  const [center, setCenter] = useState<Center>(fixedCenter ?? 'eunpyeong');
   // 접어 둔 선생님(이름만 보이고 칸은 숨김) — 이원재 선생님은 병가라 처음부터 접어 둔다
   const [folded, setFolded] = useState<Set<string>>(() => new Set(['이원재']));
   const toggleFold = (name: string) => setFolded(f => { const n = new Set(f); if (n.has(name)) n.delete(name); else n.add(name); return n; });
@@ -263,7 +264,7 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
   const testKid = isTest ? children.find(c => c.name === testChildName) : undefined;
   const testId = testKid?.id;
   const locked = (c: CellView) => isTest && c.status !== 'empty' && c.status !== 'none' && c.childId !== testId;
-  const pickKids = isTest ? (testKid ? [testKid] : []) : children;
+  const pickKids = isTest ? (testKid ? [testKid] : []) : children.filter(c => (c.center ?? 'eunpyeong') === center);   // 이 센터 아이만
   // 테스트 아이의 고정 수업 — 그 요일로 바로 가는 버튼 (월요일엔 수업이 없어 빈 표만 보일 수 있어서)
   const [testFixed, setTestFixed] = useState<{ weekday: number; time: string; teacher: string }[]>([]);
   useEffect(() => {
@@ -473,7 +474,7 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
   return (
     <div className="px-3 md:px-6 pt-6 pb-14 fade-up">
       <div className="max-w-[1400px] mx-auto">
-        <h1 className="display-heading mb-5">{isTest ? '시간표(테스트)' : '시간표'}</h1>
+        <h1 className="display-heading mb-5">{isTest ? '시간표(테스트)' : '시간표'}{fixedCenter && <span className="text-[0.7em] text-[#888]"> ({fixedCenter === 'uijeongbu' ? '의정부' : '수색'})</span>}</h1>
         {isTest ? (
           <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-[#fef3c7] px-4 py-3 text-[13px] text-[#92400e]">
             <span><b>{testChildName}</b> 수업만 보이고 고칠 수 있어요. 다른 아이 칸은 잠겨 있어요. 저장은 <b>실제 디비</b>에 돼서 {testChildName} 마이페이지에서 바로 확인할 수 있어요.</span>
@@ -496,7 +497,7 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
 
         {/* 보기 고르기 */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          {CENTERS.map(cn => (
+          {!fixedCenter && CENTERS.map(cn => (
             <button key={cn.key} onClick={() => guard(() => setCenter(cn.key))}
               className={`text-[14px] px-4 py-2 border-b-2 ${center === cn.key ? 'border-[var(--brand)] text-[var(--brand)]' : 'border-transparent text-[#999] hover:text-[#333]'}`}>{cn.label}</button>
           ))}

@@ -294,6 +294,7 @@ interface ProfileRow {
   approved_at: string | null;
   phone_last4?: string | null;
   requested_code?: string | null;
+  center?: string | null;
 }
 
 function fromProfileRow(row: ProfileRow): Profile {
@@ -303,6 +304,7 @@ function fromProfileRow(row: ProfileRow): Profile {
     centerNickname: row.center_nickname ?? undefined,
     phoneLast4: row.phone_last4 ?? undefined,
     requestedCode: row.requested_code ?? undefined,
+    center: row.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
     memo: row.memo ?? undefined,
     approvedAt: row.approved_at ?? undefined,
   };
@@ -325,8 +327,8 @@ export async function getMyProfile(userId: string): Promise<Profile | null> {
 
 /** 보호자가 처음 한 번 보호자 닉네임을 정한다 (승인 필요 없음) */
 /** 처음 가입 — 아이 이름(닉네임)·대표 보호자 뒷 4자리. 회원 코드는 claimChild 로 따로 */
-export async function createMyProfile(userId: string, nickname: string, phoneLast4: string): Promise<void> {
-  const { error } = await supabase.from('profiles').insert({ user_id: userId, nickname: nickname.trim(), phone_last4: phoneLast4 });
+export async function createMyProfile(userId: string, nickname: string, phoneLast4: string, center?: 'eunpyeong' | 'uijeongbu'): Promise<void> {
+  const { error } = await supabase.from('profiles').insert({ user_id: userId, nickname: nickname.trim(), phone_last4: phoneLast4, ...(center ? { center } : {}) });
   if (error) throw error;
 }
 

@@ -40,12 +40,15 @@ function normalizeTime(raw: string): string | null {
 interface Props {
   teachers: Teacher[];
   existing?: Schedule;
+  /** 새로 올릴 스케쥴의 센터 (고칠 때는 그 스케쥴의 센터) */
+  center?: 'eunpyeong' | 'uijeongbu';
   onTeachersChanged: () => Promise<void> | void;
   /** 저장했으면 그 스케쥴 id, 그냥 닫으면 undefined */
   onClose: (savedId?: string) => void;
 }
 
-export default function ScheduleEditor({ teachers, existing, onTeachersChanged, onClose }: Props) {
+export default function ScheduleEditor({ teachers, existing, center: centerProp, onTeachersChanged, onClose }: Props) {
+  const center = existing?.center ?? centerProp ?? 'eunpyeong';
   const monday = thisMonday();
   const nextMonday = addDays(monday, 7);
   const [mode, setMode] = useState<Mode>(() =>
@@ -89,14 +92,14 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
   useEffect(() => { getTemplates().then(setTemplates).catch(() => {}); }, []);
 
   const days = mode === 'holiday' ? holidayDates : weekDays(weekStart);
-  // 수업스케쥴은 은평 — 그 요일에 은평에 출근하지 않는 선생님(예: 설영수 월·토 의정부)은 기본으로 빼 둔다.
+  // 그 요일에 이 센터에 출근하지 않는 선생님(예: 설영수 — 은평은 화~금, 의정부는 월·토)은 기본으로 빼 둔다.
   // 공휴일 스케쥴에선 빼지 않는다. "이 날 추가"로 언제든 넣을 수 있고, 이미 시간이 올라가 있는 날은 넣은 것으로 본다.
   const [addedAway, setAddedAway] = useState<Set<string>>(() => new Set((existing?.slots ?? []).map(sl => `${sl.teacherId}|${sl.day}`)));
   const away = (t: Teacher, d: string) =>
-    mode !== 'holiday' && t.centers.includes('eunpyeong') && !worksAt(t, 'eunpyeong', parseYmd(d).getDay()) && !addedAway.has(`${t.id}|${d}`);
+    mode !== 'holiday' && t.centers.includes(center) && !worksAt(t, center, parseYmd(d).getDay()) && !addedAway.has(`${t.id}|${d}`);
 
-  // 선생님 줄 — 은평 선생님이 기본으로 선택되고, 의정부 선생님(김영훈·문석현)은 보이되 선택 안 된 채로. 줄에서 더하고 뺄 수 있다
-  const isDefault = (t: Teacher) => t.centers.includes('eunpyeong');
+  // 선생님 줄 — 이 센터 선생님이 기본으로 선택되고, 다른 센터 선생님은 보이되 선택 안 된 채로. 줄에서 더하고 뺄 수 있다
+  const isDefault = (t: Teacher) => t.centers.includes(center);
   const [removed, setRemoved] = useState<Set<string>>(() => {
     if (!existing?.days?.length) return new Set();
     const has = new Set(existing.slots.map(sl => sl.teacherId));
@@ -293,6 +296,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
     setSaving(true);
     try {
       const id = await saveSchedule({
+        center,
         weekStart: mode === 'holiday' ? days[0] : weekStart,
         days: mode === 'holiday' ? days : undefined,
         title: shownTitle.trim() || autoTitle,
@@ -462,7 +466,7 @@ export default function ScheduleEditor({ teachers, existing, onTeachersChanged, 
                     <div key={d} className="flex items-center gap-2">
                       <span className="w-[42px]" />
                       <span className="w-[80px] shrink-0 text-[13px] text-[#71717b] whitespace-nowrap">{dowLabel(d)} <span className="text-[#bbb]">{shortDay(d).split('(')[0]}</span></span>
-                      <span className="text-[12px] text-[#999]">은평 출근 안 하는 날</span>
+                      <span className="text-[12px] text-[#999]">{center === 'uijeongbu' ? '의정부' : '은평'} 출근 안 하는 날</span>
                       <button type="button" onClick={() => setAddedAway(a => new Set(a).add(key))}
                         className="text-[12px] border border-[#f59e0b] text-[#b45309] px-2 py-0.5 hover:bg-[#fef3c7]">+ 이 날 추가</button>
                     </div>

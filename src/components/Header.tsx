@@ -43,9 +43,9 @@ export default function Header() {
     }
   };
 
-  // 관리자에게만 보이는 메뉴 — 시간표 관리 / 로그인한 보호자 — 마이페이지
+  // 관리자 메뉴(회원관리·시간표)는 위 검은 띠에만 / 로그인한 보호자 — 마이페이지
   const nav = isAdmin
-    ? [...NAV, { href: '/admin/timetable', label: '시간표 관리' }]
+    ? NAV
     : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : NAV;
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
@@ -56,9 +56,14 @@ export default function Header() {
         {isAdmin && (
           <div className="bg-[#0a0a0a] text-white text-center text-[10px] tracking-[0.25em] py-1.5">
             관리자 모드&nbsp;&nbsp;
-            <Link href="/members" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원 관리</Link>
+            {/* 관리자 메뉴 — 센터(수색/의정부)마다 회원 관리·시간표 */}
+            <Link href="/members" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원관리(수색)</Link>
             &nbsp;&nbsp;
-            <Link href="/admin/timetable" className="underline underline-offset-2 opacity-60 hover:opacity-100">시간표</Link>
+            <Link href="/members/uijeongbu" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원관리(의정부)</Link>
+            &nbsp;&nbsp;
+            <Link href="/admin/timetable" className="underline underline-offset-2 opacity-60 hover:opacity-100">시간표(수색)</Link>
+            &nbsp;&nbsp;
+            <Link href="/admin/timetable/uijeongbu" className="underline underline-offset-2 opacity-60 hover:opacity-100">시간표(의정부)</Link>
             &nbsp;&nbsp;
             <Link href="/admin/dashboard" className="underline underline-offset-2 opacity-60 hover:opacity-100">수업 현황</Link>
             &nbsp;&nbsp;
