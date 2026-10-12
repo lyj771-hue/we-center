@@ -12,10 +12,13 @@ import { showAlert } from '@/lib/dialog';
 // 수업 진행 현황 (관리자) — 달·센터를 골라 선생님별 × 결제방식별 진행 횟수.
 // 진행 횟수 = 시간표에서 [결제 완료]로 확정된 수업. [스케줄 변경 완료]로 고르기만 한 것은 따로 작게 센다.
 
-const METHODS: { key: PayMethod; label: string }[] = [
+// 지원(바우처·굳센·꿈이든·지원금·학교) — 하나씩 보고 합계, 사설(그 밖: 선결제·카드·현금·직접 작성) — 묶어서 한 칸
+const SUPPORT: { key: PayMethod; label: string }[] = [
   { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'kkumideun', label: '꿈이든' },
-  { key: 'woojin', label: '우진학교' }, { key: 'subsidy', label: '지원금' }, { key: 'prepaid', label: '선결제' },
-  { key: 'card', label: '신용카드' }, { key: 'cash', label: '현금' }, { key: 'other', label: '직접 작성' },
+  { key: 'subsidy', label: '지원금' }, { key: 'woojin', label: '학교' },
+];
+const PRIVATE: { key: PayMethod; label: string }[] = [
+  { key: 'prepaid', label: '선결제' }, { key: 'card', label: '신용카드' }, { key: 'cash', label: '현금' }, { key: 'other', label: '직접 작성' },
 ];
 
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -61,6 +64,8 @@ export default function DashboardPage() {
   }, [done]);
   const totalOf = (tid: string) => [...(grid.get(tid)?.values() ?? [])].reduce((a, b) => a + b, 0);
   const methodTotal = (k: PayMethod) => done.filter(r => r.method === k).length;
+  const sumOf = (tid: string, list: { key: PayMethod }[]) => list.reduce((a, x) => a + (grid.get(tid)?.get(x.key) ?? 0), 0);
+  const groupTotal = (list: { key: PayMethod }[]) => list.reduce((a, x) => a + methodTotal(x.key), 0);
   // 표에 나오는 선생님 — 그 센터에서 일하거나 이 달 기록이 있는 선생님
   const shown = teachers.filter(t => grid.has(t.id) || center === 'all' || t.centers.includes(center));
   const unknown = grid.has('?');
@@ -70,11 +75,11 @@ export default function DashboardPage() {
   const sheet = (): Sheet => ({
     name: `${y}년 ${m}월 수업 현황`,
     rows: [
-      ['선생님', ...METHODS.map(x => x.label), '합계'],
-      ...shown.map(t => [t.name, ...METHODS.map(x => grid.get(t.id)?.get(x.key) ?? 0), totalOf(t.id)]),
-      ['합계', ...METHODS.map(x => methodTotal(x.key)), done.length],
+      ['선생님', ...SUPPORT.map(x => x.label), '지원 합계', '사설', '전체 합계'],
+      ...shown.map(t => [t.name, ...SUPPORT.map(x => grid.get(t.id)?.get(x.key) ?? 0), sumOf(t.id, SUPPORT), sumOf(t.id, PRIVATE), totalOf(t.id)]),
+      ['합계', ...SUPPORT.map(x => methodTotal(x.key)), groupTotal(SUPPORT), groupTotal(PRIVATE), done.length],
     ],
-    cols: [10, ...METHODS.map(() => 8), 8],
+    cols: [10, ...SUPPORT.map(() => 8), 9, 8, 9],
   });
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
@@ -115,10 +120,12 @@ export default function DashboardPage() {
             <p className="mt-1 text-[34px] leading-none text-[#27272a] tabular-nums">{done.length}<span className="ml-1 text-[14px] text-[#888]">회</span></p>
             {pendingCount > 0 && <p className="mt-2 text-[11px] text-[#aaa]">결제방식만 고르고 아직 확정 안 한 수업 {pendingCount}회 (포함 안 함)</p>}
           </div>
-          {METHODS.filter(x => methodTotal(x.key) > 0 || ['voucher', 'gusen', 'kkumideun', 'prepaid'].includes(x.key)).map(x => (
-            <div key={x.key} className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-4">
-              <p className="text-[12px] text-[#888]">{x.label}</p>
-              <p className="mt-1 text-[24px] leading-none text-[#27272a] tabular-nums">{methodTotal(x.key)}<span className="ml-1 text-[12px] text-[#888]">회</span></p>
+          {[{ label: '지원 합계', n: groupTotal(SUPPORT), sub: SUPPORT.map(x => `${x.label} ${methodTotal(x.key)}`).join(' · ') },
+            { label: '사설', n: groupTotal(PRIVATE), sub: PRIVATE.map(x => `${x.label} ${methodTotal(x.key)}`).join(' · ') }].map(g => (
+            <div key={g.label} className="col-span-2 rounded-xl border border-[#e5e5e5] bg-white px-5 py-4">
+              <p className="text-[12px] text-[#888]">{g.label}</p>
+              <p className="mt-1 text-[28px] leading-none text-[#27272a] tabular-nums">{g.n}<span className="ml-1 text-[13px] text-[#888]">회</span></p>
+              <p className="mt-2 text-[11px] text-[#aaa]">{g.sub}</p>
             </div>
           ))}
         </div>
@@ -130,8 +137,10 @@ export default function DashboardPage() {
             <thead>
               <tr className="border-b border-[#eee] bg-[#fafafa]">
                 <th className={`${th} text-left sticky left-0 bg-[#fafafa]`}>선생님</th>
-                {METHODS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
-                <th className={`${th} text-center`}>합계</th>
+                {SUPPORT.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
+                <th className={`${th} text-center bg-[#f1f5fb] text-[#555]`}>지원 합계</th>
+                <th className={`${th} text-center bg-[#f7f7f7] text-[#555]`} title="선결제·신용카드·현금·직접 작성">사설</th>
+                <th className={`${th} text-center text-[#27272a]`}>전체 합계</th>
               </tr>
             </thead>
             <tbody>
@@ -140,7 +149,7 @@ export default function DashboardPage() {
                 return (
                   <tr key={t.id} className="border-b border-[#f3f3f3]">
                     <td className="px-3 py-2 whitespace-nowrap sticky left-0 bg-white">{t.name}</td>
-                    {METHODS.map(x => {
+                    {SUPPORT.map(x => {
                       const n = grid.get(t.id)?.get(x.key) ?? 0;
                       return (
                         <td key={x.key} className="px-1 py-1 text-center">
@@ -148,14 +157,19 @@ export default function DashboardPage() {
                         </td>
                       );
                     })}
-                    <td className="px-3 py-2 text-center tabular-nums text-[13px] text-[#27272a]" title={`${t.name} 합계 ${total}회`}>{total}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-[13px] bg-[#f1f5fb] text-[#27272a]" title={`${t.name} 지원 합계`}>{sumOf(t.id, SUPPORT)}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-[13px] bg-[#f7f7f7] text-[#27272a]"
+                      title={`${t.name} 사설 — ${PRIVATE.map(x => `${x.label} ${grid.get(t.id)?.get(x.key) ?? 0}`).join(' · ')}`}>{sumOf(t.id, PRIVATE)}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-[14px] text-[#27272a]" title={`${t.name} 전체 ${total}회`}>{total}</td>
                   </tr>
                 );
               })}
               <tr className="bg-[#fafafa]">
                 <td className="px-3 py-2.5 text-[13px] text-[#888] sticky left-0 bg-[#fafafa]">합계</td>
-                {METHODS.map(x => <td key={x.key} className="px-1 py-2.5 text-center tabular-nums text-[13px] text-[#555]">{methodTotal(x.key)}</td>)}
-                <td className="px-3 py-2.5 text-center tabular-nums text-[13px] text-[#27272a]">{done.length}</td>
+                {SUPPORT.map(x => <td key={x.key} className="px-1 py-2.5 text-center tabular-nums text-[13px] text-[#555]">{methodTotal(x.key)}</td>)}
+                <td className="px-3 py-2.5 text-center tabular-nums text-[13px] bg-[#e9f0fa] text-[#27272a]">{groupTotal(SUPPORT)}</td>
+                <td className="px-3 py-2.5 text-center tabular-nums text-[13px] bg-[#f0f0f0] text-[#27272a]">{groupTotal(PRIVATE)}</td>
+                <td className="px-3 py-2.5 text-center tabular-nums text-[14px] text-[#27272a]">{done.length}</td>
               </tr>
             </tbody>
           </table>
