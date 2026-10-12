@@ -117,7 +117,6 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                   ) : p.method === 'prepaid' ? (
                     <td className={`py-2.5 text-right tabular-nums ${p.total - p.used <= 0 ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
                       <span className="text-[12px] text-[#999] mr-1">남은</span>{p.total - p.used}<span className="text-[12px] text-[#999] ml-1">회</span>
-                      <span className="block text-[11px] text-[#bbb]">충전 {p.total} · 사용 {p.used}</span>
                     </td>
                   ) : (
                     <td className={`py-2.5 text-right tabular-nums ${p.total && p.used >= p.total ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
