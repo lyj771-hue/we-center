@@ -29,7 +29,8 @@ const USES: { key: UsesKey; label: string }[] = [
   { key: 'woojin', label: '우진학교' }, { key: 'subsidy', label: '지원금' }, { key: 'prepaid', label: '선결제' },
 ];
 type MonthKey = Exclude<UsesKey, 'prepaid'>;
-const MONTH_COLS = USES.filter(u => u.key !== 'prepaid') as { key: MonthKey; label: string }[];
+// 이번 달 사용 횟수 칸 — 선결제(잔여로 본다)·지원금은 빼고
+const MONTH_COLS = USES.filter(u => u.key !== 'prepaid' && u.key !== 'subsidy') as { key: MonthKey; label: string }[];
 // 회원 관리(승인 탭)의 지원 항목과 같은 것 — 둘 중 어디서 체크해도 양쪽이 같이 바뀐다
 const PROFILE_KEYS: MonthKey[] = ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy'];
 
@@ -42,6 +43,8 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
   const [cardFor, setCardFor] = useState<Child | null>(null);    // 선결제 카드 창을 연 아이
   const [form, setForm] = useState(emptyForm);
   const [failed, setFailed] = useState('');
+  // "이번 달 사용" 칸들 접기/펼치기
+  const [showMonth, setShowMonth] = useState(true);
   // 이번 달 사용 횟수를 직접 적은 값
   const [manual, setManual] = useState<Map<string, Partial<Record<UsesKey, number>>>>(new Map());
   const monthStart = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; })();
@@ -179,7 +182,14 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
               <th className={`${th} text-center`} title="같은 이름 구분 번호 — 없으면 1">번호</th>
               <th className={th}>뒷번호</th>
               {USES.map(c => <th key={c.key} className={`${th} text-center`} title={`${c.label}를 쓰는 아이면 체크`}>{c.label}</th>)}
-              {MONTH_COLS.map(c => <th key={c.key} className={`${th} text-center`} title="이번 달 사용 횟수 — 직접 고쳐 적을 수 있어요(비우면 [결제 완료]로 센 횟수)">{c.label}<span className="block text-[10px] text-[#bbb]">이번 달 사용</span></th>)}
+              <th className={`${th} text-center px-1`}>
+                <button type="button" onClick={() => setShowMonth(v => !v)} aria-expanded={showMonth}
+                  title={showMonth ? '이번 달 사용 칸 접기' : '이번 달 사용 칸 펼치기'}
+                  className="inline-flex items-center gap-1 rounded border border-[#ddd] px-1.5 py-0.5 text-[10px] text-[#888] hover:border-[var(--brand)] hover:text-[var(--brand)]">
+                  이번 달 사용 {showMonth ? '◂' : '▸'}
+                </button>
+              </th>
+              {showMonth && MONTH_COLS.map(c => <th key={c.key} className={`${th} text-center`} title="이번 달 사용 횟수 — 직접 고쳐 적을 수 있어요(비우면 [결제 완료]로 센 횟수)">{c.label}<span className="block text-[10px] text-[#bbb]">이번 달 사용</span></th>)}
               <th className={`${th} text-center`}>선결제<span className="block text-[10px] text-[#bbb]">잔여/충전</span></th>
               <th className={th}>고정 수업</th>
               <th className={th}>연결된 보호자 계정</th>
@@ -190,11 +200,11 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
           </thead>
           <tbody>
             {editing === 'new' && (
-              <EditRow form={form} setForm={setForm} input={input} td={td} btn={btn} approved={approved} code="새 코드" fixed={[]}
+              <EditRow form={form} setForm={setForm} input={input} td={td} btn={btn} approved={approved} code="새 코드" fixed={[]} showMonth={showMonth}
                 onSave={() => save()} onCancel={() => setEditing(null)} />
             )}
             {list.map(k => editing === k.id ? (
-              <EditRow key={k.id} form={form} setForm={setForm} input={input} td={td} btn={btn} approved={approved} code={k.memberCode ?? ''} fixed={fixed.get(k.id) ?? []}
+              <EditRow key={k.id} form={form} setForm={setForm} input={input} td={td} btn={btn} approved={approved} code={k.memberCode ?? ''} fixed={fixed.get(k.id) ?? []} showMonth={showMonth}
                 onSave={() => save(k)} onCancel={() => setEditing(null)} />
             ) : (
               <tr key={k.id} className="border-b border-[#f0f0f0]">
@@ -215,7 +225,8 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
                     <input type="checkbox" checked={!!k.uses?.[c.key]} onChange={e => toggleUses(k, c.key, e.target.checked)} aria-label={`${k.name} ${c.label} 사용`} />
                   </td>
                 ))}
-                {MONTH_COLS.map(c => (
+                <td className={`${td} px-1`} />
+                {showMonth && MONTH_COLS.map(c => (
                   <td key={c.key} className={`${td} text-center`}>
                     <input key={`${k.id}-${c.key}-${usedOf(k, c.key)}`} defaultValue={usedOf(k, c.key)} inputMode="numeric"
                       onBlur={e => saveUsed(k, c.key, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -362,13 +373,14 @@ function FixedList({ items }: { items: Fixed[] }) {
   );
 }
 
-function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave, onCancel }: {
+function EditRow({ form, setForm, input, td, btn, approved, code, fixed, showMonth, onSave, onCancel }: {
   form: typeof emptyForm;
   setForm: React.Dispatch<React.SetStateAction<typeof emptyForm>>;
   input: string; td: string; btn: string;
   approved: Member[];
   code: string;
   fixed: Fixed[];
+  showMonth: boolean;
   onSave: () => void;
   onCancel: () => void;
 }) {
@@ -389,7 +401,7 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
           onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 4) }))} className={`${input} w-14 text-center`} />
       </td>
       {/* 쓰는 결제·이번 달 사용·선결제는 표에서 바로 고친다 */}
-      {[...USES, ...MONTH_COLS, 'prepaid'].map((_, i) => <td key={i} className={`${td} text-center text-[11px] text-[#ccc]`}>-</td>)}
+      {[...USES, 'toggle', ...(showMonth ? MONTH_COLS : []), 'prepaid'].map((_, i) => <td key={i} className={`${td} text-center text-[11px] text-[#ccc]`}>{i === USES.length ? '' : '-'}</td>)}
       <td className={`${td} text-[12px]`}><FixedList items={fixed} /><p className="text-[10px] text-[#aaa] mt-1">고정 수업은 시간표 관리에서 고쳐요</p></td>
       <td className={td}>
         {isNew ? <span className="text-[11px] text-[#aaa]">저장 후 연결</span> : (
