@@ -584,9 +584,9 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
                 {shown.map(t => folded.has(t.name) ? <th key={t.id} className={`${th} text-[10px] text-[#ccc] w-6`}>접음</th> : (
                   <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={mode === 'day' ? <>
                     <th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>
-                    <th className={`${th} text-[10px] text-[#999] w-10 px-0.5`}>수업</th>
+                    <th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>
                     <th className={`${th} text-[10px] text-[#16a34a] min-w-[64px]`}>결제방식</th>
-                  </> : <th className={`${th} text-[10px] text-[#999] w-10 px-0.5`}>수업</th>} />
+                  </> : <th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>} />
                 ))}
               </tr>
             </thead>
@@ -605,7 +605,7 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
                     const kc = mode === 'day' && right.status === 'child' ? right : left;
                     const kSide: Side = mode === 'day' && right.status === 'child' ? 'open' : 'fixed';
                     const kindTd = (
-                      <td className="border border-[#e4e4e7] h-9 w-10 px-0 text-center align-middle">
+                      <td className="border border-[#e4e4e7] h-9 min-w-[46px] px-0 text-center align-middle whitespace-nowrap">
                         {kc.status === 'child' && !locked(kc) && kc.source !== 'booking' ? (
                           <select value={kc.kind ?? ''} onChange={e => changeKind({ teacher: t, time, side: kSide, cell: kc }, (e.target.value || null) as LessonKind)}
                             aria-label={`${kc.name} 수업 종류`} title="수업 종류 (운동 / 구강 / -)"
