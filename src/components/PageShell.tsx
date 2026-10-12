@@ -142,7 +142,7 @@ export function PageTitle({ eyebrow, variant = 'default', className = '', action
   if (variant === 'notice') {
     return (
       <div className={`text-center ${className}`}>
-        {eyebrow && <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{eyebrow}</p>}
+        {eyebrow && <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] mb-5">{eyebrow}</p>}
         <h1 className="md:sr-only font-serif font-black text-[32px] leading-[1.2] tracking-[-0.03em] text-[var(--brand)] mb-4">{heading}</h1>
         {subtext && <p className="text-[14px] leading-[2] text-[#555] whitespace-pre-line">{subtext}</p>}
         {editBtn && <div className="mt-4">{editBtn}</div>}
@@ -152,7 +152,7 @@ export function PageTitle({ eyebrow, variant = 'default', className = '', action
 
   return (
     <div className={className}>
-      {eyebrow && <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-5">{eyebrow}</p>}
+      {eyebrow && <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] mb-5">{eyebrow}</p>}
       <div className="flex items-end justify-between gap-6">
         <div className="min-w-0">
           <h1 className={`display-heading ${subtext ? 'mb-3' : ''}`}>{heading}</h1>

@@ -29,7 +29,7 @@ export default function WeConceptPage() {
 
       {/* Pillars */}
       <div className="max-w-[var(--page-w)] mx-auto px-8 mb-24">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-14">We가 지키는 원칙</p>
+        <p className="text-[11px] tracking-[0.3em] text-[#aaa] mb-14">We가 지키는 원칙</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-14">
           {WE_CONCEPT.pillars.map(({ num, title, desc }) => (
             <div key={num}>

@@ -8,7 +8,7 @@ export default function HomePage() {
       {/* ── Hero ────────────────────────────────────── */}
       <section className="min-h-[calc(100svh-160px)] flex flex-col justify-center bg-[#f5f5f3] px-8 py-24">
         <div className="max-w-5xl mx-auto w-full">
-          <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-8 fade-up">
+          <p className="text-[11px] tracking-[0.3em] text-[#aaa] mb-8 fade-up">
             {HOME.eyebrow}
           </p>
           <h1 className="font-serif font-black text-[var(--brand)] text-[28px] sm:text-[40px] lg:text-[52px] leading-[1.1] tracking-[-0.03em] mb-8 fade-up-d1">
@@ -32,7 +32,7 @@ export default function HomePage() {
 
       {/* ── Values ──────────────────────────────────── */}
       <section className="max-w-5xl mx-auto px-8 py-24 fade-up">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] uppercase mb-14">
+        <p className="text-[11px] tracking-[0.3em] text-[#aaa] mb-14">
           {HOME.valuesSectionLabel}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-14 md:gap-8">
