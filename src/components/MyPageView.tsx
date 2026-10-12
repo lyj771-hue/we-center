@@ -109,7 +109,12 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
               {payRows.map(p => (
                 <tr key={p.method} className="border-t border-[#f0f0f0] first:border-t-0">
                   <td className="py-2.5">{PAY_ROW_LABEL[p.method]}</td>
-                  {p.method === 'prepaid' ? (
+                  {p.method === 'woojin' || p.method === 'subsidy' ? (
+                    <td className="py-2.5 text-right tabular-nums text-[var(--brand)]">
+                      {/* 우진학교·지원금은 남은 금액 */}
+                      <span className="text-[12px] text-[#999] mr-1">남은 금액</span>{p.total.toLocaleString('ko-KR')}<span className="text-[12px] text-[#999] ml-0.5">원</span>
+                    </td>
+                  ) : p.method === 'prepaid' ? (
                     <td className={`py-2.5 text-right tabular-nums ${p.total - p.used <= 0 ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
                       <span className="text-[12px] text-[#999] mr-1">남은</span>{p.total - p.used}<span className="text-[12px] text-[#999] ml-1">회</span>
                       <span className="block text-[11px] text-[#bbb]">충전 {p.total} · 사용 {p.used}</span>
@@ -146,7 +151,8 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         return (
           <section key={u.method} className={card}>
             <h2 className="text-[17px] text-[#27272a] mb-4">{u.label}</h2>
-            <UsageCard label={u.label} rows={rows} name={child?.childName} used={p?.used ?? rows.length} limit={p?.total} />
+            <UsageCard label={u.label} rows={rows} name={child?.childName} used={p?.used ?? rows.length}
+              {...(u.method === 'subsidy' ? { balance: p?.total ?? 0 } : { limit: p?.total })} />
           </section>
         );
       })}

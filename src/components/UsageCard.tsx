@@ -10,7 +10,7 @@ export interface UsageRow { day: string; nth: number; memo?: string }
 
 const PER_PAGE = 3;
 
-export default function UsageCard({ label, rows, name, used, limit }: {
+export default function UsageCard({ label, rows, name, used, limit, balance }: {
   label: string;
   rows: UsageRow[];
   name?: string;
@@ -18,6 +18,8 @@ export default function UsageCard({ label, rows, name, used, limit }: {
   used: number;
   /** 한 달 제공 횟수 (0 = 없음) */
   limit?: number;
+  /** 지원금처럼 금액으로 보는 결제 — 맨 아래에 남은 금액(원) */
+  balance?: number;
 }) {
   const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   const [page, setPage] = useState(0);
@@ -62,10 +64,16 @@ export default function UsageCard({ label, rows, name, used, limit }: {
               className="w-7 h-7 rounded-full text-[#888] hover:bg-[#f4f4f5] disabled:opacity-30" aria-label="뒤 쪽(지난 내역)">›</button>
           </div>
         )}
+        {balance !== undefined ? (
+          <p className="mt-2 border-t border-dashed border-[#bbb] pt-2 text-right text-[13px] text-[#27272a]">
+            남은 금액 <span className="text-[16px] tabular-nums text-[var(--brand)]">{balance.toLocaleString('ko-KR')}</span>원
+          </p>
+        ) : (
         <p className="mt-2 border-t border-dashed border-[#bbb] pt-2 text-right text-[13px] text-[#27272a]">
           이번 달 <span className={`text-[16px] tabular-nums ${limit && used >= limit ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>{used}</span>회 사용
           {!!limit && <span className="ml-1 text-[11px] text-[#999]">/ 한 달 {limit}회</span>}
         </p>
+        )}
       </div>
     </div>
   );

@@ -27,6 +27,9 @@ export interface Child {
   guardianUserId?: string;
   /** 쓰는 결제 (아이 명단 체크박스) */
   uses?: UsesFlags;
+  /** 우진학교·지원금 남은 금액(원) — 관리자가 적는다 */
+  woojinBalance?: number;
+  subsidyBalance?: number;
 }
 
 /** 수업 종류 — 운동 / 구강 / 없음(null, "-") */
@@ -106,8 +109,15 @@ export async function getChildren(): Promise<Child[]> {
     voucherLimit: r.voucher_limit ?? 0, gusenLimit: r.gusen_limit ?? 0, kkumideunLimit: r.kkumideun_limit ?? 0, prepaidTotal: r.prepaid_total ?? 0,
     number: r.number ?? undefined, memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
+    woojinBalance: r.woojin_balance ?? 0, subsidyBalance: r.subsidy_balance ?? 0,
     uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
   }));
+}
+
+/** 우진학교·지원금 남은 금액(원) 적기 */
+export async function setChildBalance(childId: string, key: 'woojin' | 'subsidy', won: number): Promise<void> {
+  const { error } = await supabase.from('children').update({ [`${key}_balance`]: Math.max(0, Math.floor(won) || 0) }).eq('id', childId);
+  if (error) throw error;
 }
 
 /** 쓰는 결제 체크 켜기·끄기 */
