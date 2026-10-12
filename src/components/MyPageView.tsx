@@ -28,7 +28,7 @@ export interface MyPageViewProps {
   payments: MyPayment[];
   /** 선결제 카드 내역 (충전·사용) */
   ledger?: LedgerRow[];
-  /** 이번 달 결제별 사용 기록 (바우처·굳센·꿈이든·지원금) */
+  /** 결제별 사용 기록 (바우처·굳센·꿈이든·지원금) — 지난 달도 쌓인다 */
   history?: MyPaymentUse[];
   today: string;
   failed?: string;
@@ -137,14 +137,19 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         </section>
       )}
 
-      {/* 결제별 사용 카드 — 바우처·굳센·꿈이든·지원금: 이번 달 일자 · 회차 · 메모 */}
+      {/* 결제별 사용 카드 — 바우처·굳센·꿈이든·지원금: 일자 · 그 달 회차 · 메모 (지난 달도 쌓인다) */}
       {USAGE_CARDS.filter(u => checked(u.method) || history.some(h => h.method === u.method)).map(u => {
         const p = payments.find(x => x.method === u.method);
-        const rows = history.filter(h => h.method === u.method)
-          .map(h => ({ day: h.day, memo: [`${h.time.replace(/^0/, '')} ${h.teacher ? `${h.teacher} 선생님` : ''}`.trim(), h.note].filter(Boolean).join(' · ') }));
+        // 회차는 달마다 1회부터 (11월 첫 사용 = 1회)
+        const perMonth = new Map<string, number>();
+        const rows = history.filter(h => h.method === u.method).map(h => {
+          const n = (perMonth.get(h.day.slice(0, 7)) ?? 0) + 1;
+          perMonth.set(h.day.slice(0, 7), n);
+          return { day: h.day, nth: n, memo: [`${h.time.replace(/^0/, '')} ${h.teacher ? `${h.teacher} 선생님` : ''}`.trim(), h.note].filter(Boolean).join(' · ') };
+        });
         return (
           <section key={u.method} className={card}>
-            <h2 className="text-[17px] text-[#27272a] mb-4">{u.label} <span className="text-[12px] text-[#999]">{monthNo}월</span></h2>
+            <h2 className="text-[17px] text-[#27272a] mb-4">{u.label}</h2>
             <UsageCard label={u.label} rows={rows} name={child?.childName} used={p?.used ?? rows.length} limit={p?.total} />
           </section>
         );

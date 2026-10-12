@@ -75,7 +75,7 @@ export async function getMyPayments(): Promise<MyPayment[]> {
   return (data ?? []) as MyPayment[];
 }
 
-/** 이번 달 결제별 사용 기록 (바우처·굳센·꿈이든·지원금·우진학교) — [결제 완료]로 확정된 수업 */
+/** 결제별 사용 기록 전부 (바우처·굳센·꿈이든·지원금·우진학교) — [결제 완료]로 확정된 수업. 지난 달도 쌓인다 */
 export interface MyPaymentUse { day: string; method: MyPayment['method']; time: string; teacher: string; note?: string }
 
 export async function getMyPaymentHistory(): Promise<MyPaymentUse[]> {

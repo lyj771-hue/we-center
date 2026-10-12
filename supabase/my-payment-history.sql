@@ -1,7 +1,7 @@
 -- WE 소아재활센터 — 마이페이지 결제별 사용 기록(바우처·굳센·꿈이든·지원금·우진학교) (2026-10)
 -- 실행 방법: Supabase 대시보드 → SQL Editor → New query → 붙여넣고 Run. 여러 번 실행해도 괜찮다.
 --
--- 시간표 [결제 완료]로 확정된 이번 달 수업 결제 — 보호자는 자기 아이 것만 본다. 매월 1일에 새 달로 넘어간다.
+-- 시간표 [결제 완료]로 확정된 수업 결제 전부(지난 달도 쌓인다) — 보호자는 자기 아이 것만 본다. 회차는 화면에서 달마다 1회부터 센다.
 
 drop function if exists public.my_payment_history();
 create function public.my_payment_history()
@@ -18,8 +18,6 @@ as $$
   left join teachers t on t.id = lp.teacher_id
   where lp.confirmed
     and lp.method in ('voucher', 'gusen', 'kkumideun', 'subsidy', 'woojin')
-    and lp.day >= date_trunc('month', current_date)::date
-    and lp.day < (date_trunc('month', current_date) + interval '1 month')::date
   order by lp.day, lp.time;
 $$;
 revoke all on function public.my_payment_history() from public, anon;

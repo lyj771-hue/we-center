@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 
-// 결제별 사용 카드(바우처·굳센·꿈이든·지원금) — 선결제 카드와 같은 모양. 이번 달 사용 기록: 일자 · 회차 · 메모.
+// 결제별 사용 카드(바우처·굳센·꿈이든·지원금) — 선결제 카드와 같은 모양. 사용 기록: 일자 · 그 달 회차 · 메모. 지난 달 기록도 쌓인다.
 // 1쪽이 가장 최근 3줄(쪽 안에서는 날짜 순).
 
-export interface UsageRow { day: string; memo?: string }
+/** nth = 그 달 몇 번째 사용인지 (매월 1회부터) */
+export interface UsageRow { day: string; nth: number; memo?: string }
 
 const PER_PAGE = 3;
 
@@ -38,13 +39,13 @@ export default function UsageCard({ label, rows, name, used, limit }: {
           <span>일자</span><span className="text-right">회차</span><span className="pl-4">메모</span>
         </div>
         {rows.length === 0 ? (
-          <p className="py-6 text-center text-[13px] text-[#bbb]">이번 달 사용 내역이 없어요.</p>
+          <p className="py-6 text-center text-[13px] text-[#bbb]">사용 내역이 없어요.</p>
         ) : (
           <ul className="py-1 font-mono text-[14px] tabular-nums">
             {shown.map((r, i) => (
               <li key={i} className="grid grid-cols-[3fr_1.6fr_5fr] items-center py-1">
                 <span className="text-[#444]">{md(r.day)}</span>
-                <span className="text-right text-[var(--brand)]">{start + i + 1}회</span>
+                <span className="text-right text-[var(--brand)]">{r.nth}회</span>
                 <span className="pl-4 font-sans text-[11px] leading-[1.3] text-[#999] break-keep">{r.memo}</span>
               </li>
             ))}
