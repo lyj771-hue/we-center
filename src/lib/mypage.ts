@@ -74,3 +74,14 @@ export async function getMyPayments(): Promise<MyPayment[]> {
   if (error) throw error;
   return (data ?? []) as MyPayment[];
 }
+
+/** 이번 달 결제별 사용 기록 (바우처·굳센·꿈이든·지원금·우진학교) — [결제 완료]로 확정된 수업 */
+export interface MyPaymentUse { day: string; method: MyPayment['method']; time: string; teacher: string; note?: string }
+
+export async function getMyPaymentHistory(): Promise<MyPaymentUse[]> {
+  const { data, error } = await supabase.rpc('my_payment_history');
+  if (error) throw error;
+  return (data ?? []).map((r: { day: string; method: MyPayment['method']; lesson_time: string; teacher_name: string | null; note: string | null }) => ({
+    day: r.day, method: r.method, time: r.lesson_time, teacher: r.teacher_name ?? '', note: r.note ?? undefined,
+  }));
+}

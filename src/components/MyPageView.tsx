@@ -1,6 +1,7 @@
 'use client';
 
-import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
+import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
+import UsageCard from '@/components/UsageCard';
 import type { LedgerRow } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import { addDays, parseYmd, thisMonday } from '@/lib/schedule';
@@ -27,11 +28,18 @@ export interface MyPageViewProps {
   payments: MyPayment[];
   /** 선결제 카드 내역 (충전·사용) */
   ledger?: LedgerRow[];
+  /** 이번 달 결제별 사용 기록 (바우처·굳센·꿈이든·지원금) */
+  history?: MyPaymentUse[];
   today: string;
   failed?: string;
 }
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], today, failed }: MyPageViewProps) {
+// 결제별 사용 카드 — 선결제 카드 아래에 이 순서로 (쓰는 결제이거나 이번 달 기록이 있는 것만)
+const USAGE_CARDS: { method: MyPayment['method']; label: string }[] = [
+  { method: 'voucher', label: '바우처' }, { method: 'gusen', label: '굳센' }, { method: 'kkumideun', label: '꿈이든' }, { method: 'subsidy', label: '지원금' },
+];
+
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, failed }: MyPageViewProps) {
   // 결제 현황 — 쓰는 결제만: 회원 관리에서 지원 항목을 체크했거나, 제공·충전 횟수가 있거나, 이미 쓴 것 (아직 안 썼으면 0회)
   const checked = (m: MyPayment['method']) => !!child?.uses?.[m] || (m !== 'prepaid' && !!child?.supports[m]);
   const payRows = payments.filter(p => checked(p.method) || p.total > 0 || p.used > 0);
@@ -47,51 +55,12 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
     <div className="space-y-6">
       {failed && <p className="text-[13px] text-red-400">불러오지 못했어요. ({failed})</p>}
 
-      {/* 아이 */}
-      <section className={card}>
-        <p className="text-[12px] text-[#999] mb-1">우리 아이</p>
-        <p className="text-[22px] text-[var(--brand)]">
-          {child?.childName ? `${child.childName}${child.childNumber ?? ''}` : nickname}
-          {child?.memberCode && <span className="ml-2 text-[13px] text-[#999] tabular-nums">{child.memberCode}</span>}
-        </p>
-        {!approved && <p className="text-[13px] text-[#f59e0b] mt-2">센터에서 승인하면 수업 신청을 할 수 있어요.</p>}
-        {!child?.memberCode && <p className="text-[13px] text-[#999] mt-2">아직 센터 회원 정보와 연결되지 않았어요. 연결되면 시간표가 보여요.</p>}
-      </section>
-
-      {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용 횟수(매월 1일 0부터), 선결제는 남은 횟수 */}
-      <section className={card}>
-        <h2 className="text-[17px] text-[#27272a] mb-1">결제 현황</h2>
-        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든은 {monthNo}월에 사용한 횟수예요(매월 1일에 새로 세요). 선결제는 남은 횟수예요.</p>
-        {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
-          <table className="w-full text-[15px]">
-            <tbody>
-              {payRows.map(p => (
-                <tr key={p.method} className="border-t border-[#f0f0f0] first:border-t-0">
-                  <td className="py-2.5">{PAY_ROW_LABEL[p.method]}</td>
-                  {p.method === 'prepaid' ? (
-                    <td className={`py-2.5 text-right tabular-nums ${p.total - p.used <= 0 ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
-                      <span className="text-[12px] text-[#999] mr-1">남은</span>{p.total - p.used}<span className="text-[12px] text-[#999] ml-1">회</span>
-                      <span className="block text-[11px] text-[#bbb]">충전 {p.total} · 사용 {p.used}</span>
-                    </td>
-                  ) : (
-                    <td className={`py-2.5 text-right tabular-nums ${p.total && p.used >= p.total ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
-                      <span className="text-[12px] text-[#999] mr-1">이번 달</span>{p.used}<span className="text-[12px] text-[#999] ml-1">회 사용</span>
-                      {p.total > 0 && <span className="block text-[11px] text-[#bbb]">한 달 {p.total}회</span>}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      {/* 선결제 카드 — 센터 종이 카드처럼 충전·사용 내역과 남은 횟수 (선결제를 쓰는 아이만) */}
-      {ledger.length > 0 && (
-        <section id="prepaid" className={card}>
-          <h2 className="text-[17px] text-[#27272a] mb-4">선결제 카드</h2>
-          <PrepaidCard rows={ledger} name={child?.childName} />
-        </section>
+      {/* 승인·연결 안내 (우리 아이 이름 칸은 없앴다) */}
+      {(!approved || !child?.memberCode) && (
+        <div className="space-y-1">
+          {!approved && <p className="text-[13px] text-[#f59e0b]">센터에서 승인하면 수업 신청을 할 수 있어요.</p>}
+          {!child?.memberCode && <p className="text-[13px] text-[#999]">아직 센터 회원 정보와 연결되지 않았어요. 연결되면 시간표가 보여요.</p>}
+        </div>
       )}
 
       {/* 주별 시간표 */}
@@ -132,6 +101,54 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
           })}
         </div>
       </section>
+      {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용 횟수(매월 1일 0부터), 선결제는 남은 횟수 */}
+      <section className={card}>
+        <h2 className="text-[17px] text-[#27272a] mb-1">결제 현황</h2>
+        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든은 {monthNo}월에 사용한 횟수예요(매월 1일에 새로 세요). 선결제는 남은 횟수예요.</p>
+        {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
+          <table className="w-full text-[15px]">
+            <tbody>
+              {payRows.map(p => (
+                <tr key={p.method} className="border-t border-[#f0f0f0] first:border-t-0">
+                  <td className="py-2.5">{PAY_ROW_LABEL[p.method]}</td>
+                  {p.method === 'prepaid' ? (
+                    <td className={`py-2.5 text-right tabular-nums ${p.total - p.used <= 0 ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
+                      <span className="text-[12px] text-[#999] mr-1">남은</span>{p.total - p.used}<span className="text-[12px] text-[#999] ml-1">회</span>
+                      <span className="block text-[11px] text-[#bbb]">충전 {p.total} · 사용 {p.used}</span>
+                    </td>
+                  ) : (
+                    <td className={`py-2.5 text-right tabular-nums ${p.total && p.used >= p.total ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
+                      <span className="text-[12px] text-[#999] mr-1">이번 달</span>{p.used}<span className="text-[12px] text-[#999] ml-1">회 사용</span>
+                      {p.total > 0 && <span className="block text-[11px] text-[#bbb]">한 달 {p.total}회</span>}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {/* 선결제 카드 — 센터 종이 카드처럼 충전·사용 내역과 남은 횟수 (선결제를 쓰는 아이만) */}
+      {ledger.length > 0 && (
+        <section id="prepaid" className={card}>
+          <h2 className="text-[17px] text-[#27272a] mb-4">선결제 카드</h2>
+          <PrepaidCard rows={ledger} name={child?.childName} />
+        </section>
+      )}
+
+      {/* 결제별 사용 카드 — 바우처·굳센·꿈이든·지원금: 이번 달 일자 · 회차 · 메모 */}
+      {USAGE_CARDS.filter(u => checked(u.method) || history.some(h => h.method === u.method)).map(u => {
+        const p = payments.find(x => x.method === u.method);
+        const rows = history.filter(h => h.method === u.method)
+          .map(h => ({ day: h.day, memo: [`${h.time.replace(/^0/, '')} ${h.teacher ? `${h.teacher} 선생님` : ''}`.trim(), h.note].filter(Boolean).join(' · ') }));
+        return (
+          <section key={u.method} className={card}>
+            <h2 className="text-[17px] text-[#27272a] mb-4">{u.label} <span className="text-[12px] text-[#999]">{monthNo}월</span></h2>
+            <UsageCard label={u.label} rows={rows} name={child?.childName} used={p?.used ?? rows.length} limit={p?.total} />
+          </section>
+        );
+      })}
     </div>
   );
 }

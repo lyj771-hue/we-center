@@ -7,7 +7,8 @@ import MyPageView, { MYPAGE_CARD } from '@/components/MyPageView';
 import type { LedgerRow } from '@/lib/prepaid';
 import { getMyLedger } from '@/lib/prepaid';
 import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
-import { getMyChild, getMyLessons, getMyPayments } from '@/lib/mypage';
+import { getMyChild, getMyLessons, getMyPaymentHistory, getMyPayments } from '@/lib/mypage';
+import type { MyPaymentUse } from '@/lib/mypage';
 import { addDays, thisMonday, toYmd } from '@/lib/schedule';
 
 // 마이페이지(보호자) — 내 아이 정보, 결제 현황(바우처·굳센·꿈이든 이번 달, 선결제 누적), 주별 시간표.
@@ -21,6 +22,7 @@ export default function MyPage() {
   const [weekLessons, setWeekLessons] = useState<MyLesson[]>([]);
   const [payments, setPayments] = useState<MyPayment[]>([]);
   const [ledger, setLedger] = useState<LedgerRow[]>([]);
+  const [history, setHistory] = useState<MyPaymentUse[]>([]);
   const [failed, setFailed] = useState('');
 
   const today = toYmd(new Date());
@@ -30,6 +32,7 @@ export default function MyPage() {
       const [c, w, p] = await Promise.all([getMyChild(), getMyLessons(week, addDays(week, 5)), getMyPayments()]);
       setChild(c); setWeekLessons(w); setPayments(p); setFailed('');
       setLedger(await getMyLedger().catch(() => []));
+      setHistory(await getMyPaymentHistory().catch(() => []));
     } catch (e) {
       setFailed((e as Error).message);
     }
@@ -54,6 +57,6 @@ export default function MyPage() {
 
   return wrap(
     <MyPageView child={child} nickname={profile?.nickname} approved={!!profile?.approvedAt} week={week} setWeek={setWeek}
-      weekLessons={weekLessons} payments={payments} ledger={ledger} today={today} failed={failed} />,
+      weekLessons={weekLessons} payments={payments} ledger={ledger} history={history} today={today} failed={failed} />,
   );
 }
