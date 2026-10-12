@@ -40,7 +40,7 @@ function lessonText(r: Row, child: Row | undefined, kind: '고정' | '빈타임'
   const name = (r.name as string) || (child?.name as string) || '';
   const pay = (r.payment as string) || '';
   const code = (child?.member_code as string) || undefined;
-  const summary = `${child?.number ?? ''}${r.oral ? 'S' : ''}${name}${pay}${absent ? ' 결석' : ''}`;
+  const summary = `${r.oral ? 'S' : ''}${name}${child?.number ?? ''}${pay}${absent ? ' 결석' : ''}`;   // 이름 뒤에 동명이인 숫자
   const lines = [`WE 소아재활센터${centerName && centerName !== '은평' ? ` ${centerName}` : ''} ${kind} 수업`];
   if (code) lines.push(`회원 코드 ${code}`);
   if (pay) lines.push(`결제 ${pay.split('').map(c => PAY[c] ?? c).join('/')}`);

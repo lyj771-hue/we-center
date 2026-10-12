@@ -23,7 +23,15 @@ export interface Child {
   memo?: string;
   /** 연결된 보호자 계정 — 계정 하나 = 아이 한 명 (홈페이지 가입 안 한 아이는 없음) */
   guardianUserId?: string;
+  /** 쓰는 결제 (아이 명단 체크박스) */
+  uses?: UsesFlags;
 }
+
+export type UsesKey = 'voucher' | 'gusen' | 'kkumideun' | 'prepaid';
+export type UsesFlags = Record<UsesKey, boolean>;
+
+/** 아이 이름 + 동명이인 숫자 (예: 김채현3) — 시간표·검색에서 이렇게 보인다 */
+export const childLabel = (c: { name: string; number?: number }) => `${c.name}${c.number ?? ''}`;
 
 /** 표 한 칸에 보이는 내용 */
 export interface CellView {
@@ -86,7 +94,32 @@ export async function getChildren(): Promise<Child[]> {
     voucherLimit: r.voucher_limit ?? 0, gusenLimit: r.gusen_limit ?? 0, kkumideunLimit: r.kkumideun_limit ?? 0, prepaidTotal: r.prepaid_total ?? 0,
     number: r.number ?? undefined, memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
+    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, kkumideun: !!r.uses_kkumideun, prepaid: !!r.uses_prepaid },
   }));
+}
+
+/** 쓰는 결제 체크 켜기·끄기 */
+export async function setChildUses(childId: string, key: UsesKey, on: boolean): Promise<void> {
+  const { error } = await supabase.from('children').update({ [`uses_${key}`]: on }).eq('id', childId);
+  if (error) throw error;
+}
+
+/** 그 달 사용 횟수를 직접 적은 값 — 아이 id → { voucher?: n, … } (month = 그 달 1일) */
+export async function getMonthUsage(month: string): Promise<Map<string, Partial<Record<UsesKey, number>>>> {
+  const { data, error } = await supabase.from('child_month_usage').select('child_id, method, used').eq('month', month);
+  if (error) throw error;
+  const m = new Map<string, Partial<Record<UsesKey, number>>>();
+  for (const r of data ?? []) m.set(r.child_id as string, { ...m.get(r.child_id as string), [r.method as UsesKey]: r.used as number });
+  return m;
+}
+
+/** 그 달 사용 횟수 적기 (null = 지우고 [결제 완료]로 센 횟수로) */
+export async function setMonthUsage(childId: string, month: string, method: UsesKey, used: number | null): Promise<void> {
+  const q = supabase.from('child_month_usage');
+  const { error } = used === null
+    ? await q.delete().match({ child_id: childId, month, method })
+    : await q.upsert({ child_id: childId, month, method, used, updated_at: new Date().toISOString() }, { onConflict: 'child_id,month,method' });
+  if (error) throw error;
 }
 
 export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise<void> {

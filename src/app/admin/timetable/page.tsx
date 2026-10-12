@@ -147,7 +147,7 @@ export default function TimetablePage() {
     const hols = await getKoreanHolidays(String(y)).catch(() => [] as string[]);
     const label = (k?: PayMethod) => PAY_METHODS.find(x => x.key === k)?.label ?? '';
     const txt = (c: CellView) => c.status === 'undecided' ? '?' : c.status === 'off' ? '수업 안 함' : c.status !== 'child' ? ''
-      : `${c.number ?? ''}${c.name ?? ''}${c.absent ? ' 결석' : ''}${c.moved ? ' 옮김' : ''}${c.source === 'booking' ? ' (신청)' : ''}`;
+      : `${c.name ?? ''}${c.number ?? ''}${c.absent ? ' 결석' : ''}${c.moved ? ' 옮김' : ''}${c.source === 'booking' ? ' (신청)' : ''}`;
     const perDay: Record<string, Cell[][]> = {};
     for (let i = 0; i < days.length; i += 4) {
       await Promise.all(days.slice(i, i + 4).map(async dd => {
@@ -651,7 +651,7 @@ function CellText({ cell, label, muted }: { cell: CellView; label?: string; mute
   if (cell.status === 'off') return <span className="text-[#a1a1aa]">수업 안 함</span>;
   return (
     <span title={cell.note} className={`${muted ? 'text-[#8a8a93]' : 'text-[#27272a]'} ${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-50' : ''}`}>
-      {cell.number ?? ''}{cell.name}
+      {cell.name}{cell.number ?? ''}
       {cell.absent && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">결석</span>}
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
@@ -719,7 +719,8 @@ function ChildPicker({ picking, kids, onPick, onSave, onMore, onClose }: {
   const { cell, rect } = picking;
   const [q, setQ] = useState('');
   const query = q.trim().toLowerCase();
-  const list = kids.filter(c => !query || c.name.toLowerCase().includes(query) || (c.memberCode ?? '').toLowerCase().includes(query));
+  // 검색은 "이름숫자"(동명이인 구분, 예: 김채현3)·회원 코드로
+  const list = kids.filter(c => !query || `${c.name}${c.number ?? ''}`.toLowerCase().includes(query) || (c.memberCode ?? '').toLowerCase().includes(query));
   // 화면 아래쪽 칸이면 위로 연다
   const W = 240, H = 340;
   const below = rect.bottom + H < window.innerHeight;
@@ -741,7 +742,7 @@ function ChildPicker({ picking, kids, onPick, onSave, onMore, onClose }: {
             <li key={c.id}>
               <button type="button" onClick={() => onPick(c)}
                 className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-[#f0f6fe] ${cell.childId === c.id ? 'bg-[#f0f6fe]' : ''}`}>
-                {c.number ?? ''}{c.name}
+                {c.name}{c.number ?? ''}
                 {c.memberCode && <span className="ml-1 text-[10px] text-[#bbb]">{c.memberCode}</span>}
               </button>
             </li>
@@ -769,13 +770,19 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
   onSave: (input: CellInput | 'reset', from?: boolean) => void;
 }) {
   const { teacher, time, side, cell } = editing;
-  const [name, setName] = useState(cell.status === 'child' ? cell.name ?? '' : '');
+  // 이름 칸은 "이름숫자"(동명이인 구분)로 보여 주고 고른다 — 저장할 땐 이름과 숫자를 나눠 둔 명단 아이로
+  const disp = (c: Child) => `${c.name}${c.number ?? ''}`;
+  const [name, setName] = useState(() => {
+    if (cell.status !== 'child') return '';
+    const k = cell.childId ? kids.find(c => c.id === cell.childId) : undefined;
+    return k ? disp(k) : cell.name ?? '';
+  });
   const [payment, setPayment] = useState(cell.payment);
   const [oral, setOral] = useState(cell.oral);
   const [absent, setAbsent] = useState(cell.absent);
   const [moved, setMoved] = useState(cell.moved);
   const [note, setNote] = useState(cell.note ?? '');
-  const child = kids.find(c => c.name === name.trim());
+  const child = kids.find(c => disp(c) === name.trim()) ?? kids.find(c => c.name === name.trim() && !c.number);
 
   const pickName = (v: string) => {
     setName(v);
@@ -786,7 +793,7 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
   const save = () => {
     // (빈타임 칸) 이름을 비우고 저장 — 원래대로
     if (!name.trim()) { onSave('reset'); return; }
-    onSave({ status: 'child', childId: child?.id ?? null, name: name.trim(), payment, oral, absent, moved, note });
+    onSave({ status: 'child', childId: child?.id ?? null, name: child?.name ?? name.trim(), payment, oral, absent, moved, note });
   };
 
   const isBooking = cell.source === 'booking';
@@ -801,7 +808,7 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
         onSave(mode === 'day' ? { status: 'none' } : 'reset', mode === 'day');
         return;
       }
-      onSave({ status: 'child', childId: child?.id ?? null, name: name.trim(), payment, oral, absent: false, moved: false }, mode === 'day');
+      onSave({ status: 'child', childId: child?.id ?? null, name: child?.name ?? name.trim(), payment, oral, absent: false, moved: false }, mode === 'day');
     };
     return (
       <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
@@ -812,7 +819,7 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
             <input list="tt-children" value={name} onChange={e => pickName(e.target.value)} autoFocus placeholder="이름 (비우면 고정 수업 없음)"
               className="w-full border-b border-[#ddd] py-1.5 text-[15px] outline-none focus:border-[var(--brand)]" />
             <datalist id="tt-children">
-              {kids.map(c => <option key={c.id} value={c.name}>{c.number ? `${c.number} ${c.name}` : c.name}</option>)}
+              {kids.map(c => <option key={c.id} value={disp(c)} />)}
             </datalist>
           </label>
           {name.trim() && !child && <p className="text-[11px] text-red-400 -mt-2">아이 명단에 없는 이름이에요. 명단에서 골라 주세요.</p>}
@@ -857,7 +864,7 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
             <input list="tt-children" value={name} onChange={e => pickName(e.target.value)} autoFocus placeholder="이름 (비우면 빈 칸)"
               className="w-full border-b border-[#ddd] py-1.5 text-[15px] outline-none focus:border-[var(--brand)]" />
             <datalist id="tt-children">
-              {kids.map(c => <option key={c.id} value={c.name}>{c.number ? `${c.number} ${c.name}` : c.name}</option>)}
+              {kids.map(c => <option key={c.id} value={disp(c)} />)}
             </datalist>
           </label>
         </div>

@@ -33,7 +33,7 @@ export interface MyPageViewProps {
 
 export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], today, failed }: MyPageViewProps) {
   // 결제 현황 — 쓰는 결제만: 회원 관리에서 지원 항목을 체크했거나, 제공·충전 횟수가 있거나, 이미 쓴 것 (아직 안 썼으면 0회)
-  const checked = (m: MyPayment['method']) => m !== 'prepaid' && !!child?.supports[m];
+  const checked = (m: MyPayment['method']) => !!child?.uses?.[m] || (m !== 'prepaid' && !!child?.supports[m]);
   const payRows = payments.filter(p => checked(p.method) || p.total > 0 || p.used > 0);
 
   const card = MYPAGE_CARD;
@@ -51,7 +51,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       <section className={card}>
         <p className="text-[12px] text-[#999] mb-1">우리 아이</p>
         <p className="text-[22px] text-[var(--brand)]">
-          {child?.childName ? `${child.childNumber ?? ''}${child.childName}` : nickname}
+          {child?.childName ? `${child.childName}${child.childNumber ?? ''}` : nickname}
           {child?.memberCode && <span className="ml-2 text-[13px] text-[#999] tabular-nums">{child.memberCode}</span>}
         </p>
         {!approved && <p className="text-[13px] text-[#f59e0b] mt-2">센터에서 승인하면 수업 신청을 할 수 있어요.</p>}

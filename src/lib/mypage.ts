@@ -9,6 +9,8 @@ export interface MyChild {
   payment: string;
   oral: boolean;
   supports: { voucher: boolean; gusen: boolean; kkumideun: boolean; woojin: boolean; subsidy: boolean };
+  /** 아이 명단에서 체크한 쓰는 결제 */
+  uses: { voucher: boolean; gusen: boolean; kkumideun: boolean; prepaid: boolean };
 }
 
 export interface MyLesson {
@@ -38,6 +40,7 @@ export async function getMyChild(): Promise<MyChild | null> {
     payment: r.payment ?? '',
     oral: !!r.oral,
     supports: { voucher: !!r.voucher, gusen: !!r.gusen, kkumideun: !!r.kkumideun, woojin: !!r.woojin, subsidy: !!r.subsidy },
+    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, kkumideun: !!r.uses_kkumideun, prepaid: !!r.uses_prepaid },
   };
 }
 

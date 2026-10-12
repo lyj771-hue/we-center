@@ -120,7 +120,7 @@ export default function MembersPage() {
     // 화면을 연 뒤에 명단(뒷번호 등)이 바뀌었을 수 있으니 새로 읽어서 맞춘다
     const fresh = await getChildren().catch(() => kids);
     if (fresh.some(k => k.guardianUserId === m.userId)) { setKids(fresh); return; }
-    const hits = fresh.filter(k => k.phoneLast4 === m.phoneLast4 && names.some(n => n === k.name || n === `${k.number ?? ''}${k.name}`));
+    const hits = fresh.filter(k => k.phoneLast4 === m.phoneLast4 && names.some(n => n === k.name || n === `${k.name}${k.number ?? ''}` || n === `${k.number ?? ''}${k.name}`));
     if (hits.length !== 1) {
       await showAlert(hits.length
         ? `승인했어요.\n이름·뒷번호가 같은 아이가 ${hits.length}명이라 자동 연결하지 않았어요. 회원 코드로 직접 연결해 주세요.`
@@ -129,11 +129,11 @@ export default function MembersPage() {
     }
     const k = hits[0];
     if (k.guardianUserId && k.guardianUserId !== m.userId) {
-      if (!(await askConfirm(`${k.memberCode} ${k.number ?? ''}${k.name}은(는) 다른 계정에 연결돼 있어요.\n이 계정으로 옮길까요?`))) return;
+      if (!(await askConfirm(`${k.memberCode} ${k.name}${k.number ?? ''}은(는) 다른 계정에 연결돼 있어요.\n이 계정으로 옮길까요?`))) return;
     }
     await linkChild(k.id, m.userId);
     loadKids();
-    await showAlert(`승인하고 아이 명단과 연결했어요.\n${k.memberCode} ${k.number ?? ''}${k.name} ↔ 카카오 ${m.kakaoId}`);
+    await showAlert(`승인하고 아이 명단과 연결했어요.\n${k.memberCode} ${k.name}${k.number ?? ''} ↔ 카카오 ${m.kakaoId}`);
   };
 
   // 승인 — 승인 버튼만 누르면 된다. 다만 같은 닉네임을 쓰는 다른 회원이 있으면 관리자 닉네임을 정해야 승인된다
@@ -206,7 +206,7 @@ export default function MembersPage() {
       {failed && <p className="text-[14px] text-red-400 py-6">회원 목록을 불러오지 못했어요. (DB 설정 SQL을 실행했는지 확인해 주세요)</p>}
 
       <datalist id="member-codes">
-        {kids.map(k => <option key={k.id} value={k.memberCode}>{`${k.number ?? ''}${k.name}`}</option>)}
+        {kids.map(k => <option key={k.id} value={k.memberCode}>{`${k.name}${k.number ?? ''}`}</option>)}
       </datalist>
       {filter === 'children' ? (
         <ChildrenTab members={members} onLinked={loadKids} />
@@ -250,7 +250,7 @@ export default function MembersPage() {
                       <input className={`${input} w-20 uppercase`} value={form.code} placeholder="W0001" list="member-codes"
                         onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
                     ) : kidOf(m.userId) ? (
-                      <span className="text-[12px]"><span className="text-[#888] tabular-nums">{kidOf(m.userId)!.memberCode}</span> {kidOf(m.userId)!.number ?? ''}{kidOf(m.userId)!.name}</span>
+                      <span className="text-[12px]"><span className="text-[#888] tabular-nums">{kidOf(m.userId)!.memberCode}</span> {kidOf(m.userId)!.name}{kidOf(m.userId)!.number ?? ''}</span>
                     ) : m.requestedCode ? <span className="text-[12px] text-[#f59e0b]" title="가입할 때 적은 회원 코드 — 아직 연결 안 됨">요청 {m.requestedCode}</span> : <span className="text-[#ccc]">-</span>}
                   </td>)}
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(m.approvedAt ?? m.joinedAt)}</td>}
