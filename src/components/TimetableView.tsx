@@ -607,11 +607,15 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
                     const kindTd = (
                       <td className="border border-[#e4e4e7] h-9 min-w-[46px] px-0 text-center align-middle whitespace-nowrap">
                         {kc.status === 'child' && !locked(kc) && kc.source !== 'booking' ? (
-                          <select value={kc.kind ?? ''} onChange={e => changeKind({ teacher: t, time, side: kSide, cell: kc }, (e.target.value || null) as LessonKind)}
-                            aria-label={`${kc.name} 수업 종류`} title="수업 종류 (운동 / 구강 / -)"
-                            className={`w-full appearance-none bg-transparent text-center [text-align-last:center] px-0 text-[11px] cursor-pointer outline-none ${kc.kind ? 'text-[#52525b]' : 'text-[#d4d4d8]'} ${view.pend.has(`${kSide}|${t.id}|${time}`) ? 'bg-[#fff6d5]' : ''}`}>
-                            {LESSON_KINDS.map(o => <option key={o.label} value={o.key ?? ''}>{o.label}</option>)}
-                          </select>
+                          <label className={`relative flex h-9 w-full cursor-pointer items-center justify-center text-[11px] leading-none ${kc.kind ? 'text-[#52525b]' : 'text-[#d4d4d8]'} ${view.pend.has(`${kSide}|${t.id}|${time}`) ? 'bg-[#fff6d5]' : ''}`}
+                            title="수업 종류 (운동 / 구강 / -)">
+                            {/* 글씨는 그대로 보여 주고, 투명한 고르기 칸을 위에 겹친다 (손글씨 글꼴이 고르기 칸 안에서 잘려서) */}
+                            {kindLabel(kc.kind) || '-'}
+                            <select value={kc.kind ?? ''} onChange={e => changeKind({ teacher: t, time, side: kSide, cell: kc }, (e.target.value || null) as LessonKind)}
+                              aria-label={`${kc.name} 수업 종류`} className="absolute inset-0 h-full w-full cursor-pointer opacity-0">
+                              {LESSON_KINDS.map(o => <option key={o.label} value={o.key ?? ''}>{o.label}</option>)}
+                            </select>
+                          </label>
                         ) : kc.status === 'child' && !locked(kc) ? <span className="text-[11px] text-[#71717a]">{kindLabel(kc.kind)}</span> : null}
                       </td>
                     );
