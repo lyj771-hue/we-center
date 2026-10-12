@@ -553,7 +553,7 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
             <thead>
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white w-16`}>시간</th>
-                <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : mode === 'day' ? 3 : 1), 0) || 1}>
+                <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : mode === 'day' ? 4 : 2), 0) || 1}>
                   {mode === 'day' ? `${DOW[d.getDay()]} / ${d.getMonth() + 1}월 ${d.getDate()}일` : `${DOW[weekday]}요일 고정 시간표`}
                   {mode === 'day' && holiday && <span className="ml-2 text-[12px] text-red-400">공휴일 — 고정 수업 없음</span>}
                 </th>
@@ -561,7 +561,7 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white`} />
                 {shown.map(t => (
-                  <th key={t.id} colSpan={folded.has(t.name) ? 1 : mode === 'day' ? 3 : 1} className={`${th} text-[14px] text-[#16a34a] whitespace-nowrap`}>
+                  <th key={t.id} colSpan={folded.has(t.name) ? 1 : mode === 'day' ? 4 : 2} className={`${th} text-[14px] text-[#16a34a] whitespace-nowrap`}>
                     <button type="button" onClick={() => toggleFold(t.name)} title={folded.has(t.name) ? '펼치기' : '접기'}
                       className="inline-flex items-center gap-1 hover:opacity-70">
                       {t.name}<span className="text-[10px] text-[#aaa]">{folded.has(t.name) ? '▸' : '◂'}</span>
@@ -579,17 +579,16 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
                   </th>
                 ))}
               </tr>
-              {mode === 'day' && (
-                <tr>
-                  <th className={`${th} sticky left-0 z-10 bg-white`} />
-                  {shown.map(t => folded.has(t.name) ? <th key={t.id} className={`${th} text-[10px] text-[#ccc] w-6`}>접음</th> : (
-                    <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={<>
-                      <th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>
-                      <th className={`${th} text-[10px] text-[#16a34a] min-w-[64px]`}>결제방식</th>
-                    </>} />
-                  ))}
-                </tr>
-              )}
+              <tr>
+                <th className={`${th} sticky left-0 z-10 bg-white`} />
+                {shown.map(t => folded.has(t.name) ? <th key={t.id} className={`${th} text-[10px] text-[#ccc] w-6`}>접음</th> : (
+                  <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={mode === 'day' ? <>
+                    <th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>
+                    <th className={`${th} text-[10px] text-[#999] w-10 px-0.5`}>수업</th>
+                    <th className={`${th} text-[10px] text-[#16a34a] min-w-[64px]`}>결제방식</th>
+                  </> : <th className={`${th} text-[10px] text-[#999] w-10 px-0.5`}>수업</th>} />
+                ))}
+              </tr>
             </thead>
             <tbody>
               {rows.map(time => (
@@ -602,6 +601,20 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
                     // 테스트 화면: 다른 아이 칸은 잠금(내용 숨김)
                     const lockL = locked(left), lockR = locked(right);
                     const lockedTd = <td className="border border-[#e4e4e7] h-9 min-w-[84px] bg-[#fafafa] text-center text-[10px] text-[#d4d4d8]" title="테스트 화면에선 다른 아이 칸을 고칠 수 없어요">·</td>;
+                    // 수업 칸 — 그 시간 수업(빈타임 아이가 있으면 그 아이, 없으면 고정 아이)의 종류를 좁은 칸에서 고른다
+                    const kc = mode === 'day' && right.status === 'child' ? right : left;
+                    const kSide: Side = mode === 'day' && right.status === 'child' ? 'open' : 'fixed';
+                    const kindTd = (
+                      <td className="border border-[#e4e4e7] h-9 w-10 px-0 text-center align-middle">
+                        {kc.status === 'child' && !locked(kc) && kc.source !== 'booking' ? (
+                          <select value={kc.kind ?? ''} onChange={e => changeKind({ teacher: t, time, side: kSide, cell: kc }, (e.target.value || null) as LessonKind)}
+                            aria-label={`${kc.name} 수업 종류`} title="수업 종류 (운동 / 구강 / -)"
+                            className={`w-full appearance-none bg-transparent text-center text-[11px] cursor-pointer outline-none ${kc.kind ? 'text-[#52525b]' : 'text-[#d4d4d8]'} ${view.pend.has(`${kSide}|${t.id}|${time}`) ? 'bg-[#fff6d5]' : ''}`}>
+                            {LESSON_KINDS.map(o => <option key={o.label} value={o.key ?? ''}>{o.label}</option>)}
+                          </select>
+                        ) : kc.status === 'child' && !locked(kc) ? <span className="text-[11px] text-[#71717a]">{kindLabel(kc.kind)}</span> : null}
+                      </td>
+                    );
                     const pendL = view.pend.has(`fixed|${t.id}|${time}`);
                     const pendR = view.pend.has(`open|${t.id}|${time}`);
                     return (
@@ -609,8 +622,7 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
                         left={lockL ? lockedTd :
                           <td className={`${td} min-w-[84px] ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
                             {/* 빈타임에 아이가 채워지면 옆 고정 칸은 회색으로 흐리게 */}
-                            <CellText cell={left} label={ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'}
-                              onKind={k => changeKind({ teacher: t, time, side: 'fixed', cell: left }, k)} />
+                            <CellText cell={left} label={ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} />
                           </td>
                         }
                         right={mode === 'day' ? (<>
@@ -620,9 +632,9 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
                             const b = e.currentTarget.getBoundingClientRect();
                             setPicking({ teacher: t, time, side: 'open', cell: right, rect: { left: b.left, top: b.top, bottom: b.bottom } });
                           }}>
-                            <CellText cell={right} label={ROW_LABEL[time]}
-                              onKind={right.source === 'booking' ? undefined : k => changeKind({ teacher: t, time, side: 'open', cell: right }, k)} />
+                            <CellText cell={right} label={ROW_LABEL[time]} />
                           </td>}
+                          {kindTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
                             {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved && !locked(c)).map((c, i) => (
@@ -633,7 +645,7 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
                                 onPay={c.childId ? e => pay(c.childId!, t.id, time, e) : undefined} />
                             ))}
                           </td>
-                        </>) : null}
+                        </>) : kindTd}
                       />
                     );
                   })}
@@ -711,7 +723,7 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
 }
 
 /** 칸 글자 — 3김채현 처럼 (숫자 + 이름) */
-function CellText({ cell, label, muted, onKind }: { cell: CellView; label?: string; muted?: boolean; onKind?: (k: LessonKind) => void }) {
+function CellText({ cell, label, muted }: { cell: CellView; label?: string; muted?: boolean }) {
   if (cell.status === 'empty' || cell.status === 'none') {
     return label ? <span className="text-[#c4c4cc]">{label}</span> : null;
   }
@@ -720,14 +732,6 @@ function CellText({ cell, label, muted, onKind }: { cell: CellView; label?: stri
   return (
     <span title={cell.note} className={`${muted ? 'text-[#8a8a93]' : 'text-[#27272a]'} ${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-50' : ''}`}>
       {cell.name}{cell.number ?? ''}
-      {/* 수업 종류 — 이름 옆에서 바로 고른다 (운동 / 구강 / -) */}
-      {onKind ? (
-        <select value={cell.kind ?? ''} onClick={e => e.stopPropagation()} onChange={e => onKind((e.target.value || null) as LessonKind)}
-          aria-label={`${cell.name} 수업 종류`} title="수업 종류"
-          className={`ml-1 appearance-none bg-transparent text-[10px] leading-none rounded px-0.5 py-0.5 border cursor-pointer ${cell.kind ? 'border-[#d4d4d8] text-[#52525b]' : 'border-dashed border-[#e4e4e7] text-[#c4c4cc]'}`}>
-          {LESSON_KINDS.map(o => <option key={o.label} value={o.key ?? ''}>{o.label}</option>)}
-        </select>
-      ) : kindLabel(cell.kind) && <span className="ml-0.5 text-[9px] text-[#71717a]">{kindLabel(cell.kind)}</span>}
       {cell.absent && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">결석</span>}
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
