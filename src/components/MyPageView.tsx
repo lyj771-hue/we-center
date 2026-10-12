@@ -40,9 +40,8 @@ const USAGE_CARDS: { method: MyPayment['method']; label: string }[] = [
 ];
 
 export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, failed }: MyPageViewProps) {
-  // 결제 현황 — 쓰는 결제만: 회원 관리에서 지원 항목을 체크했거나, 제공·충전 횟수가 있거나, 이미 쓴 것 (아직 안 썼으면 0회)
-  const checked = (m: MyPayment['method']) => !!child?.uses?.[m] || (m !== 'prepaid' && !!child?.supports[m]);
-  const payRows = payments.filter(p => checked(p.method) || p.total > 0 || p.used > 0);
+  // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
+  const payRows = payments;
 
   const card = MYPAGE_CARD;
 
@@ -104,7 +103,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용 횟수(매월 1일 0부터), 선결제는 남은 횟수 */}
       <section className={card}>
         <h2 className="text-[17px] text-[#27272a] mb-1">결제 현황</h2>
-        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든은 {monthNo}월에 사용한 횟수예요(매월 1일에 새로 세요). 선결제는 남은 횟수예요.</p>
+        <p className="text-[12px] text-[#999] mb-4">바우처·굳센·꿈이든·우진학교·지원금은 {monthNo}월에 사용한 횟수예요(매월 1일에 새로 세요). 선결제는 남은 횟수예요.</p>
         {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
           <table className="w-full text-[15px]">
             <tbody>
@@ -130,15 +129,13 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       </section>
 
       {/* 선결제 카드 — 센터 종이 카드처럼 충전·사용 내역과 남은 횟수 (선결제를 쓰는 아이만) */}
-      {ledger.length > 0 && (
-        <section id="prepaid" className={card}>
-          <h2 className="text-[17px] text-[#27272a] mb-4">선결제 카드</h2>
-          <PrepaidCard rows={ledger} name={child?.childName} />
-        </section>
-      )}
+      <section id="prepaid" className={card}>
+        <h2 className="text-[17px] text-[#27272a] mb-4">선결제 카드</h2>
+        <PrepaidCard rows={ledger} name={child?.childName} />
+      </section>
 
       {/* 결제별 사용 카드 — 바우처·굳센·꿈이든·지원금: 일자 · 그 달 회차 · 메모 (지난 달도 쌓인다) */}
-      {USAGE_CARDS.filter(u => checked(u.method) || history.some(h => h.method === u.method)).map(u => {
+      {USAGE_CARDS.map(u => {
         const p = payments.find(x => x.method === u.method);
         // 회차는 달마다 1회부터 (11월 첫 사용 = 1회)
         const perMonth = new Map<string, number>();
