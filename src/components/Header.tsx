@@ -45,7 +45,7 @@ export default function Header() {
 
   // 관리자에게만 보이는 메뉴 — 시간표 관리 / 로그인한 보호자 — 마이페이지
   const nav = isAdmin
-    ? [...NAV, { href: '/admin/timetable', label: '시간표 관리' }, { href: '/admin/dashboard', label: '수업 현황' }]
+    ? [...NAV, { href: '/admin/timetable', label: '시간표 관리' }]
     : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : NAV;
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
@@ -59,6 +59,8 @@ export default function Header() {
             <Link href="/members" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원 관리</Link>
             &nbsp;&nbsp;
             <Link href="/admin/timetable" className="underline underline-offset-2 opacity-60 hover:opacity-100">시간표</Link>
+            &nbsp;&nbsp;
+            <Link href="/admin/dashboard" className="underline underline-offset-2 opacity-60 hover:opacity-100">수업 현황</Link>
             &nbsp;&nbsp;
             <button onClick={logout} className="underline underline-offset-2 opacity-60 hover:opacity-100">
               종료
