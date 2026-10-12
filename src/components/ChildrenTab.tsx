@@ -9,6 +9,7 @@ import type { Member } from '@/lib/types';
 import type { LedgerRow } from '@/lib/prepaid';
 import { addCharge, getChildLedger } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
+import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
 import Portal from '@/components/Portal';
 
 // 회원 관리 — "아이 명단" 탭. 센터에 다니는 아이마다 회원 코드(W0001 …)가 있고,
@@ -58,6 +59,27 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
   useEffect(() => { load(); }, [load]);
 
   const memberOf = useMemo(() => new Map(members.map(m => [m.userId, m])), [members]);
+  // 승인 여부 — 연결된 보호자 계정이 없으면 미가입
+  const approvalOf = (k: Child) => !k.guardianUserId ? '미가입' : memberOf.get(k.guardianUserId)?.approvedAt ? '승인' : '미승인';
+
+  // 내려받기 — 지금 화면의 명단(찾기 적용) 그대로
+  const exportSheet = (): Sheet => {
+    const head = ['회원 코드', '이름', '구강', '뒷번호', '승인 여부', '연결된 보호자', '바우처(이번 달 사용/제공)', '굳센(이번 달 사용/제공)', '꿈이든(이번 달 사용/제공)', '선결제(잔여/충전)', '고정 수업', '메모'];
+    const rows = list.map(k => {
+      const pc = counts.get(k.id);
+      const pay = (used: number, total: number) => (total || used ? `${used}/${total}` : '');
+      return [
+        k.memberCode ?? '', `${k.number ?? ''}${k.name}`, k.oral ? '구강' : '', k.phoneLast4 ?? '', approvalOf(k),
+        k.guardianUserId ? memberOf.get(k.guardianUserId)?.nickname ?? '연결됨' : '',
+        pay(pc?.voucher ?? 0, k.voucherLimit ?? 0), pay(pc?.gusen ?? 0, k.gusenLimit ?? 0), pay(pc?.kkumideun ?? 0, k.kkumideunLimit ?? 0),
+        k.prepaidTotal || pc?.prepaid ? `${(k.prepaidTotal ?? 0) - (pc?.prepaid ?? 0)}/${k.prepaidTotal ?? 0}` : '',
+        (fixed.get(k.id) ?? []).map(f => `${DOW[f.weekday]} ${f.time} ${f.teacher}${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)] ? ` ${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)]}` : ''}`).join(', '),
+        k.memo ?? '',
+      ];
+    });
+    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 7, 8, 12, 12, 12, 12, 12, 40, 20] };
+  };
+  const stamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };
   const list = kids.filter(k => !q.trim() || `${k.memberCode} ${k.number ?? ''}${k.name}`.includes(q.trim()));
 
   const start = (k?: Child) => {
@@ -99,7 +121,11 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="이름·회원 코드 찾기"
           className="border border-[#e5e5e5] px-3 py-1.5 text-[13px] w-56 outline-none focus:border-[var(--brand)]" />
         <span className="text-[12px] text-[#aaa]">{list.length}명</span>
-        <button onClick={() => start()} className={`${btn} ml-auto border-[#0a0a0a] hover:bg-[#0a0a0a] hover:text-white`}>+ 아이 추가</button>
+        <button onClick={() => downloadXlsx([exportSheet()], `아이명단_${stamp()}`).catch(e => showAlert(`내려받지 못했어요.\n${(e as Error).message}`))}
+          className={`${btn} ml-auto border-[#16a34a] text-[#16a34a] hover:bg-[#f0fdf4]`} title="엑셀 파일(.xlsx) — 맥 Numbers 에서도 열려요">엑셀 다운로드</button>
+        <button onClick={() => downloadCsv([exportSheet()], `아이명단_${stamp()}`)}
+          className={`${btn} border-[#ddd] text-[#555] hover:bg-[#f8f8f8]`} title="CSV 파일 — 어떤 프로그램에서도 열려요">CSV 다운로드</button>
+        <button onClick={() => start()} className={`${btn} border-[#0a0a0a] hover:bg-[#0a0a0a] hover:text-white`}>+ 아이 추가</button>
       </div>
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — 회원 코드 SQL(supabase/children-code.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
 
@@ -114,6 +140,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
               {PAY_COLS.map(c => <th key={c.key} className={`${th} text-center`}>{c.label}<span className="block text-[10px] text-[#bbb]">{c.key === 'prepaid' ? '남은/충전' : '이번 달 사용/제공'}</span></th>)}
               <th className={th}>고정 수업</th>
               <th className={th}>연결된 보호자 계정</th>
+              <th className={th}>승인 여부</th>
               <th className={th}>메모</th>
               <th className={`${th} sticky right-0 bg-white`}><span className="sr-only">관리</span></th>
             </tr>
@@ -153,6 +180,9 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
                 <td className={`${td} text-[12px]`}><FixedList items={fixed.get(k.id) ?? []} /></td>
                 <td className={`${td} text-[12px] whitespace-nowrap`}>
                   {k.guardianUserId ? <span className="text-[var(--brand)]">{memberOf.get(k.guardianUserId)?.nickname ?? '연결됨'}</span> : <span className="text-[#ccc]">-</span>}
+                </td>
+                <td className={`${td} text-[12px] whitespace-nowrap`}>
+                  {(() => { const a = approvalOf(k); return <span className={a === '승인' ? 'text-[var(--brand)]' : a === '미승인' ? 'text-[#f59e0b]' : 'text-[#ccc]'}>{a}</span>; })()}
                 </td>
                 <td className={`${td} text-[12px] text-[#666] min-w-[120px]`}>{k.memo}</td>
                 <td className={`${td} text-right whitespace-nowrap sticky right-0 bg-white shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.12)]`}>
@@ -323,6 +353,7 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
           </select>
         )}
       </td>
+      <td className={`${td} text-[11px] text-[#aaa]`}>-</td>
       <td className={td}><input value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} placeholder="메모" className={`${input} w-full min-w-[120px]`} /></td>
       <td className={`${td} text-right whitespace-nowrap sticky right-0 bg-[#f8fbff] shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.12)]`}>
         <button onClick={onSave} className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white mr-1`}>저장</button>

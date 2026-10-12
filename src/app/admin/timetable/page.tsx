@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import Portal from '@/components/Portal';
+import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFile';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
@@ -136,6 +137,75 @@ export default function TimetablePage() {
   const sync = (body: Parameters<typeof syncTimetable>[0]) => {
     syncTimetable(body).then(() => setSyncMsg('')).catch(e => setSyncMsg(`캘린더 반영 실패: ${(e as Error).message}`));
   };
+  // 월별 내려받기 — 그 달 날짜별 시간표를 주마다 시트 하나로 (이 센터)
+  const [exportMonth, setExportMonth] = useState(() => toYmd(new Date()).slice(0, 7));
+  const [exporting, setExporting] = useState('');
+  const buildMonthSheets = async (ym: string): Promise<Sheet[]> => {
+    const [y, m] = ym.split('-').map(Number);
+    const last = new Date(y, m, 0).getDate();
+    const days = Array.from({ length: last }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`).filter(dd => parseYmd(dd).getDay() !== 0);
+    const hols = await getKoreanHolidays(String(y)).catch(() => [] as string[]);
+    const label = (k?: PayMethod) => PAY_METHODS.find(x => x.key === k)?.label ?? '';
+    const txt = (c: CellView) => c.status === 'undecided' ? '?' : c.status === 'off' ? '수업 안 함' : c.status !== 'child' ? ''
+      : `${c.number ?? ''}${c.name ?? ''}${c.absent ? ' 결석' : ''}${c.moved ? ' 옮김' : ''}${c.source === 'booking' ? ' (신청)' : ''}`;
+    const perDay: Record<string, Cell[][]> = {};
+    for (let i = 0; i < days.length; i += 4) {
+      await Promise.all(days.slice(i, i + 4).map(async dd => {
+        setExporting(`${dd.slice(5).replace('-', '/')} 불러오는 중…`);
+        const [b, pays, asg] = await Promise.all([getDayBoard(dd, children, center), getDayPayments(dd).catch(() => new Map<string, PayEntry>()), getDayAssigns(dd, center).catch(() => ({ added: [] as string[], removed: [] as string[] }))]);
+        const holiday = hols.includes(dd);
+        if (holiday) for (const [k, v] of b.fixed) if (v.source === 'fixed') b.fixed.delete(k);
+        const wdd = parseYmd(dd).getDay();
+        const has = new Set([...b.fixed.keys(), ...b.open.keys()].map(k => k.split('|')[0]));
+        const ts = teachers.filter(t => !asg.removed.includes(t.id) && (worksAt(t, center, wdd) || asg.added.includes(t.id) || has.has(t.id)));
+        const dt = parseYmd(dd);
+        const out: Cell[][] = [];
+        out.push([`${dt.getMonth() + 1}/${dt.getDate()}(${DOW[wdd]})${holiday ? ' 공휴일' : ''}`]);
+        out.push(['시간', ...ts.flatMap(t => [t.name, '', ''])]);
+        out.push(['', ...ts.flatMap(() => ['고정', '빈타임', '결제방식'])]);
+        for (const time of rowsForDay(dd)) {
+          const row: Cell[] = [`${time.replace(/^0/, '')}${ROW_LABEL[time] ? ` ${ROW_LABEL[time]}` : ''}`];
+          for (const t of ts) {
+            const l = cellOf(b.fixed, t.id, time), rr = cellOf(b.open, t.id, time);
+            const c = rr.status === 'child' ? rr : l;
+            let pay = '';
+            if (c.status === 'child' && !c.moved && !c.absent) {
+              const e = c.childId ? pays.get(`${c.childId}|${time}`) : undefined;
+              pay = e ? `${e.note || label(e.method)}${e.confirmed ? '' : ' (선택)'}` : rr.status === 'child' ? '' : label(defaultMethod(c.payment));
+            }
+            row.push(txt(l), txt(rr), pay);
+          }
+          out.push(row);
+        }
+        perDay[dd] = out;
+      }));
+    }
+    // 주(월요일 시작)마다 시트 하나 — 날짜별 표를 위에서 아래로 이어 붙인다
+    const weeks = new Map<string, string[]>();
+    for (const dd of days) {
+      const mon = addDays(dd, -((parseYmd(dd).getDay() + 6) % 7));
+      weeks.set(mon, [...(weeks.get(mon) ?? []), dd]);
+    }
+    return [...weeks.values()].map((ds, i) => {
+      const a = parseYmd(ds[0]), z = parseYmd(ds[ds.length - 1]);
+      const rows: Cell[][] = [[`${CENTERS.find(c => c.key === center)?.label} 시간표 · ${m}월 ${i + 1}주 (${a.getMonth() + 1}/${a.getDate()}~${z.getMonth() + 1}/${z.getDate()})`], []];
+      for (const dd of ds) rows.push(...perDay[dd], []);
+      return { name: `${m}월 ${i + 1}주 (${a.getDate()}~${z.getDate()}일)`, rows, cols: [12, ...Array(60).fill(11)] };
+    });
+  };
+  const exportFile = async (kind: 'xlsx' | 'csv') => {
+    try {
+      setExporting('불러오는 중…');
+      const sheets = await buildMonthSheets(exportMonth);
+      const name = `시간표_${CENTERS.find(c => c.key === center)?.label}_${exportMonth.replace('-', '')}`;
+      if (kind === 'xlsx') await downloadXlsx(sheets, name); else downloadCsv(sheets, name);
+    } catch (e) {
+      showAlert(`내려받지 못했어요.\n${(e as Error).message}`);
+    } finally {
+      setExporting('');
+    }
+  };
+
   const fullSync = async () => {
     if (!(await askConfirm('시간표 전체를 선생님 구글 캘린더에 반영할까요?\n(고정 수업은 이번 주부터 매주 반복, 공휴일은 빼요. 1분쯤 걸릴 수 있어요)'))) return;
     setFullSyncing(true);
@@ -403,6 +473,14 @@ export default function TimetablePage() {
           </button>
           <span className="text-[11px] text-[#999]">칸을 고친 뒤 아래 [스케줄 변경 완료]를 누르면 디비와 캘린더에 반영돼요. 어긋났을 때만 전체 반영을 눌러 주세요.</span>
           {syncMsg && <span className="text-[12px] text-red-400">{syncMsg}</span>}
+          <span className="ml-auto flex items-center gap-1.5">
+            <input type="month" value={exportMonth} onChange={e => e.target.value && setExportMonth(e.target.value)} className="text-[12px] border border-[#ddd] px-2 h-8" title="내려받을 달" />
+            <button onClick={() => exportFile('xlsx')} disabled={!!exporting} title="엑셀 파일(.xlsx) — 주마다 시트 하나. 맥 Numbers 에서도 열려요"
+              className="text-[12px] border border-[#16a34a] text-[#16a34a] px-3 h-8 hover:bg-[#f0fdf4] disabled:opacity-50">월별 엑셀</button>
+            <button onClick={() => exportFile('csv')} disabled={!!exporting} title="CSV 파일 — 주마다 이어 붙인 한 파일"
+              className="text-[12px] border border-[#ddd] text-[#555] px-3 h-8 hover:bg-[#f8f8f8] disabled:opacity-50">월별 CSV</button>
+            {exporting && <span className="text-[11px] text-[#999]">{exporting}</span>}
+          </span>
         </div>
         {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — 시간표 SQL(supabase/timetable.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
 
