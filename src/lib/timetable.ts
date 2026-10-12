@@ -481,3 +481,12 @@ export async function setMonthNote(childId: string, month: string, memo: string)
     : await q.delete().match({ child_id: childId, month: `${month}-01` });
   if (error) throw error;
 }
+
+/** 수업 현황 — 그 달 결제 기록 전부(선생님·결제방식·확정 여부·센터) */
+export async function getMonthLessonPayments(month: string): Promise<{ teacher_id: string | null; method: PayMethod; confirmed: boolean; center: string }[]> {
+  const [y, m] = month.split('-').map(Number);
+  const end = `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+  const { data, error } = await supabase.from('lesson_payments').select('teacher_id, method, confirmed, center').gte('day', `${month}-01`).lte('day', end);
+  if (error) throw error;
+  return (data ?? []).map(r => ({ teacher_id: r.teacher_id as string | null, method: r.method as PayMethod, confirmed: r.confirmed !== false, center: (r.center as string) ?? 'eunpyeong' }));
+}
