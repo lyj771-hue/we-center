@@ -445,3 +445,39 @@ export async function clearChildTestData(childId: string): Promise<{ day: string
   void c;   // 표가 없어도(SQL 전) 괜찮다
   return (cells ?? []) as { day: string; teacher_id: string; time: string; side: 'fixed' | 'open'; center: Center }[];
 }
+
+// ── 결제내역(월별) ──────────────────────────────────────────────────
+
+export interface MonthUse { voucher: number; gusen: number; kkumideun: number; woojin: number; subsidy: number; prepaid: number }
+
+/** 그 달 아이마다 결제별 사용 횟수(확정된 것) — 선결제는 결제 완료 + 선결제 카드의 직접 차감 */
+export async function getMonthUses(month: string): Promise<Map<string, MonthUse>> {
+  const [y, m] = month.split('-').map(Number);
+  const start = `${month}-01`;
+  const end = `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+  const [lp, pc] = await Promise.all([
+    supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', start).lte('day', end),
+    supabase.from('prepaid_charges').select('*').gte('day', start).lte('day', end).lt('count', 0),
+  ]);
+  if (lp.error) throw lp.error;
+  const map = new Map<string, MonthUse>();
+  const get = (id: string) => { const c = map.get(id) ?? { voucher: 0, gusen: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; map.set(id, c); return c; };
+  for (const r of lp.data ?? []) if (r.method in get(r.child_id)) (get(r.child_id) as unknown as Record<string, number>)[r.method]++;
+  for (const r of pc.data ?? []) if (!r.adjust) get(r.child_id as string).prepaid += -(r.count as number);
+  return map;
+}
+
+/** 그 달 메모 — 아이 id → 메모 */
+export async function getMonthNotes(month: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase.from('child_month_notes').select('child_id, memo').eq('month', `${month}-01`);
+  if (error) throw error;
+  return new Map((data ?? []).map(r => [r.child_id as string, (r.memo as string) ?? '']));
+}
+
+export async function setMonthNote(childId: string, month: string, memo: string): Promise<void> {
+  const q = supabase.from('child_month_notes');
+  const { error } = memo.trim()
+    ? await q.upsert({ child_id: childId, month: `${month}-01`, memo: memo.trim(), updated_at: new Date().toISOString() }, { onConflict: 'child_id,month' })
+    : await q.delete().match({ child_id: childId, month: `${month}-01` });
+  if (error) throw error;
+}

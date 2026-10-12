@@ -6,6 +6,7 @@ import { deleteProfile, getMembers, saveMemberProfile } from '@/lib/store';
 import type { Member, MemberExtras } from '@/lib/types';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
+import PaymentsTab from '@/components/PaymentsTab';
 import type { Child } from '@/lib/timetable';
 import { childLabel, getChildren, linkChild, setChildUses } from '@/lib/timetable';
 
@@ -14,7 +15,7 @@ import { childLabel, getChildren, linkChild, setChildUses } from '@/lib/timetabl
 // "승인"을 누르면 승인일자가 찍힌다(같은 닉네임 회원이 있을 때만 관리자 닉네임을 정해야 한다). 승인/미승인 탭으로 나눠 본다(승인 탭의 '가입일자'는 승인한 날, 미승인 탭의 '가입신청일자'는 처음 로그인한 날).
 // 메뉴에는 없고 관리자 모드 띠의 "회원 관리"로 들어온다.
 
-type Filter = 'waiting' | 'approved' | 'children';
+type Filter = 'waiting' | 'approved' | 'children' | 'payments';
 
 // 선결제 칸 — 지금은 가려 둔다(DB에는 칸이 있다). 다시 보이려면 true
 const SHOW_PREPAID = false;
@@ -213,7 +214,7 @@ export default function MembersPage() {
       </p>
 
       <div role="tablist" className="flex gap-1.5 mb-5">
-        {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`], ['children', `아이 명단 ${kids.length}`]] as const).map(([key, label]) => (
+        {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`], ['children', `아이 명단 ${kids.length}`], ['payments', '결제내역']] as const).map(([key, label]) => (
           <button key={key} role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}
             className={[
               'text-[13px] px-4 py-2 border transition-colors',
@@ -229,7 +230,9 @@ export default function MembersPage() {
       <datalist id="member-codes">
         {kids.map(k => <option key={k.id} value={k.memberCode}>{`${k.name}${k.number ?? ''}`}</option>)}
       </datalist>
-      {filter === 'children' ? (
+      {filter === 'payments' ? (
+        <PaymentsTab members={members} />
+      ) : filter === 'children' ? (
         <ChildrenTab members={members} onLinked={loadKids} onMembersChanged={load} />
       ) : (<>
       <div className="overflow-x-auto border-t border-[#e5e5e5]">
