@@ -7,7 +7,7 @@ import type { Member, MemberExtras } from '@/lib/types';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
 import type { Child } from '@/lib/timetable';
-import { getChildren, linkChild } from '@/lib/timetable';
+import { childLabel, getChildren, linkChild, setChildUses } from '@/lib/timetable';
 
 // 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자 표.
 // 보호자 닉네임은 보호자가 처음 입력한 것, 관리자 닉네임(center_nickname)·설명은 관리자가 정한다. 보호자 화면엔 늘 보호자 닉네임.
@@ -105,21 +105,33 @@ export default function MembersPage() {
     } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
 
+  // 지원 항목 체크 — 아이 명단과 연결된 계정은 아이의 "쓰는 결제" 체크와 같이 바뀐다(둘 중 어디서 바꿔도)
+  const supportOf = (m: Member, key: (typeof SUPPORTS)[number]['key']) => {
+    const k = kidOf(m.userId);
+    return k?.uses ? k.uses[key] : m[key];
+  };
   const toggleSupport = async (m: Member, key: (typeof SUPPORTS)[number]['key']) => {
+    const on = !supportOf(m, key);
     try {
-      await saveMemberProfile({ userId: m.userId, nickname: m.nickname, centerNickname: m.centerNickname, memo: m.memo, approvedAt: m.approvedAt, [key]: !m[key] });
-      setMembers(ms => ms.map(x => (x.userId === m.userId ? { ...x, [key]: !m[key] } : x)));
-    } catch { alert('저장하지 못했어요. 다시 시도해 주세요.'); }
+      await saveMemberProfile({ userId: m.userId, nickname: m.nickname, centerNickname: m.centerNickname, memo: m.memo, approvedAt: m.approvedAt, [key]: on });
+      setMembers(ms => ms.map(x => (x.userId === m.userId ? { ...x, [key]: on } : x)));
+      const k = kidOf(m.userId);
+      if (k) {
+        await setChildUses(k.id, key, on);
+        setKids(list => list.map(x => (x.id === k.id && x.uses ? { ...x, uses: { ...x.uses, [key]: on } } : x)));
+      }
+    } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
 
   // 승인할 때 아이 명단과 자동 연결 — 이름(보호자 닉네임 또는 관리자 닉네임, 앞 숫자 포함 가능)과 뒷번호 4자리가 둘 다 같은 아이가 딱 하나면 잇는다
-  const matchChild = async (m: Member, centerNickname: string) => {
-    if (kidOf(m.userId)) return;   // 이미 연결됨
+  const matchChild = async (m: Member, centerNickname: string): Promise<Child | undefined> => {
+    if (kidOf(m.userId)) return kidOf(m.userId);   // 이미 연결됨
     if (!m.phoneLast4) { await showAlert('승인했어요.\n뒷번호가 없어서 아이 명단과는 연결하지 않았어요.'); return; }
     const names = [m.nickname, centerNickname].map(x => x.trim()).filter(Boolean);
     // 화면을 연 뒤에 명단(뒷번호 등)이 바뀌었을 수 있으니 새로 읽어서 맞춘다
     const fresh = await getChildren().catch(() => kids);
-    if (fresh.some(k => k.guardianUserId === m.userId)) { setKids(fresh); return; }
+    const already = fresh.find(k => k.guardianUserId === m.userId);
+    if (already) { setKids(fresh); return already; }
     const hits = fresh.filter(k => k.phoneLast4 === m.phoneLast4 && names.some(n => n === k.name || n === `${k.name}${k.number ?? ''}` || n === `${k.number ?? ''}${k.name}`));
     if (hits.length !== 1) {
       await showAlert(hits.length
@@ -134,6 +146,7 @@ export default function MembersPage() {
     await linkChild(k.id, m.userId);
     loadKids();
     await showAlert(`승인하고 아이 명단과 연결했어요.\n${k.memberCode} ${k.name}${k.number ?? ''} ↔ 카카오 ${m.kakaoId}`);
+    return k;
   };
 
   // 승인 — 승인 버튼만 누르면 된다. 다만 같은 닉네임을 쓰는 다른 회원이 있으면 관리자 닉네임을 정해야 승인된다
@@ -155,16 +168,24 @@ export default function MembersPage() {
     } else if (!(await askConfirm(`"${m.nickname}" 회원의 승인을 취소할까요?`))) {
       return;
     }
+    const approvedAt = approve ? new Date().toISOString() : undefined;
     try {
       const r = await saveMemberProfile({
         userId: m.userId,
         nickname: m.nickname,
         centerNickname,
         memo: m.memo,
-        approvedAt: approve ? new Date().toISOString() : undefined,
+        approvedAt: approvedAt,
       });
       if (r === 'taken') { await showAlert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
-      if (approve) await matchChild(m, centerNickname);
+      if (approve) {
+        // 아이 명단과 이어지면 관리자 닉네임 = 아이 이름+숫자 (예: 김채현3)
+        const k = await matchChild(m, centerNickname);
+        if (k && childLabel(k) !== centerNickname) {
+          const r2 = await saveMemberProfile({ userId: m.userId, nickname: m.nickname, centerNickname: childLabel(k), memo: m.memo, approvedAt });
+          if (r2 === 'taken') await showAlert(`관리자 닉네임 "${childLabel(k)}"을 이미 다른 회원이 쓰고 있어서 바꾸지 않았어요.`);
+        }
+      }
       load();
     } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
@@ -209,7 +230,7 @@ export default function MembersPage() {
         {kids.map(k => <option key={k.id} value={k.memberCode}>{`${k.name}${k.number ?? ''}`}</option>)}
       </datalist>
       {filter === 'children' ? (
-        <ChildrenTab members={members} onLinked={loadKids} />
+        <ChildrenTab members={members} onLinked={loadKids} onMembersChanged={load} />
       ) : (<>
       <div className="overflow-x-auto border-t border-[#e5e5e5]">
         <table className="w-full text-[14px] text-[#333] border-collapse">
@@ -233,7 +254,7 @@ export default function MembersPage() {
               <th className={th}>관리자 닉네임</th>
               <th className={th}>뒷번호</th>
               <th className={th}>설명</th>
-              {SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
+              {filter !== 'waiting' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
               <th className={th}><span className="sr-only">관리</span></th>
             </tr>
@@ -272,9 +293,9 @@ export default function MembersPage() {
                     {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
                       : <span className="text-[#666] whitespace-pre-line">{m.memo || ''}</span>}
                   </td>
-                  {SUPPORTS.map(x => (
+                  {filter !== 'waiting' && SUPPORTS.map(x => (
                     <td key={x.key} className={`${td} text-center`}>
-                      <input type="checkbox" checked={m[x.key]} disabled={!m.nickname} aria-label={`${m.centerNickname || m.nickname} ${x.label}`}
+                      <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname} aria-label={`${m.centerNickname || m.nickname} ${x.label}`}
                         onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />
                     </td>
                   ))}

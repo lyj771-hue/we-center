@@ -27,7 +27,7 @@ export interface Child {
   uses?: UsesFlags;
 }
 
-export type UsesKey = 'voucher' | 'gusen' | 'kkumideun' | 'prepaid';
+export type UsesKey = 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid';
 export type UsesFlags = Record<UsesKey, boolean>;
 
 /** 아이 이름 + 동명이인 숫자 (예: 김채현3) — 시간표·검색에서 이렇게 보인다 */
@@ -94,7 +94,7 @@ export async function getChildren(): Promise<Child[]> {
     voucherLimit: r.voucher_limit ?? 0, gusenLimit: r.gusen_limit ?? 0, kkumideunLimit: r.kkumideun_limit ?? 0, prepaidTotal: r.prepaid_total ?? 0,
     number: r.number ?? undefined, memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
-    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, kkumideun: !!r.uses_kkumideun, prepaid: !!r.uses_prepaid },
+    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
   }));
 }
 
@@ -319,11 +319,13 @@ export async function syncTimetable(body: TimetableSync): Promise<Record<string,
 
 // ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
 
-export type PayMethod = 'voucher' | 'gusen' | 'kkumideun' | 'prepaid' | 'card' | 'cash' | 'other';
+export type PayMethod = 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid' | 'card' | 'cash' | 'other';
 export const PAY_METHODS: { key: PayMethod; label: string; short: string }[] = [
   { key: 'voucher', label: '바우처', short: 'b' },
   { key: 'gusen', label: '굳센', short: 'e' },
   { key: 'kkumideun', label: '꿈이든', short: 'c' },
+  { key: 'woojin', label: '우진학교', short: '우' },
+  { key: 'subsidy', label: '지원금', short: '지' },
   { key: 'prepaid', label: '선결제', short: '선' },
   { key: 'card', label: '신용카드', short: '카' },
   { key: 'cash', label: '현금', short: '현' },
@@ -358,19 +360,19 @@ export async function setLessonPayment(childId: string, day: string, time: strin
   if (error) throw error;
 }
 
-export interface PayCount { voucher: number; gusen: number; kkumideun: number; prepaid: number }
+export interface PayCount { voucher: number; gusen: number; kkumideun: number; woojin: number; subsidy: number; prepaid: number }
 
 /** 아이마다 사용 횟수(확정된 결제만) — 바우처·굳센·꿈이든은 이번 달, 선결제는 지금까지 */
 export async function getPaymentCounts(monthStart: string, monthEnd: string): Promise<Map<string, PayCount>> {
   const [month, prepaid] = await Promise.all([
-    supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'kkumideun']),
+    supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy']),
     supabase.from('lesson_payments').select('child_id').eq('confirmed', true).eq('method', 'prepaid'),
   ]);
   if (month.error) throw month.error;
   if (prepaid.error) throw prepaid.error;
   const m = new Map<string, PayCount>();
-  const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, kkumideun: 0, prepaid: 0 }; m.set(id, c); return c; };
-  for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'kkumideun']++;
+  const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; m.set(id, c); return c; };
+  for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy']++;
   for (const r of prepaid.data ?? []) get(r.child_id).prepaid++;
   return m;
 }

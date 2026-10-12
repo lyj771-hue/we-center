@@ -6,6 +6,7 @@ import type { Child } from '@/lib/timetable';
 import type { PayCount } from '@/lib/timetable';
 import { deleteChild, getChildren, getFixedByChild, getMonthUsage, getPaymentCounts, linkChild, saveChild, setChildUses, setMonthUsage, type UsesKey } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
+import { saveMemberProfile } from '@/lib/store';
 import type { LedgerRow } from '@/lib/prepaid';
 import { addCharge, getChildLedger } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
@@ -24,11 +25,15 @@ const emptyForm = { name: '', number: '', oral: false, memo: '', guardian: '', p
 
 // 결제 칸 — 쓰는 결제 체크(바우처·굳센·꿈이든·선결제), 이번 달 사용 횟수(바우처·굳센·꿈이든, 직접 적을 수 있음), 선결제 잔여
 const USES: { key: UsesKey; label: string }[] = [
-  { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'kkumideun', label: '꿈이든' }, { key: 'prepaid', label: '선결제' },
+  { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'kkumideun', label: '꿈이든' },
+  { key: 'woojin', label: '우진학교' }, { key: 'subsidy', label: '지원금' }, { key: 'prepaid', label: '선결제' },
 ];
-const MONTH_COLS = USES.filter(u => u.key !== 'prepaid') as { key: 'voucher' | 'gusen' | 'kkumideun'; label: string }[];
+type MonthKey = Exclude<UsesKey, 'prepaid'>;
+const MONTH_COLS = USES.filter(u => u.key !== 'prepaid') as { key: MonthKey; label: string }[];
+// 회원 관리(승인 탭)의 지원 항목과 같은 것 — 둘 중 어디서 체크해도 양쪽이 같이 바뀐다
+const PROFILE_KEYS: MonthKey[] = ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy'];
 
-export default function ChildrenTab({ members, onLinked }: { members: Member[]; onLinked: () => void }) {
+export default function ChildrenTab({ members, onLinked, onMembersChanged }: { members: Member[]; onLinked: () => void; onMembersChanged: () => void }) {
   const [kids, setKids] = useState<Child[]>([]);
   const [fixed, setFixed] = useState<Map<string, Fixed[]>>(new Map());
   const [counts, setCounts] = useState<Map<string, PayCount>>(new Map());
@@ -62,13 +67,21 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
 
   const memberOf = useMemo(() => new Map(members.map(m => [m.userId, m])), [members]);
   // 이번 달 사용 횟수 — 직접 적은 값이 있으면 그 값, 없으면 [결제 완료]로 확정된 횟수
-  const usedOf = (k: Child, key: 'voucher' | 'gusen' | 'kkumideun') => manual.get(k.id)?.[key] ?? counts.get(k.id)?.[key] ?? 0;
+  const usedOf = (k: Child, key: MonthKey) => manual.get(k.id)?.[key] ?? counts.get(k.id)?.[key] ?? 0;
   const toggleUses = async (k: Child, key: UsesKey, on: boolean) => {
-    setKids(list => list.map(x => (x.id === k.id ? { ...x, uses: { ...(x.uses ?? { voucher: false, gusen: false, kkumideun: false, prepaid: false }), [key]: on } } : x)));
-    try { await setChildUses(k.id, key, on); }
+    setKids(list => list.map(x => (x.id === k.id ? { ...x, uses: { ...(x.uses ?? { voucher: false, gusen: false, kkumideun: false, woojin: false, subsidy: false, prepaid: false }), [key]: on } } : x)));
+    try {
+      await setChildUses(k.id, key, on);
+      // 연결된 보호자 계정의 지원 항목도 같이
+      const g = k.guardianUserId ? memberOf.get(k.guardianUserId) : undefined;
+      if (g && (PROFILE_KEYS as UsesKey[]).includes(key) && g[key as MonthKey] !== on) {
+        await saveMemberProfile({ userId: g.userId, nickname: g.nickname, centerNickname: g.centerNickname, memo: g.memo, approvedAt: g.approvedAt, [key]: on });
+        onMembersChanged();
+      }
+    }
     catch (e) { showAlert(`저장하지 못했어요 — SQL(supabase/child-payment-flags.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); load(); }
   };
-  const saveUsed = async (k: Child, key: 'voucher' | 'gusen' | 'kkumideun', text: string) => {
+  const saveUsed = async (k: Child, key: MonthKey, text: string) => {
     const v = text.trim() === '' ? null : Math.max(0, Math.floor(Number(text)) || 0);
     if (v === (manual.get(k.id)?.[key] ?? null)) return;
     if (v !== null && manual.get(k.id)?.[key] === undefined && v === (counts.get(k.id)?.[key] ?? 0)) return;   // 센 횟수와 같으면 그대로
@@ -82,21 +95,21 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
 
   // 내려받기 — 지금 화면의 명단(찾기 적용) 그대로
   const exportSheet = (): Sheet => {
-    const head = ['회원 코드', '이름', '번호', '구강', '뒷번호', '승인 여부', '연결된 보호자', '바우처', '굳센', '꿈이든', '선결제', '바우처 이번 달 사용', '굳센 이번 달 사용', '꿈이든 이번 달 사용', '선결제 잔여/충전', '고정 수업', '메모'];
+    const head = ['회원 코드', '이름', '번호', '구강', '뒷번호', '승인 여부', '연결된 보호자', ...USES.map(u => u.label), ...MONTH_COLS.map(u => `${u.label} 이번 달 사용`), '선결제 잔여/충전', '고정 수업', '메모'];
     const rows = list.map(k => {
       const pc = counts.get(k.id);
       const ck = (key: UsesKey) => (k.uses?.[key] ? 'O' : '');
       return [
         k.memberCode ?? '', k.name, k.number ?? 1, k.oral ? '구강' : '', k.phoneLast4 ?? '', approvalOf(k),
         k.guardianUserId ? memberOf.get(k.guardianUserId)?.nickname ?? '연결됨' : '',
-        ck('voucher'), ck('gusen'), ck('kkumideun'), ck('prepaid'),
-        usedOf(k, 'voucher'), usedOf(k, 'gusen'), usedOf(k, 'kkumideun'),
+        ...USES.map(u => ck(u.key)),
+        ...MONTH_COLS.map(u => usedOf(k, u.key)),
         k.prepaidTotal || pc?.prepaid ? `${(k.prepaidTotal ?? 0) - (pc?.prepaid ?? 0)}/${k.prepaidTotal ?? 0}` : '',
         (fixed.get(k.id) ?? []).map(f => `${DOW[f.weekday]} ${f.time} ${f.teacher}${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)] ? ` ${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)]}` : ''}`).join(', '),
         k.memo ?? '',
       ];
     });
-    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 5, 7, 8, 12, 7, 7, 7, 7, 10, 10, 10, 12, 40, 20] };
+    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 5, 7, 8, 12, ...USES.map(() => 7), ...MONTH_COLS.map(() => 10), 12, 40, 20] };
   };
   const stamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };
   const list = kids.filter(k => !q.trim() || `${k.memberCode} ${k.name}${k.number ?? ''}`.includes(q.trim()));

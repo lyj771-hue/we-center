@@ -8,7 +8,7 @@ import { addDays, parseYmd, thisMonday } from '@/lib/schedule';
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', kkumideun: '꿈이든', prepaid: '선결제' };
+const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', kkumideun: '꿈이든', woojin: '우진학교', subsidy: '지원금', prepaid: '선결제' };
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈이든' };
 const payKind = (p: string) => {
   const code = p.toLowerCase().replace(/[x~]/g, '');
