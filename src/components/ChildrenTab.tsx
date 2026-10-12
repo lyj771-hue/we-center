@@ -82,6 +82,7 @@ export default function ChildrenTab({ members, onLinked, onMembersChanged }: { m
         await saveMemberProfile({ userId: g.userId, nickname: g.nickname, centerNickname: g.centerNickname, memo: g.memo, approvedAt: g.approvedAt, [key]: on });
         onMembersChanged();
       }
+      onLinked();   // 회원 관리 화면이 들고 있는 아이 명단도 새로 — 승인 탭 체크가 이걸 보여 준다
     }
     catch (e) { showAlert(`저장하지 못했어요 — SQL(supabase/child-payment-flags.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); load(); }
   };
