@@ -25,7 +25,7 @@ export default function PrepaidCard({ rows, name, editingId }: {
   const md = (d: string) => `${d.slice(2, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}`;   // 26/10/11
   return (
     <div className="relative mx-auto max-w-[380px] rounded-[16px] border border-[#e4e4e7] bg-white px-5 pt-5 pb-4 shadow-[0_2px_10px_rgba(0,0,0,0.06)] overflow-hidden">
-      <img src="/logo-we.jpg" alt="" aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 w-40 -translate-x-1/2 -translate-y-1/2 opacity-[0.06]" />
+      <img src="/logo-we-heart.png" alt="" aria-hidden="true" className="pointer-events-none absolute left-1/2 top-1/2 w-40 -translate-x-1/2 -translate-y-1/2 opacity-[0.06]" />
       <div className="relative">
         <p className="text-[12px] text-[#999] mt-0.5 tabular-nums">
           {/* 홈 화면 인사("○○님 오셨군요♥")와 같은 하트 */}

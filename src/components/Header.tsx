@@ -74,7 +74,7 @@ export default function Header() {
             aria-label="We 센터 홈"
             className="group select-none block w-[64px] h-[64px] md:w-[100px] md:h-[100px] transition-opacity duration-200 hover:opacity-70"
           >
-            <img src="/logo-we.jpg" alt="We 소아재활센터" className="w-full h-full object-contain" />
+            <img src="/logo-we-heart.png" alt="We 소아재활센터" className="w-full h-full object-contain" />
           </Link>
 
           {/* 보호자 로그인 + 카카오톡 채널 — PC는 둘 다 오른쪽.
