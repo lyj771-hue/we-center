@@ -64,12 +64,12 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
 
   // 내려받기 — 지금 화면의 명단(찾기 적용) 그대로
   const exportSheet = (): Sheet => {
-    const head = ['회원 코드', '이름', '구강', '뒷번호', '승인 여부', '연결된 보호자', '바우처(이번 달 사용/제공)', '굳센(이번 달 사용/제공)', '꿈이든(이번 달 사용/제공)', '선결제(잔여/충전)', '고정 수업', '메모'];
+    const head = ['회원 코드', '이름', '번호', '구강', '뒷번호', '승인 여부', '연결된 보호자', '바우처(이번 달 사용/제공)', '굳센(이번 달 사용/제공)', '꿈이든(이번 달 사용/제공)', '선결제(잔여/충전)', '고정 수업', '메모'];
     const rows = list.map(k => {
       const pc = counts.get(k.id);
       const pay = (used: number, total: number) => (total || used ? `${used}/${total}` : '');
       return [
-        k.memberCode ?? '', `${k.number ?? ''}${k.name}`, k.oral ? '구강' : '', k.phoneLast4 ?? '', approvalOf(k),
+        k.memberCode ?? '', k.name, k.number ?? 1, k.oral ? '구강' : '', k.phoneLast4 ?? '', approvalOf(k),
         k.guardianUserId ? memberOf.get(k.guardianUserId)?.nickname ?? '연결됨' : '',
         pay(pc?.voucher ?? 0, k.voucherLimit ?? 0), pay(pc?.gusen ?? 0, k.gusenLimit ?? 0), pay(pc?.kkumideun ?? 0, k.kkumideunLimit ?? 0),
         k.prepaidTotal || pc?.prepaid ? `${(k.prepaidTotal ?? 0) - (pc?.prepaid ?? 0)}/${k.prepaidTotal ?? 0}` : '',
@@ -77,7 +77,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
         k.memo ?? '',
       ];
     });
-    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 7, 8, 12, 12, 12, 12, 12, 40, 20] };
+    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 5, 7, 8, 12, 12, 12, 12, 12, 40, 20] };
   };
   const stamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };
   const list = kids.filter(k => !q.trim() || `${k.memberCode} ${k.number ?? ''}${k.name}`.includes(q.trim()));
@@ -91,7 +91,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
   const save = async (k?: Child) => {
     if (!form.name.trim()) { showAlert('이름을 적어 주세요.'); return; }
     try {
-      await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined, oral: form.oral, memo: form.memo, phoneLast4: form.phone,
+      await saveChild({ id: k?.id, name: form.name, number: form.number ? Number(form.number) : undefined,   // 빈칸 = 번호 없음(1로 보임, 시간표엔 숫자가 안 붙는다) oral: form.oral, memo: form.memo, phoneLast4: form.phone,
         voucherLimit: Number(form.vl) || 0, gusenLimit: Number(form.gl) || 0, kkumideunLimit: Number(form.kl) || 0 });   // 선결제는 [충전] 기록으로만
       if (k && form.guardian !== (k.guardianUserId ?? '')) {
         await linkChild(k.id, form.guardian || null);
@@ -136,6 +136,7 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
               <th className={th}>카카오계정번호</th>
               <th className={th}>회원 코드</th>
               <th className={th}>이름</th>
+              <th className={`${th} text-center`} title="같은 이름 구분 번호 — 없으면 1">번호</th>
               <th className={th}>뒷번호</th>
               {PAY_COLS.map(c => <th key={c.key} className={`${th} text-center`}>{c.label}<span className="block text-[10px] text-[#bbb]">{c.key === 'prepaid' ? '남은/충전' : '이번 달 사용/제공'}</span></th>)}
               <th className={th}>고정 수업</th>
@@ -157,7 +158,9 @@ export default function ChildrenTab({ members, onLinked }: { members: Member[]; 
               <tr key={k.id} className="border-b border-[#f0f0f0]">
                 <td className={`${td} text-[12px] text-[#999] whitespace-nowrap tabular-nums`}>{k.guardianUserId ? memberOf.get(k.guardianUserId)?.kakaoId || '-' : <span className="text-[#ddd]">-</span>}</td>
                 <td className={`${td} text-[12px] text-[#888] whitespace-nowrap tabular-nums`}>{k.memberCode}</td>
-                <td className={`${td} whitespace-nowrap`}>{k.number ?? ''}{k.name}{k.oral && <span className="ml-1 text-[11px] text-[#999]">구강</span>}</td>
+                <td className={`${td} whitespace-nowrap`}>{k.name}{k.oral && <span className="ml-1 text-[11px] text-[#999]">구강</span>}</td>
+                {/* 같은 이름 구분 번호 — 비어 있으면 1 (시간표에는 번호가 있는 아이만 이름 앞에 붙는다) */}
+                <td className={`${td} text-center text-[13px] tabular-nums ${k.number ? '' : 'text-[#aaa]'}`}>{k.number ?? 1}</td>
                 <td className={`${td} text-[12px] whitespace-nowrap tabular-nums`}>{k.phoneLast4 ?? <span className="text-[#ccc]">-</span>}</td>
                 {PAY_COLS.map(c => {
                   const used = counts.get(k.id)?.[c.key] ?? 0;
@@ -325,11 +328,11 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
       <td className={`${td} text-[12px] text-[#bbb]`}>{approved.find(m => m.userId === form.guardian)?.kakaoId ?? '-'}</td>
       <td className={`${td} text-[12px] text-[#888]`}>{code}</td>
       <td className={td}>
-        <span className="inline-flex items-center gap-1">
-          <input value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value.replace(/\D/g, '') }))} placeholder="숫자" className={`${input} w-10 text-center`} />
-          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="이름" className={`${input} w-24`} autoFocus />
-        </span>
-        <label className="flex items-center gap-1 text-[11px] text-[#888] mt-1"><input type="checkbox" checked={form.oral} onChange={e => setForm(f => ({ ...f, oral: e.target.checked }))} />구강(S)</label>
+        <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="이름" className={`${input} w-24`} autoFocus />
+        <label className="flex items-center gap-1 text-[11px] text-[#888] mt-1"><input type="checkbox" checked={form.oral} onChange={e => setForm(f => ({ ...f, oral: e.target.checked }))} />구강</label>
+      </td>
+      <td className={`${td} text-center`}>
+        <input value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value.replace(/\D/g, '') }))} placeholder="1" className={`${input} w-10 text-center`} />
       </td>
       <td className={td}>
         <input value={form.phone} inputMode="numeric" maxLength={4} placeholder="1234"
