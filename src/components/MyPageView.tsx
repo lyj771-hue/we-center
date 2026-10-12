@@ -41,7 +41,7 @@ const USAGE_CARDS: { method: MyPayment['method']; label: string }[] = [
 
 export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, failed }: MyPageViewProps) {
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
-  const payRows = payments;
+  const payRows = [...payments].sort((a, b) => (a.method === 'prepaid' ? -1 : b.method === 'prepaid' ? 1 : 0));   // 선결제를 맨 위로
 
   const card = MYPAGE_CARD;
 
