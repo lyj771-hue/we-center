@@ -10,7 +10,7 @@ import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import {
   CENTERS, LESSON_KINDS, PAY_METHODS, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getPaymentCounts, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
-  rowsForDay, rowsForWeekday, saveDayCell, syncTimetable, clearChildTestData,
+  rowsForDay, rowsForWeekday, saveDayCell, syncTimetable, clearChildTestData, getFixedByChild,
 } from '@/lib/timetable';
 
 // 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임 | 결제방식] 세 칸.
@@ -264,6 +264,13 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
   const testId = testKid?.id;
   const locked = (c: CellView) => isTest && c.status !== 'empty' && c.status !== 'none' && c.childId !== testId;
   const pickKids = isTest ? (testKid ? [testKid] : []) : children;
+  // 테스트 아이의 고정 수업 — 그 요일로 바로 가는 버튼 (월요일엔 수업이 없어 빈 표만 보일 수 있어서)
+  const [testFixed, setTestFixed] = useState<{ weekday: number; time: string; teacher: string }[]>([]);
+  useEffect(() => {
+    if (!testId) return;
+    getFixedByChild().then(m => setTestFixed((m.get(testId) ?? []).map(f => ({ weekday: f.weekday, time: f.time, teacher: f.teacher })))).catch(() => {});
+  }, [testId]);
+  const nextDay = (wd: number) => { const t = toYmd(new Date()); return addDays(t, (wd - parseYmd(t).getDay() + 7) % 7); };
   // 테스트 기록 지우기 — 이 아이의 결제 기록·그날 칸을 지우고 캘린더도 맞춘다(고정 수업·선결제 충전은 그대로)
   const clearTestRecords = async () => {
     if (!testId) return;
@@ -470,6 +477,16 @@ export default function TimetableView({ testChildName }: { testChildName?: strin
         {isTest ? (
           <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-[#fef3c7] px-4 py-3 text-[13px] text-[#92400e]">
             <span><b>{testChildName}</b> 수업만 보이고 고칠 수 있어요. 다른 아이 칸은 잠겨 있어요. 저장은 <b>실제 디비</b>에 돼서 {testChildName} 마이페이지에서 바로 확인할 수 있어요.</span>
+            <span className="w-full flex flex-wrap items-center gap-1.5 text-[12px]">
+              {testChildName} 고정 수업:
+              {testFixed.length === 0 && <span className="text-[#b45309]/70">없음</span>}
+              {testFixed.map((f, i) => (
+                <button key={i} onClick={() => guard(() => { setMode('day'); setDay(nextDay(f.weekday)); })}
+                  className="border border-[#d97706] bg-white rounded-full px-2.5 py-0.5 hover:bg-[#fffbeb]" title="그 요일(오늘 또는 다음)로 가기">
+                  {DOW[f.weekday]} {f.time.replace(/^0/, '')} {f.teacher} →
+                </button>
+              ))}
+            </span>
             <button onClick={clearTestRecords} className="ml-auto text-[12px] border border-[#d97706] text-[#b45309] bg-white px-3 py-1.5 rounded-full hover:bg-[#fffbeb]">테스트 기록 지우기</button>
             <a href="/admin/timetable" className="text-[12px] underline underline-offset-2">시간표 관리로</a>
           </div>
