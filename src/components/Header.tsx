@@ -28,7 +28,7 @@ export default function Header() {
   const pathname = usePathname();
   const { isAdmin, requestAdmin, logout } = useAdmin();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { userId, profile, login, logout: memberLogout, branches } = useMember();
+  const { userId, profile, login, logout: memberLogout } = useMember();
 
   // Triple-click the WE logo → admin prompt
   const clicks = useRef(0);
@@ -45,17 +45,10 @@ export default function Header() {
   };
 
   // 관리자 메뉴(회원관리·시간표)는 위 검은 띠에만 / 로그인한 보호자 — 마이페이지
-  // 보호자는 가입(신청)한 지점의 수업스케쥴 메뉴만
-  const branchOfHref = (href: string) => (href === '/schedule' ? 'eunpyeong' : href === '/schedule/uijeongbu' ? 'uijeongbu' : null);
-  const memberNav = NAV.filter(n => {
-    const b = branchOfHref(n.href);
-    if (!b || !profile) return true;
-    const st = branches.find(x => x.key === b)?.status ?? (b === (profile.center ?? 'eunpyeong') ? 'primary' : 'none');
-    return st !== 'none';
-  });
+  // 수업스케쥴 메뉴는 두 지점 모두 늘 보인다 (신청은 그 지점 승인된 보호자만)
   const nav = isAdmin
     ? NAV
-    : userId ? [...memberNav, { href: '/mypage', label: '마이페이지' }] : NAV;
+    : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : NAV;
 
   // /schedule/uijeongbu 는 수업스케쥴(의정부)에만 불이 들어오게
   const isActive = (href: string) => pathname === href || (pathname.startsWith(href + '/') && !NAV.some(n => n.href !== href && n.href.startsWith(href + '/') && pathname.startsWith(n.href)));

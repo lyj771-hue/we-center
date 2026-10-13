@@ -63,6 +63,20 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
     return () => { alive = false; };
   }, [years]);
 
+  // 이 지점 승인 전 — 칸마다 내용 대신 "승인 대기 중"
+  if (!approved) return (
+    <div className="space-y-6">
+      {top}
+      {['주별 시간표', '결제 현황', '선결제 카드', ...USAGE_CARDS.map(u => u.label)].map(t => (
+        <section key={t} className={card}>
+          <h2 className="text-[17px] text-[#27272a] mb-3">{t}</h2>
+          <p className="text-[14px] text-[#f59e0b]">승인 대기 중</p>
+        </section>
+      ))}
+      {bottom}
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {failed && <p className="text-[13px] text-red-400">불러오지 못했어요. ({failed})</p>}
