@@ -92,13 +92,15 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
 
       {/* 주별 시간표 */}
       <section className={card}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[17px] text-[#27272a]">주별 시간표</h2>
+        {/* 제목은 위 줄에 따로 — 주를 바꿔도(날짜 글자 길이·[이번 주] 버튼) 위치가 안 움직이게 */}
+        <h2 className="text-[17px] text-[#27272a] mb-3">주별 시간표</h2>
+        <div className="flex items-center mb-4">
           <div className="flex items-center gap-1.5 text-[13px]">
             <button onClick={() => setWeek(w => addDays(w, -7))} aria-label="지난주" className="w-8 h-8 border border-[#e5e5e5] rounded-full">‹</button>
             <span className="min-w-[120px] text-center tabular-nums">{ws.getMonth() + 1}/{ws.getDate()} ~ {we.getMonth() + 1}/{we.getDate()}</span>
             <button onClick={() => setWeek(w => addDays(w, 7))} aria-label="다음주" className="w-8 h-8 border border-[#e5e5e5] rounded-full">›</button>
-            {week !== thisMonday() && <button onClick={() => setWeek(() => thisMonday())} className="ml-1 text-[12px] text-[#888] underline underline-offset-2">이번 주</button>}
+            <button onClick={() => setWeek(() => thisMonday())} tabIndex={week === thisMonday() ? -1 : 0} aria-hidden={week === thisMonday()}
+              className={`ml-1 text-[12px] text-[#888] underline underline-offset-2 ${week === thisMonday() ? 'invisible' : ''}`}>이번 주</button>
           </div>
         </div>
         <div className="divide-y divide-[#f0f0f0]">
