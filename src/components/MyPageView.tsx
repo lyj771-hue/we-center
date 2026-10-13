@@ -55,7 +55,12 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   const days = [0, 1, 2, 3, 4, 5].map(i => addDays(week, i));
   const ws = parseYmd(week);
   const we = parseYmd(addDays(week, 5));
-  const monthNo = parseYmd(today).getMonth() + 1;
+  // 결제 현황 — 보는 달(YYYY-MM). 이번 달은 결제 현황 값 그대로, 지난 달은 결제 기록([결제 완료])으로 센다
+  const thisMonth = today.slice(0, 7);
+  const [payMonth, setPayMonth] = useState(thisMonth);
+  const shiftMonth = (ym: string, n: number) => { const d = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  const usedIn = (p: MyPayment) => payMonth === thisMonth ? p.used : history.filter(h => h.method === p.method && h.day.startsWith(payMonth)).length;
+  const payMonthLabel = `${payMonth.slice(0, 4)}년 ${Number(payMonth.slice(5, 7))}월`;
   // 공휴일 — 그 주에 걸친 해(연말·연초는 두 해)의 공휴일 이름
   const [holidays, setHolidays] = useState<Record<string, string>>({});
   const years = [...new Set([days[0].slice(0, 4), days[5].slice(0, 4)])].join(',');
@@ -140,7 +145,18 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       </section>
       {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용 횟수(매월 1일 0부터), 선결제는 남은 횟수 */}
       <section className={card}>
-        <h2 className="text-[17px] text-[#27272a] mb-3">결제 현황</h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[17px] text-[#27272a]">결제 현황</h2>
+          <button onClick={() => setPayMonth(thisMonth)} tabIndex={payMonth === thisMonth ? -1 : 0} aria-hidden={payMonth === thisMonth}
+            className={`text-[12px] text-[#888] underline underline-offset-2 ${payMonth === thisMonth ? 'invisible' : ''}`}>이번 달</button>
+        </div>
+        {/* 달 넘기기 — 바우처·굳센·꿈이든 사용 횟수가 그 달 것으로 바뀐다 (다음 달은 없어서 이번 달까지) */}
+        <div className="flex items-center justify-center gap-1.5 text-[13px] mb-3">
+          <button onClick={() => setPayMonth(m => shiftMonth(m, -1))} aria-label="지난달" className="w-8 h-8 border border-[#e5e5e5] rounded-full">‹</button>
+          <span className="min-w-[120px] text-center tabular-nums">{payMonthLabel}</span>
+          <button onClick={() => setPayMonth(m => shiftMonth(m, 1))} disabled={payMonth >= thisMonth} aria-label="다음달"
+            className="w-8 h-8 border border-[#e5e5e5] rounded-full disabled:opacity-30">›</button>
+        </div>
         {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
           <table className="w-full text-[15px]">
             <tbody>
@@ -150,15 +166,15 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                   {p.method === 'woojin' || p.method === 'subsidy' ? (
                     <td className="py-2.5 text-right tabular-nums text-[var(--brand)]">
                       {/* 우진학교·지원금은 남은 금액 */}
-                      <span className="text-[12px] text-[#999] mr-1">남은 금액</span>{p.total.toLocaleString('ko-KR')}<span className="text-[12px] text-[#999] ml-0.5">원</span>
+                      <span className="text-[12px] text-[#999] mr-1">{payMonth === thisMonth ? '' : '지금 '}남은 금액</span>{p.total.toLocaleString('ko-KR')}<span className="text-[12px] text-[#999] ml-0.5">원</span>
                     </td>
                   ) : p.method === 'prepaid' ? (
                     <td className={`py-2.5 text-right tabular-nums ${p.total - p.used <= 0 ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
-                      <span className="text-[12px] text-[#999] mr-1">남은</span>{p.total - p.used}<span className="text-[12px] text-[#999] ml-1">회</span>
+                      <span className="text-[12px] text-[#999] mr-1">{payMonth === thisMonth ? '' : '지금 '}남은</span>{p.total - p.used}<span className="text-[12px] text-[#999] ml-1">회</span>
                     </td>
                   ) : (
-                    <td className={`py-2.5 text-right tabular-nums ${p.total && p.used >= p.total ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
-                      <span className="text-[12px] text-[#999] mr-1">이번 달</span>{p.used}<span className="text-[12px] text-[#999] ml-1">회 사용</span>
+                    <td className={`py-2.5 text-right tabular-nums ${p.total && usedIn(p) >= p.total ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
+                      <span className="text-[12px] text-[#999] mr-1">{payMonth === thisMonth ? '이번 달' : `${Number(payMonth.slice(5, 7))}월`}</span>{usedIn(p)}<span className="text-[12px] text-[#999] ml-1">회 사용</span>
                       {p.total > 0 && <span className="block text-[11px] text-[#bbb]">한 달 {p.total}회</span>}
                     </td>
                   )}
