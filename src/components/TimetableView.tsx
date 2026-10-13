@@ -515,10 +515,10 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
-  const th = 'border border-[#d4d4d8] px-2 py-1.5 font-normal';
+  const th = 'border border-[#d4d4d8] px-1 py-1.5 font-normal';
   const memoTh = <th onClick={toggleMemo} title={memoOpen ? '메모 접기' : '메모 펼치기'}
-    className={`${th} text-[10px] text-[#999] cursor-pointer hover:text-[#555] ${memoOpen ? 'min-w-[90px]' : 'w-5 px-0'}`}>{memoOpen ? '메모 ‹' : '›'}</th>;
-  const td = 'border border-[#e4e4e7] h-9 px-1.5 text-center align-middle cursor-pointer hover:bg-[#f0f6fe] whitespace-nowrap';
+    className={`${th} text-[10px] text-[#999] cursor-pointer hover:text-[#555] ${memoOpen ? 'min-w-[56px]' : 'w-5 px-0'}`}>{memoOpen ? '메모 ‹' : '›'}</th>;
+  const td = 'border border-[#e4e4e7] h-9 px-1 text-center align-middle cursor-pointer hover:bg-[#f0f6fe] whitespace-nowrap';
 
   return (
     <div className="px-3 md:px-6 pt-6 pb-14 fade-up">
@@ -581,7 +581,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         </div>
         <div className={`flex items-center gap-3 mb-3 ${isTest ? 'hidden' : ''}`}>
           <button onClick={fullSync} disabled={fullSyncing}
-            className="text-[12px] border border-[#0a0a0a] px-3 py-1.5 hover:bg-[#0a0a0a] hover:text-white disabled:opacity-50">
+            className="shrink-0 whitespace-nowrap text-[12px] border border-[#0a0a0a] px-3 py-1.5 hover:bg-[#0a0a0a] hover:text-white disabled:opacity-50">
             {fullSyncing ? '캘린더에 반영 중…' : '구글 캘린더 전체 반영'}
           </button>
           <span className="text-[11px] text-[#999]">칸을 고친 뒤 아래 [스케줄 변경 완료]를 누르면 디비와 캘린더에 반영돼요. 어긋났을 때만 전체 반영을 눌러 주세요.</span>
@@ -589,9 +589,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           <span className="ml-auto flex items-center gap-1.5">
             <input type="month" value={exportMonth} onChange={e => e.target.value && setExportMonth(e.target.value)} className="text-[12px] border border-[#ddd] px-2 h-8" title="내려받을 달" />
             <button onClick={() => exportFile('xlsx')} disabled={!!exporting} title="엑셀 파일(.xlsx) — 주마다 시트 하나. 맥 Numbers 에서도 열려요"
-              className="text-[12px] border border-[#16a34a] text-[#16a34a] px-3 h-8 hover:bg-[#f0fdf4] disabled:opacity-50">월별 엑셀</button>
+              className="whitespace-nowrap text-[12px] border border-[#16a34a] text-[#16a34a] px-3 h-8 hover:bg-[#f0fdf4] disabled:opacity-50">월별 엑셀</button>
             <button onClick={() => exportFile('csv')} disabled={!!exporting} title="CSV 파일 — 주마다 이어 붙인 한 파일"
-              className="text-[12px] border border-[#ddd] text-[#555] px-3 h-8 hover:bg-[#f8f8f8] disabled:opacity-50">월별 CSV</button>
+              className="whitespace-nowrap text-[12px] border border-[#ddd] text-[#555] px-3 h-8 hover:bg-[#f8f8f8] disabled:opacity-50">월별 CSV</button>
             {exporting && <span className="text-[11px] text-[#999]">{exporting}</span>}
           </span>
         </div>
@@ -632,12 +632,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white`} />
                 {shown.map(t => folded.has(t.name) ? <th key={t.id} className={`${th} text-[10px] text-[#ccc] w-6`}>접음</th> : (
-                  <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={mode === 'day' ? <>
-                    <th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>
-                    <th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>
-                    <th className={`${th} text-[10px] text-[#16a34a] min-w-[64px]`}>결제방식</th>
+                  <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999]`}>고정</th>} right={mode === 'day' ? <>
+                    <th className={`${th} text-[10px] text-[#999]`}>빈타임</th>
+                    <th className={`${th} text-[10px] text-[#999] px-0.5`}>수업</th>
+                    <th className={`${th} text-[10px] text-[#16a34a]`}>결제방식</th>
                     {showMemo && memoTh}
-                  </> : <><th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>{showMemo && memoTh}</>} />
+                  </> : <><th className={`${th} text-[10px] text-[#999] px-0.5`}>수업</th>{showMemo && memoTh}</>} />
                 ))}
               </tr>
             </thead>
@@ -651,12 +651,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                     const right = cellOf(view.open, t.id, time);
                     // 테스트 화면: 다른 아이 칸은 잠금(내용 숨김)
                     const lockL = locked(left), lockR = locked(right);
-                    const lockedTd = <td className="border border-[#e4e4e7] h-9 min-w-[84px] bg-[#fafafa] text-center text-[10px] text-[#d4d4d8]" title="테스트 화면에선 다른 아이 칸을 고칠 수 없어요">·</td>;
+                    const lockedTd = <td className="border border-[#e4e4e7] h-9 bg-[#fafafa] text-center text-[10px] text-[#d4d4d8]" title="테스트 화면에선 다른 아이 칸을 고칠 수 없어요">·</td>;
                     // 수업 칸 — 그 시간 수업(빈타임 아이가 있으면 그 아이, 없으면 고정 아이)의 종류를 좁은 칸에서 고른다
                     const kc = mode === 'day' && right.status === 'child' ? right : left;
                     const kSide: Side = mode === 'day' && right.status === 'child' ? 'open' : 'fixed';
                     const kindTd = (
-                      <td className="border border-[#e4e4e7] h-9 min-w-[46px] px-0 text-center align-middle whitespace-nowrap">
+                      <td className="border border-[#e4e4e7] h-9 px-0 text-center align-middle whitespace-nowrap">
                         {kc.status === 'child' && !locked(kc) && kc.source !== 'booking' ? (
                           <label className={`relative flex h-9 w-full cursor-pointer items-center justify-center text-[11px] leading-none ${kc.kind ? 'text-[#52525b]' : 'text-[#d4d4d8]'} ${view.pend.has(`${kSide}|${t.id}|${time}`) ? 'bg-[#fff6d5]' : ''}`}
                             title="수업 종류 (운동 / 구강 / -)">
@@ -677,7 +677,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                         {kc.status === 'child' && !locked(kc) && kc.note ? '•' : null}
                       </td>
                     ) : (
-                      <td className={`border border-[#e4e4e7] h-9 min-w-[90px] max-w-[160px] px-1.5 text-left align-middle text-[10px] leading-[1.3] text-[#71717a] ${kc.status === 'child' && !locked(kc) ? 'cursor-pointer hover:bg-[#f0f6fe]' : ''}`}
+                      <td className={`border border-[#e4e4e7] h-9 min-w-[56px] max-w-[120px] px-1.5 text-left align-middle text-[10px] leading-[1.3] text-[#71717a] ${kc.status === 'child' && !locked(kc) ? 'cursor-pointer hover:bg-[#f0f6fe]' : ''}`}
                         title={kc.note ? `메모: ${kc.note}` : kc.status === 'child' ? '눌러서 메모 쓰기' : ''}
                         onClick={() => { if (kc.status === 'child' && !locked(kc)) changeNote({ teacher: t, time, side: kSide, cell: kc }); }}>
                         {kc.status === 'child' && !locked(kc) ? kc.note : null}
@@ -688,13 +688,13 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                     return (
                       <FragmentPair key={t.id}
                         left={lockL ? lockedTd :
-                          <td className={`${td} min-w-[84px] ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
+                          <td className={`${td} ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
                             {/* 빈타임에 아이가 채워지면 옆 고정 칸은 회색으로 흐리게 */}
                             <CellText cell={left} label={ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} />
                           </td>
                         }
                         right={mode === 'day' ? (<>
-                          {lockR ? lockedTd : <td className={`${td} min-w-[84px] ${pendR ? 'bg-[#fff6d5]' : 'bg-[#fcfcfd]'}`} onClick={e => {
+                          {lockR ? lockedTd : <td className={`${td} ${pendR ? 'bg-[#fff6d5]' : 'bg-[#fcfcfd]'}`} onClick={e => {
                             // 보호자 신청 칸은 안내가 있는 창으로, 그 밖은 칸 아래로 아이 명단을 연다
                             if (right.source === 'booking') { setEditing({ teacher: t, time, side: 'open', cell: right }); return; }
                             const b = e.currentTarget.getBoundingClientRect();
