@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { parseYmd } from './schedule';
+import { getKoreanHolidays, parseYmd } from './schedule';
 
 // 관리자 시간표 — 표 구조는 supabase/timetable.sql 참고.
 // 날짜별 표의 왼쪽(고정) 칸 = 그날 바꾼 칸(board_cells) ?? 요일 고정 수업(fixed_lessons)
@@ -406,6 +406,82 @@ export async function getPaymentCounts(monthStart: string, monthEnd: string): Pr
   for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy']++;
   for (const r of prepaid.data ?? []) get(r.child_id).prepaid++;
   return m;
+}
+
+/** 월 회차를 세는 결제(바우처·굳센·꿈이든)와 빨간 글씨가 되는 회차 — 바우처 6회째부터, 굳센 4회째부터. 꿈이든은 회차만(0 = 제한 없음) */
+export const ROUND_LIMIT: Partial<Record<PayMethod, number>> = { voucher: 6, gusen: 4, kkumideun: 0 };
+
+/** 결제 글자(b·e·c …) → 기본 결제. 모르는 글자면 없음 */
+export function defaultPayMethod(payment: string | undefined): PayMethod | undefined {
+  const p = (payment ?? '').toLowerCase().replace(/x/g, '');
+  for (const ch of p) {
+    const m = PAY_METHODS.find(x => x.short === ch);
+    if (m) return m.key;
+  }
+  return undefined;
+}
+
+/** 이번 달 1일 ~ upTo 날까지 두 센터 시간표의 바우처·굳센·꿈이든 수업 — 시간표의 월 회차용.
+ *  결제를 아직 안 했어도 센다: 결제 기록이 있으면 그 결제, 없으면 칸의 기본 결제(빈타임 아이는 기본 결제가 없어 기록이 있을 때만).
+ *  결석·옮긴 수업, 공휴일의 고정 수업, 그날 뺀 선생님 수업은 세지 않는다 */
+export async function getMonthRoundLessons(upTo: string, children: Child[]): Promise<{ childId: string; day: string; time: string; method: PayMethod }[]> {
+  const from = `${upTo.slice(0, 7)}-01`;
+  const byId = new Map(children.map(c => [c.id, c]));
+  // 한 번에 1000줄까지만 오므로 나눠 받는다
+  const all = async (make: () => { range: (a: number, b: number) => PromiseLike<{ data: Row[] | null; error: unknown }> }) => {
+    const rows: Row[] = [];
+    for (let i = 0; ; i += 1000) {
+      const { data, error } = await make().range(i, i + 999);
+      if (error) throw error;
+      rows.push(...(data ?? []));
+      if ((data ?? []).length < 1000) return rows;
+    }
+  };
+  const [fixedRows, cellRows, slotRows, payRows, offRows, hols] = await Promise.all([
+    all(() => supabase.from('fixed_lessons').select('*')),
+    all(() => supabase.from('board_cells').select('*').gte('day', from).lte('day', upTo)),
+    all(() => supabase.from('slots').select('day, teacher_id, time, booked_by, cancel_state').gte('day', from).lte('day', upTo).not('booked_by', 'is', null)),
+    all(() => supabase.from('lesson_payments').select('child_id, day, time, method').gte('day', from).lte('day', upTo)),
+    all(() => supabase.from('teacher_day_assign').select('day, teacher_id, center').eq('off', true).gte('day', from).lte('day', upTo)),
+    getKoreanHolidays(upTo.slice(0, 4)).catch(() => [] as string[]),
+  ]);
+  const paid = new Map(payRows.map(r => [`${r.child_id}|${r.day}|${r.time}`, r.method as PayMethod]));
+  const off = new Set(offRows.map(r => `${r.day}|${r.center}|${r.teacher_id}`));
+  // 보호자 신청한 빈타임 — 그 시간엔 신청한 아이 수업(고정 아이 대신). 아이는 보호자 계정으로 찾는다
+  const booked = new Map(slotRows.filter(s => s.cancel_state !== 'approved')
+    .map(s => [`${s.day}|${s.teacher_id}|${s.time}`, children.find(c => c.guardianUserId === s.booked_by)?.id]));
+  const out: { childId: string; day: string; time: string; method: PayMethod }[] = [];
+  for (let d = parseYmd(from); ; d.setDate(d.getDate() + 1)) {
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (day > upTo) break;
+    for (const center of CENTERS.map(c => c.key)) {
+      const fixed = new Map<string, CellView>();
+      const open = new Map<string, { cell?: CellView; childId?: string }>();
+      if (!hols.includes(day)) for (const r of fixedRows) {
+        if (r.weekday === d.getDay() && r.center === center && (!r.start_date || (r.start_date as string) <= day)) fixed.set(key(r.teacher_id as string, r.time as string), fromRow({ ...r, status: 'child' }, 'fixed', byId));
+      }
+      for (const [k, childId] of booked) if (k.startsWith(`${day}|`)) open.set(k.slice(day.length + 1), { childId });
+      for (const r of cellRows) {
+        if (r.day !== day || r.center !== center) continue;
+        const c = fromRow(r, 'override', byId);
+        const k = key(r.teacher_id as string, r.time as string);
+        if (r.side === 'fixed') fixed.set(k, c); else open.set(k, { cell: c });
+      }
+      for (const k of new Set([...fixed.keys(), ...open.keys()])) {
+        const [teacherId, time] = k.split('|');
+        if (off.has(`${day}|${center}|${teacherId}`)) continue;
+        const o = open.get(k);
+        const oc = o?.cell?.status === 'child' ? o.cell : undefined;
+        const isOpen = !!oc || !!o?.childId;
+        const c = oc ?? (o?.childId ? undefined : fixed.get(k));
+        const childId = oc?.childId ?? o?.childId ?? c?.childId;
+        if (!childId || (c && (c.status !== 'child' || c.moved || c.absent))) continue;
+        const method = paid.get(`${childId}|${day}|${time}`) ?? (isOpen ? undefined : defaultPayMethod(c?.payment));
+        if (method && method in ROUND_LIMIT) out.push({ childId, day, time, method });
+      }
+    }
+  }
+  return out;
 }
 
 // ── 센터별 출근 요일 · 날짜별 선생님 추가 ─────────────────────────────

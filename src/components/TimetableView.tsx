@@ -9,7 +9,7 @@ import type { Teacher } from '@/lib/schedule';
 import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import {
-  CENTERS, LESSON_KINDS, PAY_METHODS, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getPaymentCounts, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
+  CENTERS, LESSON_KINDS, PAY_METHODS, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, saveDayCell, syncTimetable, clearChildTestData, getFixedByChild,
 } from '@/lib/timetable';
 
@@ -47,14 +47,7 @@ interface Picking extends Editing {
 }
 
 /** 결제 글자(b·e·c …) → 기본 결제. 모르는 글자면 없음 */
-function defaultMethod(payment: string | undefined): PayMethod | undefined {
-  const p = (payment ?? '').toLowerCase().replace(/x/g, '');
-  for (const ch of p) {
-    const m = PAY_METHODS.find(x => x.short === ch);
-    if (m) return m.key;
-  }
-  return undefined;
-}
+const defaultMethod = defaultPayMethod;
 
 /** testChildName 을 주면 "시간표(테스트)" — 그 아이 수업만 보이고 고칠 수 있다(저장은 실제 디비). 다른 아이 칸은 잠긴다 */
 /** fixedCenter 를 주면 그 센터(수색/의정부) 시간표만 — 센터 탭을 숨긴다 */
@@ -75,6 +68,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const [draft, setDraft] = useState<Map<string, { entry: PayEntry | null; childId: string; teacherId: string; time: string }>>(new Map());
   // 아이마다 이번 달 바우처·굳센·꿈이든, 지금까지 선결제 사용 횟수(디비)
   const [counts, setCounts] = useState<Map<string, PayCount>>(new Map());
+  // 이번 달 1일~그날 두 센터의 바우처·굳센·꿈이든 수업(결제 전이면 기본 결제로) — 결제방식 칸에 "바우처3"처럼 월 회차를 붙인다
+  const [roundPays, setRoundPays] = useState<{ childId: string; day: string; time: string; method: PayMethod }[]>([]);
   const [savingPay, setSavingPay] = useState(false);
   // 그날만 이 센터에 더한 선생님(공휴일 등)·뺀 선생님
   const [assigns, setAssigns] = useState<{ added: string[]; removed: string[] }>({ added: [], removed: [] });
@@ -106,6 +101,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         setPayments(await getDayPayments(day).catch(() => new Map()));
         const ym = day.slice(0, 7);
         setCounts(await getPaymentCounts(`${ym}-01`, `${ym}-31`).catch(() => new Map()));
+        setRoundPays(await getMonthRoundLessons(day, c).catch(() => []));
         setAssigns(await getDayAssigns(day, center).catch(() => ({ added: [], removed: [] })));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
@@ -254,6 +250,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     return worksAt(t, center, wd) || st === 'add' || hasCellsOf(t.id);
   });
   const addable = teachers.filter(t => !shown.some(x => x.id === t.id));
+  // 펼친 선생님 한 사람 몫(표 폭 %) — 수업·메모 칸 폭을 이 비율로
+  const per = 95 / Math.max(1, shown.filter(t => !folded.has(t.name)).length);
   const setAssign = (id: string, st: AssignState) => setAssignDraft(m => {
     const n = new Map(m);
     if (st === dbAssign(id)) n.delete(id); else n.set(id, st);
@@ -477,13 +475,36 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   })) : [];
   // 결제방식이 빈 수업(고른 것도 기본 결제도 없음) — 하나라도 있으면 [결제 완료]를 누를 수 없다
   const missingPay = new Set(lessons.filter(x => !paidOf(x.childId, x.time) && !x.base).map(x => keyOf(x.childId, x.time)));
+  // 월 회차 — 아이마다 이번 달 바우처·굳센·꿈이든 몇 번째 수업인지 (결제 전 수업도 센다. 오늘 이 표는 고르는 중인 결제까지 반영해 시간 순)
+  const effMethod = (x: { childId: string; time: string; base?: PayMethod }) => paidOf(x.childId, x.time)?.method ?? x.base;
+  const rounds = (() => {
+    const onBoard = new Set(lessons.map(x => keyOf(x.childId, x.time)));
+    const before = new Map<string, number>();
+    const today: { childId: string; time: string; method: PayMethod; mine: boolean }[] = [];
+    for (const r of roundPays) {
+      if (r.day < day) before.set(`${r.childId}|${r.method}`, (before.get(`${r.childId}|${r.method}`) ?? 0) + 1);
+      else if (r.day === day && !onBoard.has(keyOf(r.childId, r.time))) today.push({ ...r, mine: false });   // 같은 날 다른 센터 수업
+    }
+    for (const x of lessons) { const m = effMethod(x); if (m && m in ROUND_LIMIT) today.push({ childId: x.childId, time: x.time, method: m, mine: true }); }
+    today.sort((a, b) => a.time.localeCompare(b.time));
+    const out = new Map<string, { n: number; over: boolean }>();
+    for (const r of today) {
+      const k = `${r.childId}|${r.method}`;
+      const n = (before.get(k) ?? 0) + 1;
+      before.set(k, n);
+      if (r.mine) out.set(keyOf(r.childId, r.time), { n, over: !!ROUND_LIMIT[r.method] && n >= ROUND_LIMIT[r.method]! });
+    }
+    return out;
+  })();
+  // 회차가 넘친 수업(빨간 글씨) — 하나라도 있으면 [결제 완료]를 누를 수 없다
+  const overRound = [...rounds.values()].filter(r => r.over).length;
   // 아직 확정 안 된 수업 — [결제 완료]에서 고른 결제(없으면 기본 결제)로 확정한다
   const toConfirm = lessons.filter(x => {
     const k = keyOf(x.childId, x.time);
     return draft.has(k) || !payments.get(k)?.confirmed;
   });
   const schedPending = ops.size + assignDraft.size;
-  const canPay = !missingPay.size && !schedPending && toConfirm.length > 0;
+  const canPay = !missingPay.size && !overRound && !schedPending && toConfirm.length > 0;
 
   // [결제 완료] — 그날 진행된 수업을 모두 확정 (스케줄 변경을 먼저 저장해야 누를 수 있다)
   const savePayments = async () => {
@@ -601,23 +622,25 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         {/* 표 — 이 센터 선생님만. 접은 선생님은 이름 칸만 좁게 */}
         <div ref={tableBox} className="overflow-x-hidden bg-white">
           {/* 고정 폭 표 — 칸 폭을 미리 정해서 화면 폭을 넘지 않는다(글꼴·브라우저가 달라도 가로 스크롤 없이). 너비를 안 정한 칸이 남는 폭을 나눠 가진다 */}
-          <table className="border-collapse text-[11px] w-full table-fixed" style={fillH ? { height: fillH } : undefined}>
+          {/* 수업·메모 칸은 선생님 한 사람 몫(per %)의 비율로 — 화면을 넓히거나 축소해도 이름·빈타임·결제방식만 커지지 않게 */}
+          <table className="border-collapse text-[11px] w-full table-fixed" style={{ border: TEACHER_LINE, ...(fillH ? { height: fillH } : {}) }}>
             <colgroup>
               <col style={{ width: 52 }} />
-              {shown.map(t => folded.has(t.name) ? <col key={t.id} style={{ width: 72 }} /> : (
+              {/* 선생님 사이 세로선은 진하게 — 표가 border-collapse 라 col 의 왼쪽 선이 그 칸들의 선이 된다 */}
+              {shown.map(t => folded.has(t.name) ? <col key={t.id} style={{ width: 72, borderLeft: TEACHER_LINE }} /> : (
                 <Fragment key={t.id}>
-                  <col />
+                  <col style={{ borderLeft: TEACHER_LINE }} />
                   {mode === 'day' && <col />}
-                  <col style={{ width: 40 }} />
+                  <col style={{ width: `max(40px, ${(per * 0.08).toFixed(2)}%)` }} />
                   {mode === 'day' && <col />}
-                  {showMemo && <col style={{ width: memoOpen ? 80 : 16 }} />}
+                  {showMemo && <col style={{ width: memoOpen ? `max(80px, ${(per * 0.24).toFixed(2)}%)` : 16 }} />}
                 </Fragment>
               ))}
             </colgroup>
             <thead>
               <tr>
-                <th className={`${th} sticky left-0 z-10 bg-white w-16`}>시간</th>
-                <th className={`${th} text-[13px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : (mode === 'day' ? 4 : 2) + (showMemo ? 1 : 0)), 0) || 1}>
+                <th className={`${th} sticky left-0 z-10 bg-white w-16`} style={{ borderBottom: TEACHER_LINE }}>시간</th>
+                <th className={`${th} text-[13px] text-[#c026d3]`} style={{ borderBottom: TEACHER_LINE }} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : (mode === 'day' ? 4 : 2) + (showMemo ? 1 : 0)), 0) || 1}>
                   {mode === 'day' ? `${DOW[d.getDay()]} / ${d.getMonth() + 1}월 ${d.getDate()}일` : `${DOW[weekday]}요일 고정 시간표`}
                   {mode === 'day' && holiday && <span className="ml-2 text-[12px] text-red-400">공휴일 — 고정 수업 없음</span>}
                 </th>
@@ -725,6 +748,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                               <PayCell key={i} cell={c} noBase={c === right} paid={c.childId ? paidOf(c.childId, time) : undefined}
                                 pending={!!c.childId && draft.has(keyOf(c.childId, time))}
                                 missing={!!c.childId && missingPay.has(keyOf(c.childId, time))}
+                                round={c.childId ? rounds.get(keyOf(c.childId, time)) : undefined}
                                 left={c.childId ? (m => remaining(c.childId!, m)) : undefined}
                                 askAlways={c !== right && !!c.childId && c.childId === cellOf(board.fixed, t.id, time).childId}
                                 onPay={c.childId ? (e, always) => { pay(c.childId!, t.id, time, e); if (always && e) setFixedPayment(t, time, e.method); } : undefined} />
@@ -759,8 +783,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           {mode === 'day' && (
             <>
               <span className="w-px h-6 bg-[#e5e5e5] mx-1" />
-              <span className={`text-[12px] ${missingPay.size ? 'text-red-400' : 'text-[#888]'}`}>
+              <span className={`text-[12px] ${missingPay.size || overRound ? 'text-red-400' : 'text-[#888]'}`}>
                 {missingPay.size ? `결제방식이 빈 수업 ${missingPay.size}개 — 빨간 테두리 칸을 채워 주세요`
+                  : overRound ? `월 횟수를 넘은 수업 ${overRound}개 — 빨간 글씨 칸의 결제방식을 바꿔 주세요`
                   : schedPending ? '시간표 변경을 먼저 저장해 주세요'
                   : toConfirm.length ? `확정할 결제 ${toConfirm.length}건`
                   : lessons.length ? '결제가 모두 확정됐어요' : ''}
@@ -775,7 +800,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
         <p className="text-[11px] text-[#999] mt-3 leading-[2]">
           칸을 누르면 고칠 수 있어요. 앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정
-          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span></>}
+          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span> · <span className="text-[#dc2626] font-bold ring-2 ring-[#dc2626] px-1 rounded">바우처6!</span> = 월 횟수 넘침(바우처 6회째·굳센 4회째부터)</>}
         </p>
       </div>
 
@@ -804,6 +829,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   );
 }
 
+const TEACHER_LINE = '2px solid #a1a1aa';
+
 function FragmentPair({ left, right }: { left: React.ReactNode; right: React.ReactNode }) {
   return <>{left}{right}</>;
 }
@@ -827,7 +854,7 @@ function CellText({ cell, label, muted }: { cell: CellView; label?: string; mute
 }
 
 /** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
-function PayCell({ cell, noBase, paid, pending, missing, left, askAlways, onPay }: {
+function PayCell({ cell, noBase, paid, pending, missing, round, left, askAlways, onPay }: {
   cell: CellView;
   /** 빈타임 아이 — 기본 결제를 보여 주지 않고 비워 둔다 */
   noBase?: boolean;
@@ -836,6 +863,8 @@ function PayCell({ cell, noBase, paid, pending, missing, left, askAlways, onPay 
   pending?: boolean;
   /** 결제방식이 비어 있음 — 채워야 [결제 완료]를 누를 수 있다 */
   missing?: boolean;
+  /** 바우처·굳센·꿈이든 월 회차 — over = 빨간 글씨([결제 완료] 막힘) */
+  round?: { n: number; over: boolean };
   left?: (m: PayMethod) => string | undefined;
   /** 고정 아이 — 기본과 다른 결제를 고르면 이번만인지 앞으로 계속인지 묻는다 */
   askAlways?: boolean;
@@ -844,18 +873,21 @@ function PayCell({ cell, noBase, paid, pending, missing, left, askAlways, onPay 
   if (cell.absent) return <span className="block text-[10px] text-[#c4c4cc]">결석</span>;
   const base = noBase ? undefined : defaultMethod(cell.payment);
   const label = (k?: PayMethod) => PAY_METHODS.find(m => m.key === k)?.label;
-  const rest = paid?.confirmed && !pending ? left?.(paid.method) : undefined;
+  // 회차를 붙이는 결제는 남은 횟수 대신 회차만 (고르는 목록은 그대로)
+  const rest = paid?.confirmed && !pending && !round ? left?.(paid.method) : undefined;
+  const rn = round ? <>{round.n}{round.over && <span className="ml-0.5">!</span>}</> : null;
   // 단계 — 기본(그대로) / 파랑: 직접 고름(저장 전) / 빨강: 결제 완료로 확정
   // 파랑 = 고름(저장 전·선택 저장됨) / 빨강 = 결제 완료로 확정
   const confirmed = !pending && !!paid?.confirmed;
-  const tone = confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
+  // 회차 넘침은 확정(빨강 바탕)과 헷갈리지 않게 — 흰 바탕 + 빨간 테두리 + ! 
+  const tone = round?.over ? 'bg-white text-[#dc2626] font-bold ring-2 ring-[#dc2626]' : confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
   const text = paid
-    ? <span>{confirmed ? '✓' : ''}{paid.note || label(paid.method)}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
-    : <span>{pending ? '체크 풀기' : (label(base) ?? '')}</span>;
+    ? <span>{confirmed ? '✓' : ''}{paid.note || label(paid.method)}{rn}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
+    : <span>{pending ? '체크 풀기' : (label(base) ?? '')}{!pending && rn}</span>;
   if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{label(base) ?? ''}</span>;
   return (
-    <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone} ${missing ? 'ring-1 ring-red-300' : ''}`}
-      title={pending ? '저장 전 — [스케줄 변경 완료]로 저장, [결제 완료]로 확정' : paid?.confirmed ? '결제 완료로 확정됨' : paid ? '고른 결제 — [결제 완료]를 눌러야 확정돼요' : '기본 결제 — 눌러서 고르기'}>
+    <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone} ${missing && !round?.over ? 'ring-1 ring-red-300' : ''}`}
+      title={round?.over ? `이번 달 ${round.n}회째 — 월 횟수를 넘었어요. 결제방식을 바꿔야 [결제 완료]를 누를 수 있어요` : pending ? '저장 전 — [스케줄 변경 완료]로 저장, [결제 완료]로 확정' : paid?.confirmed ? '결제 완료로 확정됨' : paid ? '고른 결제 — [결제 완료]를 눌러야 확정돼요' : '기본 결제 — 눌러서 고르기'}>
       {text}
       <select value={paid ? (paid.note ? 'custom' : paid.method) : ''}
         onChange={async e => {

@@ -132,13 +132,18 @@ const seoul = (day: string, time: string) => new Date(`${day}T${time}:00+09:00`)
 
 /** 대한민국 공휴일 날짜들 (구글 공휴일 캘린더 — "기념일"은 빼고 "공휴일"만) */
 export async function koreanHolidays(from: string, to: string): Promise<string[]> {
+  return (await koreanHolidayList(from, to)).map(h => h.date);
+}
+
+/** 공휴일 날짜와 이름 (예: 2026-10-03 개천절) */
+export async function koreanHolidayList(from: string, to: string): Promise<{ date: string; name: string }[]> {
   const q = new URLSearchParams({ timeMin: `${from}T00:00:00+09:00`, timeMax: `${to}T23:59:59+09:00`, singleEvents: 'true', maxResults: '250' });
   const res = await call('GET', `/calendars/${encodeURIComponent(HOLIDAY_CAL)}/events?${q}`);
   if (!res.ok) throw new Error(`공휴일 읽기 오류 ${res.status}`);
   const data = await res.json();
   return (data.items ?? [])
     .filter((e: { description?: string; start?: { date?: string } }) => (e.description ?? '').startsWith('공휴일') && e.start?.date)
-    .map((e: { start: { date: string } }) => e.start.date);
+    .map((e: { summary?: string; start: { date: string } }) => ({ date: e.start.date, name: e.summary ?? '공휴일' }));
 }
 
 /** 고정 수업 반복 일정 넣기/고치기 — firstDay = 첫 수업 날짜, holidays = 빼는 날짜들,

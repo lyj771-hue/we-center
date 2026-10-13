@@ -4,7 +4,8 @@ import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
 import UsageCard from '@/components/UsageCard';
 import type { LedgerRow } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
-import { addDays, parseYmd, thisMonday } from '@/lib/schedule';
+import { useEffect, useState } from 'react';
+import { addDays, getHolidayNames, parseYmd, thisMonday } from '@/lib/schedule';
 
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
 
@@ -52,6 +53,15 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   const ws = parseYmd(week);
   const we = parseYmd(addDays(week, 5));
   const monthNo = parseYmd(today).getMonth() + 1;
+  // 공휴일 — 그 주에 걸친 해(연말·연초는 두 해)의 공휴일 이름
+  const [holidays, setHolidays] = useState<Record<string, string>>({});
+  const years = [...new Set([days[0].slice(0, 4), days[5].slice(0, 4)])].join(',');
+  useEffect(() => {
+    let alive = true;
+    Promise.all(years.split(',').map(y => getHolidayNames(y).catch(() => ({}))))
+      .then(list => { if (alive) setHolidays(Object.assign({}, ...list)); });
+    return () => { alive = false; };
+  }, [years]);
 
   return (
     <div className="space-y-6">
@@ -83,7 +93,11 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
             const dd = parseYmd(d);
             return (
               <div key={d} className={`flex gap-3 py-3 ${d === today ? 'bg-[#f8fbff] -mx-3 px-3 rounded-lg' : ''}`}>
-                <div className="w-[60px] shrink-0 text-[12px] text-[#71717b] pt-0.5 whitespace-nowrap">{DOW[dd.getDay()]} <span className="text-[#b4b4bb]">{dd.getMonth() + 1}/{dd.getDate()}</span></div>
+                <div className={`w-[60px] shrink-0 text-[12px] pt-0.5 ${holidays[d] ? 'text-[#dc2626]' : 'text-[#71717b]'}`}>
+                  <span className="whitespace-nowrap">{DOW[dd.getDay()]} <span className={holidays[d] ? 'text-[#ef4444]' : 'text-[#b4b4bb]'}>{dd.getMonth() + 1}/{dd.getDate()}</span></span>
+                  {/* 공휴일 — 요일·날짜 아래 빨간 글씨로 작게 */}
+                  {holidays[d] && <span className="block mt-0.5 text-[10px] leading-[1.3] text-[#dc2626] break-keep">{holidays[d]}</span>}
+                </div>
                 <div className="flex-1 space-y-1.5">
                   {list.length === 0 && <span className="text-[12px] text-[#d4d4d8]">수업 없음</span>}
                   {list.map((l, i) => (

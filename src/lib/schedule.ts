@@ -311,6 +311,23 @@ export function getKoreanHolidays(year: string): Promise<string[]> {
   return p;
 }
 
+/** 누구나: 공휴일 날짜 → 이름 (마이페이지 주별 시간표) — 해마다 한 번만 불러 둔다 */
+const holidayNameCache = new Map<string, Promise<Record<string, string>>>();
+export function getHolidayNames(year: string): Promise<Record<string, string>> {
+  let p = holidayNameCache.get(year);
+  if (!p) {
+    p = (async () => {
+      const res = await fetch(`/api/calendar/holidays?${new URLSearchParams({ from: `${year}-01-01`, to: `${year}-12-31`, names: '1' })}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `오류 ${res.status}`);
+      return Object.fromEntries(((data.holidays ?? []) as { date: string; name: string }[]).map(h => [h.date, h.name]));
+    })();
+    p.catch(() => holidayNameCache.delete(year));
+    holidayNameCache.set(year, p);
+  }
+  return p;
+}
+
 /** 보호자: 내 신청 취소 신청 / 철회. 관리자: 취소 승인 */
 async function slotRpc(fn: 'request_cancel' | 'withdraw_cancel' | 'approve_cancel', slotId: string): Promise<string> {
   const { data, error } = await supabase.rpc(fn, { p_slot: slotId });
