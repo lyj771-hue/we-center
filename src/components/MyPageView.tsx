@@ -103,7 +103,8 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         </div>
         <div className="divide-y divide-[#f0f0f0]">
           {days.map(d => {
-            const list = weekLessons.filter(l => l.day === d && l.status !== 'none' && l.status !== 'off' && l.status !== 'undecided');
+            // 공휴일에는 고정 수업을 하지 않는다(빈타임만) — 그날 넣은 칸·신청만 보인다
+            const list = weekLessons.filter(l => l.day === d && l.status !== 'none' && l.status !== 'off' && l.status !== 'undecided' && !(holidays[d] && l.source === 'fixed'));
             const dd = parseYmd(d);
             return (
               <div key={d} className={`flex gap-3 py-3 ${d === today ? 'bg-[#f8fbff] -mx-3 px-3 rounded-lg' : ''}`}>
