@@ -378,7 +378,7 @@ export default function MembersView({ center }: { center: Center }) {
                 </button>
               </th>
               {showDates && <th className={th}>카카오계정번호</th>}
-              {showDates && <th className={th}>회원 코드</th>}
+              {showDates && filter !== 'waiting' && <th className={th}>회원 코드</th>}
               {showDates && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
               {showDates && filter !== 'waiting' && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
@@ -401,7 +401,7 @@ export default function MembersView({ center }: { center: Center }) {
                 <tr key={m.userId} className="border-b border-[#f0f0f0]">
                   <td className={`${td} w-8 pr-0`} />
                   {showDates && <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>}
-                  {showDates && (<td className={`${td} whitespace-nowrap`}>
+                  {showDates && filter !== 'waiting' && (<td className={`${td} whitespace-nowrap`}>
                     {on ? (
                       <input className={`${input} w-20 uppercase`} value={form.code} placeholder="W0001" list="member-codes"
                         onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
