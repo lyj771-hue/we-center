@@ -328,6 +328,8 @@ export default function MembersView({ center }: { center: Center }) {
     ));
   };
   const list = filter === 'waiting' ? waiting : approved;
+  // 미승인 목록은 접기 없이 늘 펼친다(카카오계정번호·가입신청일자)
+  const datesOn = showDates || filter === 'waiting';
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
   const input = 'w-full min-w-[90px] border-b border-[var(--brand)] py-1 text-[14px] outline-none bg-transparent';
   const th = 'text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
@@ -367,6 +369,7 @@ export default function MembersView({ center }: { center: Center }) {
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
             <tr className="border-b border-[#e5e5e5]">
+              {filter !== 'waiting' && (
               <th className={`${th} w-8 pr-0`}>
                 <button type="button" onClick={() => setShowDates(v => !v)}
                   aria-label={showDates ? '카카오계정번호·회원 코드·가입일자·마지막 로그인 접기' : '카카오계정번호·회원 코드·가입일자·마지막 로그인 펼치기'} aria-expanded={showDates}
@@ -377,10 +380,11 @@ export default function MembersView({ center }: { center: Center }) {
                   </svg>
                 </button>
               </th>
-              {showDates && <th className={th}>카카오계정번호</th>}
-              {showDates && filter !== 'waiting' && <th className={th}>회원 코드</th>}
-              {showDates && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
-              {showDates && filter !== 'waiting' && <th className={th}>마지막 로그인</th>}
+              )}
+              {datesOn && <th className={th}>카카오계정번호</th>}
+              {datesOn && filter !== 'waiting' && <th className={th}>회원 코드</th>}
+              {datesOn && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
+              {datesOn && filter !== 'waiting' && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
               <th className={`${th} text-center`}>수색점</th>
               <th className={`${th} text-center`}>의정부점</th>
@@ -399,9 +403,9 @@ export default function MembersView({ center }: { center: Center }) {
               const on = editing === m.userId;
               return (
                 <tr key={m.userId} className="border-b border-[#f0f0f0]">
-                  <td className={`${td} w-8 pr-0`} />
-                  {showDates && <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>}
-                  {showDates && filter !== 'waiting' && (<td className={`${td} whitespace-nowrap`}>
+                  {filter !== 'waiting' && <td className={`${td} w-8 pr-0`} />}
+                  {datesOn && <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>}
+                  {datesOn && filter !== 'waiting' && (<td className={`${td} whitespace-nowrap`}>
                     {on ? (
                       <input className={`${input} w-20 uppercase`} value={form.code} placeholder="W0001" list="member-codes"
                         onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
@@ -416,8 +420,8 @@ export default function MembersView({ center }: { center: Center }) {
                       <span key={k.id} className="block text-[11px] text-[#aaa] tabular-nums">{(k.center ?? 'eunpyeong') === 'uijeongbu' ? '의정부' : '수색'} {k.memberCode}</span>
                     ))}
                   </td>)}
-                  {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(approvedHere(m) ?? m.joinedAt)}</td>}
-                  {showDates && filter !== 'waiting' && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
+                  {datesOn && <td className={`${td} whitespace-nowrap`}>{fmtDate(approvedHere(m) ?? m.joinedAt)}</td>}
+                  {datesOn && filter !== 'waiting' && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
                   <td className={td}>
                     {on ? <input className={input} value={form.nickname} maxLength={20} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} />
                       : <>{m.nickname || <span className="text-[#ccc]">아직 안 정함</span>}</>}
