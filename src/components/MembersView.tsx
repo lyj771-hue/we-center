@@ -405,16 +405,7 @@ export default function MembersView({ center }: { center: Center }) {
                           <div key={k.id}>
                             <span className="text-[#888] tabular-nums">{k.memberCode ?? '코드 없음'}</span> {k.name}{k.number ?? ''}
                             {m.phoneLast4 && k.phoneLast4 && k.phoneLast4 !== m.phoneLast4 && <span className="ml-1 text-[#bbb]">(뒷번호 {k.phoneLast4})</span>}
-                            {k.guardianUserId === m.userId ? <>
-                              <span className="ml-1 text-[var(--brand)]">연결됨</span>
-                              {/* 승인 전인데 이어져 있으면 끊을 수 있게 (가입할 때 회원 코드로 이었거나, 승인 취소 전에 이어진 것) */}
-                              <button type="button" className="ml-1 text-[11px] text-[#aaa] underline underline-offset-2 hover:text-red-400"
-                                onClick={async () => {
-                                  if (!(await askConfirm(`${centerLabel} ${k.memberCode} ${k.name}${k.number ?? ''}와(과)의 연결을 끊을까요?`))) return;
-                                  try { await linkChild(k.id, null); autoTried.current.add(`${m.userId}|${center}`); loadKids(); }
-                                  catch (e) { showAlert(`끊지 못했어요.\n${(e as Error).message}`); }
-                                }}>끊기</button>
-                            </>
+                            {k.guardianUserId === m.userId ? <span className="ml-1 text-[var(--brand)]">연결됨</span>
                               : k.guardianUserId ? <span className="ml-1 text-[#bbb]">다른 계정 연결</span>
                               : <span className="ml-1 text-[#bbb]" title="이름이 같은 명단 아이 — 승인하면 이어져요">(연결 안 됨)</span>}
                           </div>
