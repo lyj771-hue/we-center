@@ -67,12 +67,6 @@ export default function MembersView({ center }: { center: Center }) {
 
   // 미승인 탭 — 승인할 때 적는 선결제·우진학교·지원금("회원|칸" → 적은 숫자). 하나라도 비어 있으면 승인할 수 없다
   const [approveInput, setApproveInput] = useState<Map<string, string>>(new Map());
-  // 승인 불가 까닭 말풍선 — 브라우저 기본(title)은 늦게 떠서 바로 뜨는 걸로. 표가 옆으로 스크롤돼도 안 잘리게 화면 기준(fixed)
-  const [tip, setTip] = useState<{ lines: string[]; x: number; y: number } | null>(null);
-  const tipOn = (lines: string[]) => lines.length ? {
-    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => { const r = e.currentTarget.getBoundingClientRect(); setTip({ lines, x: r.left, y: r.bottom + 6 }); },
-    onMouseLeave: () => setTip(null),
-  } : {};
   const inputOf = (m: Member, f: ApproveField) => approveInput.get(`${m.userId}|${f}`) ?? '';
   const filled = (m: Member) => APPROVE_FIELDS.every(f => inputOf(m, f.key) !== '');
 
@@ -354,7 +348,7 @@ export default function MembersView({ center }: { center: Center }) {
   const approveBadge = (m: Member) => {
     const why = blockers(m);
     return why.length
-      ? <span className="inline-block mb-0.5 text-[11px] text-[#e11d48] border border-[#fecdd3] bg-[#fff1f2] rounded px-1.5 cursor-help" {...tipOn(why)}>승인 불가</span>
+      ? <span className="inline-block mb-0.5 text-[11px] text-[#e11d48] border border-[#fecdd3] bg-[#fff1f2] rounded px-1.5 ">승인 불가</span>
       : <span className="inline-block mb-0.5 text-[11px] text-[#16a34a] border border-[#86efac] bg-[#f0fdf4] rounded px-1.5">승인 가능</span>;
   };
   // 미승인 회원이 지금 아이 명단에 있는지 — 이미 연결된 아이, 아니면 이 센터에서 이름(닉네임·관리자 닉네임, 앞뒤 숫자 포함)이나 가입할 때 적은 회원 코드가 같은 아이
@@ -542,7 +536,11 @@ export default function MembersView({ center }: { center: Center }) {
                   {/* 설명 — 맨 오른쪽(버튼 왼쪽) */}
                   <td className={`${td} min-w-[160px]`}>
                     {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
-                      : <span className="text-[#666] whitespace-pre-line">{m.memo || ''}</span>}
+                      : <>
+                        <span className="text-[#666] whitespace-pre-line">{m.memo || ''}</span>
+                        {/* 미승인 — 승인 못 하는 까닭(안 된 조건) */}
+                        {filter === 'waiting' && blockers(m).map(w => <div key={w} className="text-[11px] text-[#e11d48]">· {w}</div>)}
+                      </>}
                   </td>
                   {filter !== 'methods' && <td className={`${td} text-right`}>
                     <div className="flex justify-end gap-1">
@@ -555,10 +553,8 @@ export default function MembersView({ center }: { center: Center }) {
                         <>
                           {m.nickname && (approvedHere(m)
                             ? <button onClick={() => setApprovedHere(m, false)} className={`${btn} border-[#e5e5e5] text-[#888] hover:bg-[#f8f8f8]`}>승인 취소</button>
-                            : <span className="inline-flex" {...tipOn(blockers(m))}>{/* 꺼진 버튼은 마우스 이벤트가 안 와서 감싼 칸에 말풍선 */}
-                                <button onClick={() => setApprovedHere(m, true)} disabled={blockers(m).length > 0}
-                                  className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none`}>승인</button>
-                              </span>)}
+                            : <button onClick={() => setApprovedHere(m, true)} disabled={blockers(m).length > 0}
+                                className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed`}>승인</button>)}
                           <button onClick={() => startEdit(m)} className={`${btn} border-[#e5e5e5] hover:bg-[#f8f8f8]`}>수정</button>
                           {m.nickname && <button onClick={() => remove(m)} className={`${btn} border-[#e5e5e5] text-red-400 hover:bg-red-50`}>삭제</button>}
                         </>
@@ -572,11 +568,6 @@ export default function MembersView({ center }: { center: Center }) {
         </table>
       </div>
 
-      {tip && (
-        <div className="fixed z-[600] pointer-events-none bg-[#27272a] text-white text-[11px] leading-[1.7] rounded px-2.5 py-1.5 shadow-lg whitespace-nowrap" style={{ left: tip.x, top: tip.y }}>
-          {tip.lines.map(w => <div key={w}>· {w}</div>)}
-        </div>
-      )}
       {loaded && !failed && list.length === 0 && (
         <p className="text-[14px] text-[#bbb] py-16 text-center">아직 없어요.</p>
       )}
