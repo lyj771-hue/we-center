@@ -268,13 +268,14 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       const el = tableBox.current;
       if (!el) return;
       const top = el.getBoundingClientRect().top + window.scrollY;
-      setFillH(Math.max(0, window.innerHeight - top - (barBox.current?.offsetHeight ?? 0) - 8));
+      const v = Math.max(0, Math.round(window.innerHeight - top - (barBox.current?.offsetHeight ?? 0) - 8));
+      setFillH(h => (Math.abs(h - v) > 2 ? v : h));   // 1~2px 차이로 계속 다시 그리지 않게
     };
     fit();
     window.addEventListener('resize', fit);
     const t = setTimeout(fit, 500); // 글꼴·위 줄이 늦게 그려지는 것까지
     return () => { window.removeEventListener('resize', fit); clearTimeout(t); };
-  });
+  }, [mode, day, weekday, center, isAdmin]);
 
   // 선생님마다 맨 오른쪽에 메모 칸 (40분 수업, 4시 시작 같은 것). 수색은 접어 두고 머리 칸을 누르면 펼친다
   const showMemo = true;
@@ -603,7 +604,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           <table className="border-collapse text-[11px] w-full table-fixed" style={fillH ? { height: fillH } : undefined}>
             <colgroup>
               <col style={{ width: 52 }} />
-              {shown.map(t => folded.has(t.name) ? <col key={t.id} style={{ width: 60 }} /> : (
+              {shown.map(t => folded.has(t.name) ? <col key={t.id} style={{ width: 72 }} /> : (
                 <Fragment key={t.id}>
                   <col />
                   {mode === 'day' && <col />}
@@ -627,14 +628,16 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                   <th key={t.id} colSpan={folded.has(t.name) ? 1 : (mode === 'day' ? 4 : 2) + (showMemo ? 1 : 0)} className={`${th} text-[13px] text-[#16a34a] whitespace-nowrap`}>
                     <button type="button" onClick={() => toggleFold(t.name)} title={folded.has(t.name) ? '펼치기' : '접기'}
                       className="inline-flex items-center gap-1 hover:opacity-70">
-                      {t.name}<span className="text-[10px] text-[#aaa]">{folded.has(t.name) ? '▸' : '◂'}</span>
+                      {t.name}{folded.has(t.name)
+                        ? <span className="text-[12px] leading-none text-[#16a34a]" aria-label="펼치기">▶</span>
+                        : <span className="text-[10px] text-[#aaa]">◂</span>}
                     </button>
                     {!isTest && !folded.has(t.name) && (
                       <button type="button" onClick={() => clearTeacher(t)}
                         className="ml-1 text-[10px] rounded px-1 border text-[#a1a1aa] border-[#e4e4e7] hover:text-red-400"
                         title={mode === 'day' ? '이 날 이 선생님 칸 모두 비우기' : '이 요일 고정 수업 모두 비우기'}>비우기</button>
                     )}
-                    {!isTest && mode === 'day' && (
+                    {!isTest && mode === 'day' && !folded.has(t.name) && (
                       <button type="button" onClick={() => hideTeacher(t)}
                         className={`ml-1 text-[10px] rounded px-1 border ${assignOf(t.id) === 'add' ? 'text-[#f59e0b] border-[#fcd34d]' : 'text-[#a1a1aa] border-[#e4e4e7] hover:text-red-400'}`}
                         title="이 날만 시간표에서 빼기 (칸도 비워져요)">✕ 빼기</button>
