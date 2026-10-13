@@ -259,8 +259,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     if (st === dbAssign(id)) n.delete(id); else n.set(id, st);
     return n;
   });
-  // 선생님마다 맨 오른쪽에 메모 칸 (40분 수업, 4시 시작 같은 것)
+  // 선생님마다 맨 오른쪽에 메모 칸 (40분 수업, 4시 시작 같은 것). 수색은 접어 두고 머리 칸을 누르면 펼친다
   const showMemo = true;
+  const [memoOpenFor, setMemoOpenFor] = useState<Set<Center>>(() => new Set<Center>(['uijeongbu']));
+  const memoOpen = memoOpenFor.has(center);
+  const toggleMemo = () => setMemoOpenFor(s => { const n = new Set(s); if (n.has(center)) n.delete(center); else n.add(center); return n; });
 
   // 테스트 화면 — 이 아이 칸만 고칠 수 있고, 다른 아이가 있는 칸은 잠근다
   const isTest = !!testChildName;
@@ -481,6 +484,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
   const th = 'border border-[#d4d4d8] px-2 py-1.5 font-normal';
+  const memoTh = <th onClick={toggleMemo} title={memoOpen ? '메모 접기' : '메모 펼치기'}
+    className={`${th} text-[10px] text-[#999] cursor-pointer hover:text-[#555] ${memoOpen ? 'min-w-[90px]' : 'w-5 px-0'}`}>{memoOpen ? '메모 ‹' : '›'}</th>;
   const td = 'border border-[#e4e4e7] h-9 px-1.5 text-center align-middle cursor-pointer hover:bg-[#f0f6fe] whitespace-nowrap';
 
   return (
@@ -599,8 +604,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                     <th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>
                     <th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>
                     <th className={`${th} text-[10px] text-[#16a34a] min-w-[64px]`}>결제방식</th>
-                    {showMemo && <th className={`${th} text-[10px] text-[#999] min-w-[90px]`}>메모</th>}
-                  </> : <><th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>{showMemo && <th className={`${th} text-[10px] text-[#999] min-w-[90px]`}>메모</th>}</>} />
+                    {showMemo && memoTh}
+                  </> : <><th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>{showMemo && memoTh}</>} />
                 ))}
               </tr>
             </thead>
@@ -634,13 +639,18 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                       </td>
                     );
                     // 메모 칸 (선생님마다 맨 오른쪽) — 누르면 고친다
-                    const memoTd = showMemo ? (
+                    const memoTd = !showMemo ? null : !memoOpen ? (
+                      // 접힌 메모 — 메모가 있으면 점만, 마우스를 올리면 내용
+                      <td className="border border-[#e4e4e7] h-9 w-5 px-0 text-center align-middle text-[10px] text-[#a1a1aa]" title={kc.status === 'child' && kc.note ? `메모: ${kc.note}` : ''}>
+                        {kc.status === 'child' && !locked(kc) && kc.note ? '•' : null}
+                      </td>
+                    ) : (
                       <td className={`border border-[#e4e4e7] h-9 min-w-[90px] max-w-[160px] px-1.5 text-left align-middle text-[10px] leading-[1.3] text-[#71717a] ${kc.status === 'child' && !locked(kc) ? 'cursor-pointer hover:bg-[#f0f6fe]' : ''}`}
                         title={kc.note ? `메모: ${kc.note}` : kc.status === 'child' ? '눌러서 메모 쓰기' : ''}
                         onClick={() => { if (kc.status === 'child' && !locked(kc)) changeNote({ teacher: t, time, side: kSide, cell: kc }); }}>
                         {kc.status === 'child' && !locked(kc) ? kc.note : null}
                       </td>
-                    ) : null;
+                    );
                     const pendL = view.pend.has(`fixed|${t.id}|${time}`);
                     const pendR = view.pend.has(`open|${t.id}|${time}`);
                     return (
