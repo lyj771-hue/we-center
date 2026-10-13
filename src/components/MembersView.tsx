@@ -217,6 +217,17 @@ export default function MembersView({ center }: { center: Center }) {
     try { await setMemberCenterApproved(m.userId, center, approve); load(); }
     catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
   };
+  // 미승인 회원이 지금 아이 명단에 있는지 — 이미 연결된 아이, 아니면 이 센터에서 이름(닉네임·관리자 닉네임, 앞뒤 숫자 포함)이나 가입할 때 적은 회원 코드가 같은 아이
+  const rosterOf = (m: Member): Child[] => {
+    const linked = kidOf(m.userId);
+    if (linked) return [linked];
+    const names = [m.nickname, m.centerNickname ?? ''].map(x => x.trim()).filter(Boolean);
+    const code = m.requestedCode?.trim().toUpperCase();
+    return kids.filter(k => (k.center ?? 'eunpyeong') === center && (
+      (!!code && k.memberCode === code) ||
+      names.some(n => n === k.name || n === `${k.name}${k.number ?? ''}` || n === `${k.number ?? ''}${k.name}`)
+    ));
+  };
   const list = filter === 'waiting' ? waiting : approved;
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
   const input = 'w-full min-w-[90px] border-b border-[var(--brand)] py-1 text-[14px] outline-none bg-transparent';
@@ -269,11 +280,12 @@ export default function MembersView({ center }: { center: Center }) {
               {showDates && <th className={th}>카카오계정번호</th>}
               {showDates && <th className={th}>회원 코드</th>}
               {showDates && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
-              {showDates && <th className={th}>마지막 로그인</th>}
+              {showDates && filter !== 'waiting' && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
               <th className={th}>관리자 닉네임</th>
               <th className={th}>뒷번호</th>
               <th className={th}>설명</th>
+              {filter === 'waiting' && <th className={th}>아이 명단</th>}
               {filter !== 'waiting' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {filter !== 'waiting' && <th className={`${th} text-center`}>선결제</th>}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
@@ -296,7 +308,7 @@ export default function MembersView({ center }: { center: Center }) {
                     ) : m.requestedCode ? <span className="text-[12px] text-[#f59e0b]" title="가입할 때 적은 회원 코드 — 아직 연결 안 됨">요청 {m.requestedCode}</span> : <span className="text-[#ccc]">-</span>}
                   </td>)}
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(approvedHere(m) ?? m.joinedAt)}</td>}
-                  {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
+                  {showDates && filter !== 'waiting' && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
                   <td className={td}>
                     {on ? <input className={input} value={form.nickname} maxLength={20} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} />
                       : <>{m.nickname || <span className="text-[#ccc]">아직 안 정함</span>}
@@ -315,6 +327,22 @@ export default function MembersView({ center }: { center: Center }) {
                     {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
                       : <span className="text-[#666] whitespace-pre-line">{m.memo || ''}</span>}
                   </td>
+                  {filter === 'waiting' && (
+                    <td className={`${td} whitespace-nowrap text-[12px]`}>
+                      {(() => {
+                        const hits = rosterOf(m);
+                        if (!hits.length) return <span className="text-[#f59e0b]">현재 명단에 없음</span>;
+                        return hits.map(k => (
+                          <div key={k.id}>
+                            <span className="text-[#888] tabular-nums">{k.memberCode ?? '코드 없음'}</span> {k.name}{k.number ?? ''}
+                            {m.phoneLast4 && k.phoneLast4 && k.phoneLast4 !== m.phoneLast4 && <span className="ml-1 text-[#bbb]">(뒷번호 {k.phoneLast4})</span>}
+                            {k.guardianUserId === m.userId ? <span className="ml-1 text-[var(--brand)]">연결됨</span>
+                              : k.guardianUserId && <span className="ml-1 text-[#bbb]">다른 계정 연결</span>}
+                          </div>
+                        ));
+                      })()}
+                    </td>
+                  )}
                   {filter !== 'waiting' && SUPPORTS.map(x => (
                     <td key={x.key} className={`${td} text-center`}>
                       <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname} aria-label={`${m.centerNickname || m.nickname} ${x.label}`}
