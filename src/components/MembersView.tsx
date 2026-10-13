@@ -386,11 +386,11 @@ export default function MembersView({ center }: { center: Center }) {
               <th className={`${th} text-center`}>의정부점</th>
               <th className={th}>관리자 닉네임</th>
               <th className={th}>뒷번호</th>
-              <th className={th}>설명</th>
               {filter === 'waiting' && <th className={th}>아이 명단</th>}
               {filter !== 'waiting' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {filter !== 'waiting' && <th className={`${th} text-center`}>선결제</th>}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
+              <th className={th}>설명</th>
               <th className={th}><span className="sr-only">관리</span></th>
             </tr>
           </thead>
@@ -439,10 +439,6 @@ export default function MembersView({ center }: { center: Center }) {
                     {on ? <input className={`${input} w-14 text-center`} value={form.phone} inputMode="numeric" maxLength={4} placeholder="1234"
                       onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 4) }))} />
                       : m.phoneLast4 ?? <span className="text-[#ccc]">-</span>}
-                  </td>
-                  <td className={`${td} min-w-[160px]`}>
-                    {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
-                      : <span className="text-[#666] whitespace-pre-line">{m.memo || ''}</span>}
                   </td>
                   {filter === 'waiting' && (
                     <td className={`${td} whitespace-nowrap text-[12px]`}>
@@ -501,6 +497,11 @@ export default function MembersView({ center }: { center: Center }) {
                     )}
                   </td>
                   )}
+                  {/* 설명 — 맨 오른쪽(버튼 왼쪽) */}
+                  <td className={`${td} min-w-[160px]`}>
+                    {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
+                      : <span className="text-[#666] whitespace-pre-line">{m.memo || ''}</span>}
+                  </td>
                   <td className={`${td} text-right`}>
                     <div className="flex justify-end gap-1">
                       {on ? (
