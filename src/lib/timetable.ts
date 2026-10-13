@@ -406,14 +406,24 @@ export async function setLessonPayment(childId: string, day: string, time: strin
 
 export interface PayCount { voucher: number; gusen: number; kkumideun: number; woojin: number; subsidy: number; prepaid: number }
 
+/** 1000줄 넘게 — 디비가 한 번에 1000줄까지만 주니 나눠서 다 받는다 (range 로 쪼갤 수 있는 select 를 넘긴다) */
+async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await page(from, from + 999);
+    if (error) throw error;
+    out.push(...(data ?? []));
+    if (!data || data.length < 1000) return out;
+  }
+}
+
 /** 아이마다 사용 횟수(확정된 결제만) — 바우처·굳센·꿈이든은 이번 달, 선결제는 지금까지 */
 export async function getPaymentCounts(monthStart: string, monthEnd: string): Promise<Map<string, PayCount>> {
-  const [month, prepaid] = await Promise.all([
-    supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy']),
-    supabase.from('lesson_payments').select('child_id').eq('confirmed', true).eq('method', 'prepaid'),
+  const [monthRows, prepaidRows] = await Promise.all([
+    fetchAll<{ child_id: string; method: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy']).order('id').range(a, b)),
+    fetchAll<{ child_id: string }>((a, b) => supabase.from('lesson_payments').select('child_id').eq('confirmed', true).eq('method', 'prepaid').order('id').range(a, b)),
   ]);
-  if (month.error) throw month.error;
-  if (prepaid.error) throw prepaid.error;
+  const month = { data: monthRows }, prepaid = { data: prepaidRows };
   const m = new Map<string, PayCount>();
   const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; m.set(id, c); return c; };
   for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy']++;
@@ -563,11 +573,11 @@ export async function getMonthUses(month: string): Promise<Map<string, MonthUse>
   const [y, m] = month.split('-').map(Number);
   const start = `${month}-01`;
   const end = `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
-  const [lp, pc] = await Promise.all([
-    supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', start).lte('day', end),
+  const [lpRows, pc] = await Promise.all([
+    fetchAll<{ child_id: string; method: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', start).lte('day', end).order('id').range(a, b)),
     supabase.from('prepaid_charges').select('*').gte('day', start).lte('day', end).lt('count', 0),
   ]);
-  if (lp.error) throw lp.error;
+  const lp = { data: lpRows };
   const map = new Map<string, MonthUse>();
   const get = (id: string) => { const c = map.get(id) ?? { voucher: 0, gusen: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; map.set(id, c); return c; };
   for (const r of lp.data ?? []) if (r.method in get(r.child_id)) (get(r.child_id) as unknown as Record<string, number>)[r.method]++;
@@ -594,7 +604,6 @@ export async function setMonthNote(childId: string, month: string, memo: string)
 export async function getMonthLessonPayments(month: string): Promise<{ teacher_id: string | null; method: PayMethod; confirmed: boolean; center: string }[]> {
   const [y, m] = month.split('-').map(Number);
   const end = `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
-  const { data, error } = await supabase.from('lesson_payments').select('teacher_id, method, confirmed, center').gte('day', `${month}-01`).lte('day', end);
-  if (error) throw error;
-  return (data ?? []).map(r => ({ teacher_id: r.teacher_id as string | null, method: r.method as PayMethod, confirmed: r.confirmed !== false, center: (r.center as string) ?? 'eunpyeong' }));
+  const data = await fetchAll<Record<string, unknown>>((a, b) => supabase.from('lesson_payments').select('teacher_id, method, confirmed, center').gte('day', `${month}-01`).lte('day', end).order('id').range(a, b));
+  return data.map(r => ({ teacher_id: r.teacher_id as string | null, method: r.method as PayMethod, confirmed: r.confirmed !== false, center: (r.center as string) ?? 'eunpyeong' }));
 }

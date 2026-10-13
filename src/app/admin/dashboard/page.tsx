@@ -27,7 +27,7 @@ const shiftMonth = (ym: string, n: number) => { const [y, m] = ym.split('-').map
 type Row = { teacher_id: string | null; method: PayMethod; confirmed: boolean; center: string };
 
 export default function DashboardPage() {
-  const { isAdmin } = useAdmin();
+  const { canSeeStats: isAdmin } = useAdmin();   // 수업 현황은 전체 관리자만(직원 계정은 못 본다)
   const [month, setMonth] = useState(thisMonth);
   const [center, setCenter] = useState<Center | 'all'>('all');
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -49,12 +49,12 @@ export default function DashboardPage() {
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
 
   // 센터별 선생님 — 기본 센터로(은평: 이정길·허홍석·선우용 / 의정부: 김영훈·문석현). 공휴일에 다른 지점에서 수업해도 기본 센터로 센다.
-  // 이원재(수요일 의정부)만 일한 곳으로 — 은평·의정부 두 줄에 나온다. 설영수는 뺀다
-  // 표 순서 — 은평: 이정길·허홍석·선우용·이원재, 의정부: 김영훈·문석현·이원재 (그 밖의 선생님은 뒤에)
-  const ORDER: Record<string, string[]> = { eunpyeong: ['이정길', '허홍석', '선우용', '이원재'], uijeongbu: ['김영훈', '문석현', '이원재'] };
+  // 두 센터에서 일하는 설영수·이원재는 일한 곳으로 — 은평·의정부 두 줄에 나온다
+  // 표 순서 — 시간표와 같게 은평: 설영수·이정길·허홍석·선우용·이원재, 의정부: 설영수·김영훈·문석현·이원재 (그 밖의 선생님은 뒤에)
+  const ORDER: Record<string, string[]> = { eunpyeong: ['설영수', '이정길', '허홍석', '선우용', '이원재'], uijeongbu: ['설영수', '김영훈', '문석현', '이원재'] };
   const orderOf = (name: string, c: string) => ((ORDER[c] ?? []).indexOf(name) + 1 || 99);
-  const EXCLUDE = ['설영수'];
-  const BY_WORKPLACE = ['이원재'];
+  const EXCLUDE: string[] = [];
+  const BY_WORKPLACE = ['설영수', '이원재'];
   const keyOf = (tid: string, c: string) => `${tid}|${c}`;
   const teacherById = useMemo(() => new Map(teachers.map(t => [t.id, t])), [teachers]);
   const homeOf = (t: Teacher) => (t.centers.length === 1 ? t.centers[0] : null);
