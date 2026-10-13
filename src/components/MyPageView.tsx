@@ -43,6 +43,9 @@ const USAGE_CARDS: { method: MyPayment['method']; label: string }[] = [
   { method: 'voucher', label: '바우처' }, { method: 'gusen', label: '굳센' }, { method: 'kkumideun', label: '꿈이든' }, { method: 'subsidy', label: '지원금' },
 ];
 
+// 년/월/일 (주별 시간표 날짜 넘기기)
+const ymd = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+
 export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, failed, top, bottom }: MyPageViewProps) {
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
   const payRows = [...payments].sort((a, b) => (a.method === 'prepaid' ? -1 : b.method === 'prepaid' ? 1 : 0));   // 선결제를 맨 위로
@@ -92,16 +95,16 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
 
       {/* 주별 시간표 */}
       <section className={card}>
-        {/* 제목은 위 줄에 따로 — 주를 바꿔도(날짜 글자 길이·[이번 주] 버튼) 위치가 안 움직이게 */}
-        <h2 className="text-[17px] text-[#27272a] mb-3">주별 시간표</h2>
-        <div className="flex items-center mb-4">
-          <div className="flex items-center gap-1.5 text-[13px]">
-            <button onClick={() => setWeek(w => addDays(w, -7))} aria-label="지난주" className="w-8 h-8 border border-[#e5e5e5] rounded-full">‹</button>
-            <span className="min-w-[120px] text-center tabular-nums">{ws.getMonth() + 1}/{ws.getDate()} ~ {we.getMonth() + 1}/{we.getDate()}</span>
-            <button onClick={() => setWeek(w => addDays(w, 7))} aria-label="다음주" className="w-8 h-8 border border-[#e5e5e5] rounded-full">›</button>
-            <button onClick={() => setWeek(() => thisMonday())} tabIndex={week === thisMonday() ? -1 : 0} aria-hidden={week === thisMonday()}
-              className={`ml-1 text-[12px] text-[#888] underline underline-offset-2 ${week === thisMonday() ? 'invisible' : ''}`}>이번 주</button>
-          </div>
+        {/* 제목 줄 — 오른쪽 [이번 주](이번 주를 볼 땐 자리만 두고 숨김). 아래 날짜 넘기기는 가운데, 주를 바꿔도 위치가 안 움직이게 */}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-[17px] text-[#27272a]">주별 시간표</h2>
+          <button onClick={() => setWeek(() => thisMonday())} tabIndex={week === thisMonday() ? -1 : 0} aria-hidden={week === thisMonday()}
+            className={`text-[12px] text-[#888] underline underline-offset-2 ${week === thisMonday() ? 'invisible' : ''}`}>이번 주</button>
+        </div>
+        <div className="flex items-center justify-center gap-1.5 text-[13px] mb-4">
+          <button onClick={() => setWeek(w => addDays(w, -7))} aria-label="지난주" className="w-8 h-8 border border-[#e5e5e5] rounded-full">‹</button>
+          <span className="min-w-[180px] text-center tabular-nums">{ymd(ws)} ~ {ymd(we)}</span>
+          <button onClick={() => setWeek(w => addDays(w, 7))} aria-label="다음주" className="w-8 h-8 border border-[#e5e5e5] rounded-full">›</button>
         </div>
         <div className="divide-y divide-[#f0f0f0]">
           {days.map(d => {
