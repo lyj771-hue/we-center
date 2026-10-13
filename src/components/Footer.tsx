@@ -1,4 +1,9 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
+
 // 맨 아래 — 사업자 정보 + 저작권. (보호자 로그인은 상단 오른쪽 버튼)
+// 시간표 관리 화면은 표를 화면 높이에 맞추므로 빼서 스크롤이 생기지 않게 한다
 // 사업자 정보는 사업자등록증과 똑같이 적는다 — 카카오 비즈니스 심사가 홈페이지의 사업자 정보와 대조한다.
 const BUSINESS = [
   ['상호', '위(We) 아동발달센터'],
@@ -9,6 +14,8 @@ const BUSINESS = [
 ];
 
 export default function Footer() {
+  const path = usePathname();
+  if (path?.startsWith('/admin/timetable')) return null;
   return (
     <footer className="border-t border-[#ebebeb] py-8 px-4 text-center text-[11px] text-[#aaa]">
       <p className="leading-[1.9] break-keep">

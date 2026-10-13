@@ -267,8 +267,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     const fit = () => {
       const el = tableBox.current;
       if (!el) return;
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      setFillH(Math.max(0, window.innerHeight - top - (barBox.current?.offsetHeight ?? 0) - 8));
+      const box = el.getBoundingClientRect();
+      const top = box.top + window.scrollY;
+      // 표 아래로 붙는 높이 — 버튼 줄 + 위 여백(mt-2) + 화면 아래 여백(pb-2)
+      const below = (barBox.current?.offsetHeight ?? 0) + 16;
+      setFillH(Math.max(0, window.innerHeight - top - below - 2));
     };
     fit();
     window.addEventListener('resize', fit);
@@ -515,17 +518,18 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
-  const th = 'border border-[#d4d4d8] px-2 py-1.5 font-normal';
+  const th = 'border border-[#d4d4d8] px-1 py-1 font-normal';
   const memoTh = <th onClick={toggleMemo} title={memoOpen ? '메모 접기' : '메모 펼치기'}
     className={`${th} text-[10px] text-[#999] cursor-pointer hover:text-[#555] ${memoOpen ? 'min-w-[90px]' : 'w-5 px-0'}`}>{memoOpen ? '메모 ‹' : '›'}</th>;
-  const td = 'border border-[#e4e4e7] h-9 px-1.5 text-center align-middle cursor-pointer hover:bg-[#f0f6fe] whitespace-nowrap';
+  const td = 'border border-[#e4e4e7] h-6 px-1 text-center align-middle cursor-pointer hover:bg-[#f0f6fe] whitespace-nowrap';
 
   return (
-    <div className="px-3 md:px-6 pt-6 pb-14 fade-up">
+    <div className="px-3 md:px-6 pt-3 pb-2 fade-up">
       <div className="mx-auto">
-        <h1 className="display-heading mb-5">{isTest ? '시간표(테스트)' : '시간표'}{fixedCenter && <span className="text-[0.7em] text-[#888]"> ({fixedCenter === 'uijeongbu' ? '의정부' : '수색'})</span>}</h1>
+        <div className="flex flex-wrap items-baseline gap-x-4 mb-2">
+        <h1 className="display-heading">{isTest ? '시간표(테스트)' : '시간표'}{fixedCenter && <span className="text-[0.7em] text-[#888]"> ({fixedCenter === 'uijeongbu' ? '의정부' : '수색'})</span>}</h1>
         {isTest ? (
-          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-[#fef3c7] px-4 py-3 text-[13px] text-[#92400e]">
+          <div className="w-full mt-2 flex flex-wrap items-center gap-3 rounded-lg bg-[#fef3c7] px-4 py-3 text-[13px] text-[#92400e]">
             <span><b>{testChildName}</b> 수업만 보이고 고칠 수 있어요. 다른 아이 칸은 잠겨 있어요. 저장은 <b>실제 디비</b>에 돼서 {testChildName} 마이페이지에서 바로 확인할 수 있어요.</span>
             <span className="w-full flex flex-wrap items-center gap-1.5 text-[12px]">
               {testChildName} 고정 수업:
@@ -541,11 +545,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             <a href="/admin/timetable" className="text-[12px] underline underline-offset-2">시간표 관리로</a>
           </div>
         ) : (
-          <a href="/admin/timetable-test" className="inline-block mb-3 text-[12px] text-[#888] underline underline-offset-2">시간표(테스트) — 김유담으로 연습하기 →</a>
+          <a href="/admin/timetable-test" className="text-[12px] text-[#888] underline underline-offset-2">시간표(테스트) — 김유담으로 연습하기 →</a>
         )}
+        </div>
 
         {/* 보기 고르기 */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
           {!fixedCenter && CENTERS.map(cn => (
             <button key={cn.key} onClick={() => guard(() => setCenter(cn.key))}
               className={`text-[14px] px-4 py-2 border-b-2 ${center === cn.key ? 'border-[var(--brand)] text-[var(--brand)]' : 'border-transparent text-[#999] hover:text-[#333]'}`}>{cn.label}</button>
@@ -579,7 +584,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             </div>
           )}
         </div>
-        <div className={`flex items-center gap-3 mb-3 ${isTest ? 'hidden' : ''}`}>
+        <div className={`flex items-center gap-3 mb-2 ${isTest ? 'hidden' : ''}`}>
           <button onClick={fullSync} disabled={fullSyncing}
             className="text-[12px] border border-[#0a0a0a] px-3 py-1.5 hover:bg-[#0a0a0a] hover:text-white disabled:opacity-50">
             {fullSyncing ? '캘린더에 반영 중…' : '구글 캘린더 전체 반영'}
@@ -632,10 +637,10 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white`} />
                 {shown.map(t => folded.has(t.name) ? <th key={t.id} className={`${th} text-[10px] text-[#ccc] w-6`}>접음</th> : (
-                  <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={mode === 'day' ? <>
-                    <th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>
+                  <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[64px]`}>고정</th>} right={mode === 'day' ? <>
+                    <th className={`${th} text-[10px] text-[#999] min-w-[64px]`}>빈타임</th>
                     <th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>
-                    <th className={`${th} text-[10px] text-[#16a34a] min-w-[64px]`}>결제방식</th>
+                    <th className={`${th} text-[10px] text-[#16a34a] min-w-[56px]`}>결제방식</th>
                     {showMemo && memoTh}
                   </> : <><th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>{showMemo && memoTh}</>} />
                 ))}
@@ -651,14 +656,14 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                     const right = cellOf(view.open, t.id, time);
                     // 테스트 화면: 다른 아이 칸은 잠금(내용 숨김)
                     const lockL = locked(left), lockR = locked(right);
-                    const lockedTd = <td className="border border-[#e4e4e7] h-9 min-w-[84px] bg-[#fafafa] text-center text-[10px] text-[#d4d4d8]" title="테스트 화면에선 다른 아이 칸을 고칠 수 없어요">·</td>;
+                    const lockedTd = <td className="border border-[#e4e4e7] h-6 min-w-[64px] bg-[#fafafa] text-center text-[10px] text-[#d4d4d8]" title="테스트 화면에선 다른 아이 칸을 고칠 수 없어요">·</td>;
                     // 수업 칸 — 그 시간 수업(빈타임 아이가 있으면 그 아이, 없으면 고정 아이)의 종류를 좁은 칸에서 고른다
                     const kc = mode === 'day' && right.status === 'child' ? right : left;
                     const kSide: Side = mode === 'day' && right.status === 'child' ? 'open' : 'fixed';
                     const kindTd = (
-                      <td className="border border-[#e4e4e7] h-9 min-w-[46px] px-0 text-center align-middle whitespace-nowrap">
+                      <td className="border border-[#e4e4e7] h-6 min-w-[46px] px-0 text-center align-middle whitespace-nowrap">
                         {kc.status === 'child' && !locked(kc) && kc.source !== 'booking' ? (
-                          <label className={`relative flex h-9 w-full cursor-pointer items-center justify-center text-[11px] leading-none ${kc.kind ? 'text-[#52525b]' : 'text-[#d4d4d8]'} ${view.pend.has(`${kSide}|${t.id}|${time}`) ? 'bg-[#fff6d5]' : ''}`}
+                          <label className={`relative flex h-6 w-full cursor-pointer items-center justify-center text-[11px] leading-none ${kc.kind ? 'text-[#52525b]' : 'text-[#d4d4d8]'} ${view.pend.has(`${kSide}|${t.id}|${time}`) ? 'bg-[#fff6d5]' : ''}`}
                             title="수업 종류 (운동 / 구강 / -)">
                             {/* 글씨는 그대로 보여 주고, 투명한 고르기 칸을 위에 겹친다 (손글씨 글꼴이 고르기 칸 안에서 잘려서) */}
                             {kindLabel(kc.kind) || '-'}
@@ -673,11 +678,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                     // 메모 칸 (선생님마다 맨 오른쪽) — 누르면 고친다
                     const memoTd = !showMemo ? null : !memoOpen ? (
                       // 접힌 메모 — 메모가 있으면 점만, 마우스를 올리면 내용
-                      <td className="border border-[#e4e4e7] h-9 w-5 px-0 text-center align-middle text-[10px] text-[#a1a1aa]" title={kc.status === 'child' && kc.note ? `메모: ${kc.note}` : ''}>
+                      <td className="border border-[#e4e4e7] h-6 w-5 px-0 text-center align-middle text-[10px] text-[#a1a1aa]" title={kc.status === 'child' && kc.note ? `메모: ${kc.note}` : ''}>
                         {kc.status === 'child' && !locked(kc) && kc.note ? '•' : null}
                       </td>
                     ) : (
-                      <td className={`border border-[#e4e4e7] h-9 min-w-[90px] max-w-[160px] px-1.5 text-left align-middle text-[10px] leading-[1.3] text-[#71717a] ${kc.status === 'child' && !locked(kc) ? 'cursor-pointer hover:bg-[#f0f6fe]' : ''}`}
+                      <td className={`border border-[#e4e4e7] h-6 min-w-[90px] max-w-[160px] px-1.5 text-left align-middle text-[10px] leading-[1.3] text-[#71717a] ${kc.status === 'child' && !locked(kc) ? 'cursor-pointer hover:bg-[#f0f6fe]' : ''}`}
                         title={kc.note ? `메모: ${kc.note}` : kc.status === 'child' ? '눌러서 메모 쓰기' : ''}
                         onClick={() => { if (kc.status === 'child' && !locked(kc)) changeNote({ teacher: t, time, side: kSide, cell: kc }); }}>
                         {kc.status === 'child' && !locked(kc) ? kc.note : null}
@@ -688,13 +693,13 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                     return (
                       <FragmentPair key={t.id}
                         left={lockL ? lockedTd :
-                          <td className={`${td} min-w-[84px] ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
+                          <td className={`${td} min-w-[64px] ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
                             {/* 빈타임에 아이가 채워지면 옆 고정 칸은 회색으로 흐리게 */}
                             <CellText cell={left} label={ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} />
                           </td>
                         }
                         right={mode === 'day' ? (<>
-                          {lockR ? lockedTd : <td className={`${td} min-w-[84px] ${pendR ? 'bg-[#fff6d5]' : 'bg-[#fcfcfd]'}`} onClick={e => {
+                          {lockR ? lockedTd : <td className={`${td} min-w-[64px] ${pendR ? 'bg-[#fff6d5]' : 'bg-[#fcfcfd]'}`} onClick={e => {
                             // 보호자 신청 칸은 안내가 있는 창으로, 그 밖은 칸 아래로 아이 명단을 연다
                             if (right.source === 'booking') { setEditing({ teacher: t, time, side: 'open', cell: right }); return; }
                             const b = e.currentTarget.getBoundingClientRect();
@@ -703,7 +708,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                             <CellText cell={right} label={ROW_LABEL[time]} />
                           </td>}
                           {kindTd}
-                          <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
+                          <td className="border border-[#e4e4e7] h-6 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
                             {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved && !locked(c)).map((c, i) => (
                               <PayCell key={i} cell={c} noBase={c === right} paid={c.childId ? paidOf(c.childId, time) : undefined}
@@ -727,6 +732,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
         {/* 저장 버튼 — [스케줄 변경 완료] = 시간표 변경·결제방식 선택 저장 / [결제 완료] = 그날 결제 확정 */}
         <div ref={barBox} className="sticky bottom-0 z-20 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 bg-white/95 border-t border-[#eee] py-3 mt-2">
+          {/* 표 보는 법 — 표가 화면 높이에 맞도록 아래 줄 대신 마우스를 올리면 보이게 */}
+          <span className="mr-auto text-[11px] text-[#999] underline decoration-dotted underline-offset-2 cursor-help"
+            title={'칸을 누르면 고칠 수 있어요.\n앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정' + (mode === 'day' ? '\n빈타임의 "신청" = 보호자가 수업스케쥴에서 신청\n결제방식: 기본 결제 → 파랑 = 직접 고름 → [결제 완료] → ✓ 빨강 = 확정' : '')}>표 보는 법</span>
           <span className="text-[12px] text-[#888]">
             {schedPending + draft.size
               ? `저장 안 한 변경 ${schedPending + draft.size}건 (시간표 ${schedPending} · 결제방식 ${draft.size})`
@@ -757,10 +765,6 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           )}
         </div>
 
-        <p className="text-[11px] text-[#999] mt-3 leading-[2]">
-          칸을 누르면 고칠 수 있어요. 앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정
-          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span></>}
-        </p>
       </div>
 
       {editing && (
