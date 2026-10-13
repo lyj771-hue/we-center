@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import Portal from '@/components/Portal';
 import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFile';
@@ -515,10 +515,10 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
-  const th = 'border border-[#d4d4d8] px-1 py-1.5 font-normal';
+  const th = 'border border-[#d4d4d8] px-1 py-1.5 font-normal overflow-hidden whitespace-nowrap';
   const memoTh = <th onClick={toggleMemo} title={memoOpen ? '메모 접기' : '메모 펼치기'}
     className={`${th} text-[10px] text-[#999] cursor-pointer hover:text-[#555] ${memoOpen ? 'min-w-[56px]' : 'w-5 px-0'}`}>{memoOpen ? '메모 ‹' : '›'}</th>;
-  const td = 'border border-[#e4e4e7] h-9 px-1 text-center align-middle cursor-pointer hover:bg-[#f0f6fe] whitespace-nowrap';
+  const td = 'border border-[#e4e4e7] h-9 px-1 text-center align-middle cursor-pointer hover:bg-[#f0f6fe] whitespace-nowrap overflow-hidden text-ellipsis';
 
   return (
     <div className="px-3 md:px-6 pt-6 pb-14 fade-up">
@@ -579,7 +579,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             </div>
           )}
         </div>
-        <div className={`flex items-center gap-3 mb-3 ${isTest ? 'hidden' : ''}`}>
+        <div className={`flex flex-wrap items-center gap-3 mb-3 ${isTest ? 'hidden' : ''}`}>
           <button onClick={fullSync} disabled={fullSyncing}
             className="shrink-0 whitespace-nowrap text-[12px] border border-[#0a0a0a] px-3 py-1.5 hover:bg-[#0a0a0a] hover:text-white disabled:opacity-50">
             {fullSyncing ? '캘린더에 반영 중…' : '구글 캘린더 전체 반영'}
@@ -599,7 +599,20 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
         {/* 표 — 이 센터 선생님만. 접은 선생님은 이름 칸만 좁게 */}
         <div ref={tableBox} className="overflow-x-auto bg-white">
-          <table className="border-collapse text-[11px] min-w-full" style={fillH ? { height: fillH } : undefined}>
+          {/* 고정 폭 표 — 칸 폭을 미리 정해서 화면 폭을 넘지 않는다(글꼴·브라우저가 달라도 가로 스크롤 없이). 너비를 안 정한 칸이 남는 폭을 나눠 가진다 */}
+          <table className="border-collapse text-[11px] w-full table-fixed" style={fillH ? { height: fillH } : undefined}>
+            <colgroup>
+              <col style={{ width: 52 }} />
+              {shown.map(t => folded.has(t.name) ? <col key={t.id} style={{ width: 60 }} /> : (
+                <Fragment key={t.id}>
+                  <col />
+                  {mode === 'day' && <col />}
+                  <col style={{ width: 40 }} />
+                  {mode === 'day' && <col />}
+                  {showMemo && <col style={{ width: memoOpen ? 80 : 16 }} />}
+                </Fragment>
+              ))}
+            </colgroup>
             <thead>
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white w-16`}>시간</th>
@@ -644,7 +657,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             <tbody>
               {rows.map(time => (
                 <tr key={time}>
-                  <td className={`border border-[#d4d4d8] px-2 text-center sticky left-0 z-10 bg-white ${ROW_LABEL[time] ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
+                  <td className={`border border-[#d4d4d8] px-1 text-center whitespace-nowrap sticky left-0 z-10 bg-white ${ROW_LABEL[time] ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
                   {shown.map(t => {
                     if (folded.has(t.name)) return <td key={t.id} className="border border-[#e4e4e7] bg-[#f4f4f5] w-6" />;
                     const left = cellOf(view.fixed, t.id, time);
