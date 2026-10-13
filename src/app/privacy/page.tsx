@@ -7,11 +7,13 @@ export const metadata: Metadata = { title: '개인정보처리방침' };
 
 const EFFECTIVE_DATE = '2026년 10월 13일';
 
+// [구분, 수집 항목, 수집 조건(필수/선택), 이용 목적]
 const ITEMS = [
-  ['보호자 회원가입·로그인 (카카오 로그인)', '카카오 회원번호, 카카오계정 전화번호', '회원 식별, 로그인'],
-  ['회원 정보 입력', '아이 이름(닉네임), 보호자 전화번호 뒷 4자리, 이용 센터', '센터 아동과 보호자 계정 연결, 관리자 승인'],
-  ['수업 예약·선결제 이용', '수업 예약 내역, 선결제 충전·사용 내역', '수업 예약 관리, 선결제 잔여 횟수 안내'],
-  ['알림 발송', '카카오계정 전화번호', '수업 예약 확인 및 선결제 이용 내역 알림톡 발송'],
+  ['카카오 로그인', '카카오 회원번호', '필수', '회원 식별, 로그인'],
+  ['카카오 로그인', '카카오계정 전화번호', '필수', '수업 예약 확인 및 선결제 이용 내역 알림톡 발송, 보호자 본인 확인'],
+  ['회원가입 정보 입력', '아이 이름(닉네임), 이용 센터, 대표 보호자 전화번호 뒷 4자리', '필수', '센터 아동과 보호자 계정 연결, 관리자 승인'],
+  ['회원가입 정보 입력', '회원 코드(센터에서 받은 번호)', '선택', '센터 아동 명단과 빠르게 연결'],
+  ['서비스 이용 중 생성', '수업 예약 내역, 선결제 충전·사용 내역', '필수', '수업 예약 관리, 선결제 잔여 횟수 안내'],
 ];
 
 const h2 = 'font-bold text-[15px] text-[#222] mt-10 mb-3';
@@ -30,16 +32,16 @@ export default function PrivacyPage() {
       <div className="overflow-x-auto">
         <table className="w-full text-[12px] text-[#555] border-collapse">
           <thead className="bg-[#f7f7f7] text-[#333]">
-            <tr><th className={td}>구분</th><th className={td}>수집 항목</th><th className={td}>이용 목적</th></tr>
+            <tr><th className={td}>구분</th><th className={td}>수집 항목</th><th className={`${td} whitespace-nowrap`}>수집 조건</th><th className={td}>이용 목적</th></tr>
           </thead>
           <tbody>
-            {ITEMS.map(([a, b, c]) => (
-              <tr key={a}><td className={td}>{a}</td><td className={td}>{b}</td><td className={td}>{c}</td></tr>
+            {ITEMS.map(([a, b, c, d]) => (
+              <tr key={b}><td className={td}>{a}</td><td className={td}>{b}</td><td className={`${td} text-center whitespace-nowrap`}>{c}</td><td className={td}>{d}</td></tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className={`${p} mt-3`}>센터는 위 목적 외의 용도로 개인정보를 이용하지 않으며, 이용 목적이 바뀌면 미리 동의를 받습니다.</p>
+      <p className={`${p} mt-3`}>필수 항목에 동의하지 않으면 회원가입(카카오 로그인)을 할 수 없고, 선택 항목은 동의하지 않아도 서비스를 이용할 수 있습니다. 센터는 위 목적 외의 용도로 개인정보를 이용하지 않으며, 이용 목적이 바뀌면 미리 동의를 받습니다.</p>
 
       <h2 className={h2}>2. 보유 및 이용 기간</h2>
       <p className={p}>
