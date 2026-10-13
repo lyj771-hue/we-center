@@ -100,13 +100,13 @@ export default function MyPage() {
     const pending = b.status === 'pending' || (b.status === 'primary' && !profile?.approvedAt);
     const last = joined.length <= 1;
     const msg = pending
-      ? `${b.label} 가입 신청을 취소할까요?`
-      : `${b.label} 가입을 취소할까요?\n${b.label} 아이 연결이 끊기고 ${b.label} 수업·결제가 안 보여요.\n다시 신청해서 승인되면 지난 기록도 그대로 다시 보여요.${last ? '\n\n마지막 지점이라 취소하면 가입한 지점이 없어져요. (회원 정보는 남아요)' : ''}`;
+      ? `${b.label} 승인 신청을 취소할까요?`
+      : `${b.label} 이용을 취소할까요?\n${b.label} 아이 연결이 끊기고 ${b.label} 수업·결제가 안 보여요.\n다시 신청해서 승인되면 지난 기록도 그대로 다시 보여요.${last ? '\n\n마지막 지점이라 취소하면 가입한 지점이 없어져요. (회원 정보는 남아요)' : ''}`;
     if (!(await askConfirm(msg))) return;
     try {
       await leaveBranch(b.key);
       setSel(null); refreshBranches(); refreshProfile(); refreshLinked();
-      await showAlert(pending ? '가입 신청을 취소했어요.' : `${b.label} 가입을 취소했어요.`);
+      await showAlert(pending ? '승인 신청을 취소했어요.' : `${b.label} 이용을 취소했어요.`);
     } catch (e) { showAlert(`취소하지 못했어요.\n${(e as Error).message}`); }
   };
   const withdraw = async () => {
@@ -117,25 +117,38 @@ export default function MyPage() {
   };
 
   // 맨 아래 — 지점 가입 (안 한 지점은 눌러서 가입 신청, 가입했거나 신청한 지점은 다시 누르면 취소)
+  // 지점 상태 — 가입됨 / 승인 대기 / 가입 안 함
+  const stateOf = (b: { key: BranchKey; status: string }) =>
+    b.status === 'primary' ? (profile?.approvedAt ? 'approved' : 'pending')
+    : b.status === 'approved' || linked.includes(b.key) ? 'approved'
+    : b.status === 'pending' ? 'pending' : 'none';
   const bottom = (
     <div className={`${MYPAGE_CARD} space-y-3`}>
       <h2 className="text-[17px] text-[#27272a]">지점</h2>
       <div className="flex gap-2">
-        {branches.map(b => (
-          <button key={b.key} type="button"
-            onClick={() => (b.status === 'none' && !linked.includes(b.key) ? join(b.key) : leave(b))}
-            className={`flex-1 py-2.5 text-[14px] rounded-full border ${
-              b.status === 'primary' || b.status === 'approved' || linked.includes(b.key) ? 'border-[var(--brand)] text-[var(--brand)] bg-[#eef5fe]'
-              : b.status === 'pending' ? 'border-[#f59e0b] text-[#b45309] bg-[#fffbeb]'
-              : 'border-[#ddd] text-[#888] hover:bg-[#f8f8f8]'}`}>
-            {b.label}
-            <span className="block text-[11px] mt-0.5 opacity-80">
-              {b.status === 'primary' ? (profile?.approvedAt ? '가입됨' : '승인 대기') : b.status === 'approved' || linked.includes(b.key) ? '가입됨' : b.status === 'pending' ? '승인 대기' : '눌러서 가입 신청'}
-            </span>
-          </button>
-        ))}
+        {branches.map(b => {
+          const st = stateOf(b);
+          return (
+            <div key={b.key} className="flex-1 text-center">
+              {/* 가입 안 한 지점만 눌러서 신청 — 취소는 아래 작은 글씨로 */}
+              <button type="button" disabled={st !== 'none'} onClick={() => join(b.key)}
+                className={`w-full py-2.5 text-[14px] rounded-full border disabled:cursor-default ${
+                  st === 'approved' ? 'border-[var(--brand)] text-[var(--brand)] bg-[#eef5fe]'
+                  : st === 'pending' ? 'border-[#eab308] text-[#a16207] bg-[#fefce8]'
+                  : 'border-[#ddd] text-[#888] hover:bg-[#f8f8f8]'}`}>
+                {b.label}
+                <span className="block text-[11px] mt-0.5 opacity-80">{st === 'approved' ? '가입됨' : st === 'pending' ? '승인 대기 중' : '눌러서 가입 신청'}</span>
+              </button>
+              {st !== 'none' && (
+                <button type="button" onClick={() => leave(b)}
+                  className="mt-1.5 text-[11px] text-[#aaa] underline underline-offset-2 hover:text-red-400">
+                  {st === 'approved' ? `${b.label} 이용 취소` : '승인 신청 취소'}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
-      <p className="text-[11px] text-[#aaa]">가입했거나 신청한 지점을 다시 누르면 취소할 수 있어요.</p>
     </div>
   );
   // 맨 아래 작게 — 회원 탈퇴
