@@ -259,8 +259,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     if (st === dbAssign(id)) n.delete(id); else n.set(id, st);
     return n;
   });
-  // 의정부는 선생님이 적어서 메모 칸을 둔다 (40분 수업, 4시 시작 같은 것)
-  const showMemo = center === 'uijeongbu';
+  // 선생님마다 맨 오른쪽에 메모 칸 (40분 수업, 4시 시작 같은 것)
+  const showMemo = true;
 
   // 테스트 화면 — 이 아이 칸만 고칠 수 있고, 다른 아이가 있는 칸은 잠근다
   const isTest = !!testChildName;
@@ -598,8 +598,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                   <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={mode === 'day' ? <>
                     <th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>
                     <th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>
-                    {showMemo && <th className={`${th} text-[10px] text-[#999] min-w-[90px]`}>메모</th>}
                     <th className={`${th} text-[10px] text-[#16a34a] min-w-[64px]`}>결제방식</th>
+                    {showMemo && <th className={`${th} text-[10px] text-[#999] min-w-[90px]`}>메모</th>}
                   </> : <><th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>{showMemo && <th className={`${th} text-[10px] text-[#999] min-w-[90px]`}>메모</th>}</>} />
                 ))}
               </tr>
@@ -633,7 +633,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                         ) : kc.status === 'child' && !locked(kc) ? <span className="text-[11px] text-[#71717a]">{kindLabel(kc.kind)}</span> : null}
                       </td>
                     );
-                    // 메모 칸 (의정부) — 누르면 고친다
+                    // 메모 칸 (선생님마다 맨 오른쪽) — 누르면 고친다
                     const memoTd = showMemo ? (
                       <td className={`border border-[#e4e4e7] h-9 min-w-[90px] max-w-[160px] px-1.5 text-left align-middle text-[10px] leading-[1.3] text-[#71717a] ${kc.status === 'child' && !locked(kc) ? 'cursor-pointer hover:bg-[#f0f6fe]' : ''}`}
                         title={kc.note ? `메모: ${kc.note}` : kc.status === 'child' ? '눌러서 메모 쓰기' : ''}
@@ -661,7 +661,6 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                             <CellText cell={right} label={ROW_LABEL[time]} />
                           </td>}
                           {kindTd}
-                          {memoTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
                             {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved && !locked(c)).map((c, i) => (
@@ -672,6 +671,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                                 onPay={c.childId ? e => pay(c.childId!, t.id, time, e) : undefined} />
                             ))}
                           </td>
+                          {memoTd}
                         </>) : <>{kindTd}{memoTd}</>}
                       />
                     );
