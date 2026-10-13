@@ -365,6 +365,9 @@ export default function MembersView({ center }: { center: Center }) {
       ) : filter === 'children' ? (
         <ChildrenTab members={members} center={center} onLinked={loadKids} onMembersChanged={load} />
       ) : (<>
+      {filter === 'waiting' && (
+        <p className="mb-2 text-[12px] text-[#888]">아이 명단에 <b className="font-normal text-[#555]">아이 이름 · 휴대전화 뒷번호</b>가 같은 아이가 등록돼 있으면 <span className="text-[#16a34a]">승인 가능</span>이에요. 승인하면 그 아이와 자동으로 이어져요.</p>
+      )}
       <div className="overflow-x-auto border-t border-[#e5e5e5]">
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
@@ -449,7 +452,9 @@ export default function MembersView({ center }: { center: Center }) {
                       {(() => {
                         const hits = rosterOf(m);
                         if (!hits.length) return <span className="text-[#f59e0b]">현재 명단에 없음</span>;
-                        return hits.map(k => (
+                        // 이름·뒷번호가 같은 아이가 딱 하나면 승인 가능(승인하면 자동 연결)
+                        const ok = sameKidsHere(m, kids).length === 1;
+                        return <>{ok && <span className="inline-block mb-0.5 text-[11px] text-[#16a34a] border border-[#86efac] bg-[#f0fdf4] rounded px-1.5">승인 가능</span>}{hits.map(k => (
                           <div key={k.id}>
                             <span className="text-[#888] tabular-nums">{k.memberCode ?? '코드 없음'}</span> {k.name}{k.number ?? ''}
                             {m.phoneLast4 && k.phoneLast4 && k.phoneLast4 !== m.phoneLast4 && <span className="ml-1 text-[#bbb]">(뒷번호 {k.phoneLast4})</span>}
@@ -457,7 +462,7 @@ export default function MembersView({ center }: { center: Center }) {
                               : k.guardianUserId ? <span className="ml-1 text-[#bbb]">다른 계정 연결</span>
                               : <span className="ml-1 text-[#bbb]" title="이름이 같은 명단 아이 — 승인하면 이어져요">(연결 안 됨)</span>}
                           </div>
-                        ));
+                        ))}</>;
                       })()}
                     </td>
                   )}
