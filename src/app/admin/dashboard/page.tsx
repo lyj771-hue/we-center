@@ -48,24 +48,33 @@ export default function DashboardPage() {
   }, [month]);
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
 
-  // 센터별 선생님 — 그 센터에서 일하는 선생님(은평: 이정길·허홍석·선우용·이원재 / 의정부: 김영훈·문석현·이원재). 설영수는 뺀다.
-  // 두 센터 선생님(이원재: 수요일 의정부)은 센터마다 그 센터 수업만 센다
+  // 센터별 선생님 — 기본 센터로(은평: 이정길·허홍석·선우용 / 의정부: 김영훈·문석현). 공휴일에 다른 지점에서 수업해도 기본 센터로 센다.
+  // 이원재(수요일 의정부)만 일한 곳으로 — 은평·의정부 두 줄에 나온다. 설영수는 뺀다
   // 표 순서 — 은평: 이정길·허홍석·선우용·이원재, 의정부: 김영훈·문석현·이원재 (그 밖의 선생님은 뒤에)
   const ORDER: Record<string, string[]> = { eunpyeong: ['이정길', '허홍석', '선우용', '이원재'], uijeongbu: ['김영훈', '문석현', '이원재'] };
   const orderOf = (name: string, c: string) => ((ORDER[c] ?? []).indexOf(name) + 1 || 99);
   const EXCLUDE = ['설영수'];
+  const BY_WORKPLACE = ['이원재'];
   const keyOf = (tid: string, c: string) => `${tid}|${c}`;
+  const teacherById = useMemo(() => new Map(teachers.map(t => [t.id, t])), [teachers]);
+  const homeOf = (t: Teacher) => (t.centers.length === 1 ? t.centers[0] : null);
+  const inSection = (t: Teacher, c: string) => !EXCLUDE.includes(t.name) && (BY_WORKPLACE.includes(t.name) ? t.centers.includes(c) : homeOf(t) === c);
+  // 수업 기록이 어느 센터 칸에 들어가나
+  const centerOfRow = (r: Row) => {
+    const t = r.teacher_id ? teacherById.get(r.teacher_id) : undefined;
+    return (t && !BY_WORKPLACE.includes(t.name) && homeOf(t)) || (r.center ?? 'eunpyeong');
+  };
   const sections = CENTERS.filter(c => center === 'all' || c.key === center)
-    .map(c => ({ ...c, teachers: teachers.filter(t => !EXCLUDE.includes(t.name) && t.centers.includes(c.key)).sort((x, y) => orderOf(x.name, c.key) - orderOf(y.name, c.key)) }));
+    .map(c => ({ ...c, teachers: teachers.filter(t => inSection(t, c.key)).sort((x, y) => orderOf(x.name, c.key) - orderOf(y.name, c.key)) }));
   const inShown = useMemo(() => new Set(sections.flatMap(sct => sct.teachers.map(t => keyOf(t.id, sct.key)))), [sections]);
-  const filtered = useMemo(() => rows.filter(r => r.teacher_id && inShown.has(keyOf(r.teacher_id, r.center ?? 'eunpyeong'))), [rows, inShown]);
+  const filtered = useMemo(() => rows.filter(r => r.teacher_id && inShown.has(keyOf(r.teacher_id, centerOfRow(r)))), [rows, inShown]);
   const done = filtered.filter(r => r.confirmed);
   const pendingCount = filtered.length - done.length;
   // 선생님 × 결제방식 → 횟수
   const grid = useMemo(() => {
     const g = new Map<string, Map<PayMethod, number>>();
     for (const r of done) {
-      const tid = keyOf(r.teacher_id ?? '?', r.center ?? 'eunpyeong');
+      const tid = keyOf(r.teacher_id ?? '?', centerOfRow(r));
       const m = g.get(tid) ?? new Map<PayMethod, number>();
       m.set(r.method, (m.get(r.method) ?? 0) + 1);
       g.set(tid, m);
