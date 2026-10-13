@@ -45,6 +45,28 @@ function open({ message, ok = '확인', cancel = '취소' }: Opts): Promise<bool
 /** 확인 창 — 확인을 누르면 true */
 export const askConfirm = (message: string, ok?: string) => open({ message, ok });
 
+/** 두 갈래 고르기 — 왼쪽 버튼 'a', 오른쪽(강조) 버튼 'b', 바깥을 누르면 null */
+export function askChoice(message: string, a: string, b: string): Promise<'a' | 'b' | null> {
+  return new Promise(resolve => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const close = (v: 'a' | 'b' | null) => { root.unmount(); host.remove(); resolve(v); };
+    root.render(
+      <div role="alertdialog" aria-modal="true" aria-label={message}
+        className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/30 px-6" onClick={() => close(null)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6 text-center" onClick={e => e.stopPropagation()}>
+          <p className="text-[15px] leading-[1.9] text-[#333] whitespace-pre-line mb-5">{message}</p>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => close('a')} className="flex-1 border border-[#e5e5e5] text-[#555] text-[14px] py-2.5 rounded-full">{a}</button>
+            <button type="button" autoFocus onClick={() => close('b')} className="flex-1 bg-[var(--brand)] text-white text-[14px] py-2.5 rounded-full">{b}</button>
+          </div>
+        </div>
+      </div>,
+    );
+  });
+}
+
 /** 알림 창 — 확인 버튼 하나 */
 export const showAlert = (message: string) => open({ message, cancel: null }).then(() => undefined);
 

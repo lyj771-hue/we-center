@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import Portal from '@/components/Portal';
 import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFile';
-import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
+import { askChoice, askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
@@ -453,6 +453,14 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       return n;
     });
   };
+  // 고정 아이 결제방식을 "앞으로 계속"으로 바꿀 때 — 고정 수업 결제를 이 날부터 바꾼다([스케줄 변경 완료]로 저장)
+  const setFixedPayment = (t: Teacher, time: string, method: PayMethod) => {
+    const base = cellOf(board.fixed, t.id, time);
+    const short = PAY_METHODS.find(m => m.key === method)?.short;
+    if (base.status !== 'child' || !short) return;
+    stage({ teacher: t, time, side: 'fixed', cell: base },
+      { status: 'child', childId: base.childId ?? null, name: base.name, payment: short, kind: base.kind ?? null, note: base.note }, true);
+  };
   // 그날 진행된 수업 — 고정·빈타임에 아이가 있고(빈타임 아이가 있으면 그 아이), 결석·옮김이 아닌 명단 아이
   const lessons = mode === 'day' ? shown.flatMap(t => rows.flatMap(time => {
     if (isTest) {
@@ -702,7 +710,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                                 pending={!!c.childId && draft.has(keyOf(c.childId, time))}
                                 missing={!!c.childId && missingPay.has(keyOf(c.childId, time))}
                                 left={c.childId ? (m => remaining(c.childId!, m)) : undefined}
-                                onPay={c.childId ? e => pay(c.childId!, t.id, time, e) : undefined} />
+                                askAlways={c !== right && !!c.childId && c.childId === cellOf(board.fixed, t.id, time).childId}
+                                onPay={c.childId ? (e, always) => { pay(c.childId!, t.id, time, e); if (always && e) setFixedPayment(t, time, e.method); } : undefined} />
                             ))}
                           </td>
                           {memoTd}
@@ -802,7 +811,7 @@ function CellText({ cell, label, muted }: { cell: CellView; label?: string; mute
 }
 
 /** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
-function PayCell({ cell, noBase, paid, pending, missing, left, onPay }: {
+function PayCell({ cell, noBase, paid, pending, missing, left, askAlways, onPay }: {
   cell: CellView;
   /** 빈타임 아이 — 기본 결제를 보여 주지 않고 비워 둔다 */
   noBase?: boolean;
@@ -812,7 +821,9 @@ function PayCell({ cell, noBase, paid, pending, missing, left, onPay }: {
   /** 결제방식이 비어 있음 — 채워야 [결제 완료]를 누를 수 있다 */
   missing?: boolean;
   left?: (m: PayMethod) => string | undefined;
-  onPay?: (e: PayEntry | null) => void;
+  /** 고정 아이 — 기본과 다른 결제를 고르면 이번만인지 앞으로 계속인지 묻는다 */
+  askAlways?: boolean;
+  onPay?: (e: PayEntry | null, always?: boolean) => void;
 }) {
   if (cell.absent) return <span className="block text-[10px] text-[#c4c4cc]">결석</span>;
   const base = noBase ? undefined : defaultMethod(cell.payment);
@@ -837,6 +848,9 @@ function PayCell({ cell, noBase, paid, pending, missing, left, onPay }: {
           else if (v === 'custom') {
             const t = await askPrompt('결제 방식을 적어 주세요', paid?.note ?? '');
             if (t?.trim()) onPay({ method: 'other', note: t.trim() });
+          } else if (askAlways && v !== base) {
+            const r = await askChoice(`${cell.name} — ${label(v as PayMethod)}\n이번 수업만 바꿀까요,\n앞으로 계속 ${label(v as PayMethod)}(으)로 할까요?`, '이번만', '앞으로 계속');
+            if (r) onPay({ method: v as PayMethod }, r === 'b');
           } else onPay({ method: v as PayMethod });
         }}
         className="absolute inset-0 w-full opacity-0 cursor-pointer" aria-label={`${cell.name} 결제 체크`}>
