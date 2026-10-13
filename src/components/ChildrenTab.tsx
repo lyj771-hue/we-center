@@ -79,19 +79,18 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
 
   // 내려받기 — 지금 화면의 명단(찾기 적용) 그대로
   const exportSheet = (): Sheet => {
-    const head = ['회원 코드', '이름', '번호', '뒷번호', '승인 여부', '연결된 보호자', ...USES.map(u => u.label), '우진학교 남은 금액', '지원금 남은 금액', '고정 수업', '메모'];
+    const head = ['회원 코드', '이름', '번호', '뒷번호', '승인 여부', ...USES.map(u => u.label), '우진학교 남은 금액', '지원금 남은 금액', '고정 수업', '메모'];
     const rows = list.map(k => {
       const ck = (key: UsesKey) => (k.uses?.[key] ? 'O' : '');
       return [
         k.memberCode ?? '', k.name, k.number ?? 1, k.phoneLast4 ?? '', approvalOf(k),
-        k.guardianUserId ? memberOf.get(k.guardianUserId)?.nickname ?? '연결됨' : '',
         ...USES.map(u => ck(u.key)),
         balOf(k, 'woojin'), balOf(k, 'subsidy'),
         (fixed.get(k.id) ?? []).map(f => `${DOW[f.weekday]} ${f.time} ${f.teacher}${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)] ? ` ${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)]}` : ''}`).join(', '),
         k.memo ?? '',
       ];
     });
-    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 7, 8, 12, ...USES.map(() => 7), 12, 12, 40, 20] };
+    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 7, 8, ...USES.map(() => 7), 12, 12, 40, 20] };
   };
   const stamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };
   // 정렬 — 머리글을 누르면 오름차순 → 내림차순 → 원래대로(회원 코드 순)
@@ -172,7 +171,6 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
               {USES.map(c => <th key={c.key} className={`${th} text-center ${sortTh}`} onClick={() => sortBy(`uses:${c.key}`)} title={`${c.label}를 쓰는 아이면 체크 · 눌러서 정렬`}>{c.label}{arrow(`uses:${c.key}`)}</th>)}
               {BALANCES.map(b => <th key={b.key} className={`${th} text-center ${sortTh}`} onClick={() => sortBy(`bal:${b.key}`)} title={`${b.label} 남은 금액 — 직접 적어요(원)`}>{b.label}{arrow(`bal:${b.key}`)}<span className="block text-[10px] text-[#bbb]">남은 금액(원)</span></th>)}
               <th className={th}>고정 수업</th>
-              <th className={th}>연결된 보호자 계정</th>
               <th className={th}>승인 여부</th>
               <th className={th}>메모</th>
               <th className={`${th} sticky right-0 bg-white`}><span className="sr-only">관리</span></th>
@@ -207,9 +205,6 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
                   </td>
                 ))}
                 <td className={`${td} text-[12px]`}><FixedList items={fixed.get(k.id) ?? []} /></td>
-                <td className={`${td} text-[12px] whitespace-nowrap`}>
-                  {k.guardianUserId ? <span className="text-[var(--brand)]">{memberOf.get(k.guardianUserId)?.nickname ?? '연결됨'}</span> : <span className="text-[#ccc]">-</span>}
-                </td>
                 <td className={`${td} text-[12px] whitespace-nowrap`}>
                   {(() => { const a = approvalOf(k); return <span className={a === '승인' ? 'text-[var(--brand)]' : a === '미승인' ? 'text-[#f59e0b]' : 'text-[#ccc]'}>{a}</span>; })()}
                 </td>
@@ -250,7 +245,6 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
   onSave: () => void;
   onCancel: () => void;
 }) {
-  const isNew = code === '새 코드';
   return (
     <tr className="border-b border-[#f0f0f0] bg-[#f8fbff]">
       <td className={`${td} text-[12px] text-[#bbb]`}>{approved.find(m => m.userId === form.guardian)?.kakaoId ?? '-'}</td>
@@ -273,15 +267,6 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
       {/* 쓰는 결제·이번 달 사용·선결제는 표에서 바로 고친다 */}
       {[...USES, ...BALANCES].map((_, i) => <td key={i} className={`${td} text-center text-[11px] text-[#ccc]`}>-</td>)}
       <td className={`${td} text-[12px]`}><FixedList items={fixed} /><p className="text-[10px] text-[#aaa] mt-1">고정 수업은 시간표 관리에서 고쳐요</p></td>
-      <td className={td}>
-        {isNew ? <span className="text-[11px] text-[#aaa]">저장 후 연결</span> : (
-          <select value={form.guardian} onChange={e => setForm(f => ({ ...f, guardian: e.target.value }))}
-            className="text-[13px] border border-[#ddd] bg-white px-2 py-1 max-w-[160px]">
-            <option value="">연결 안 함</option>
-            {approved.map(m => <option key={m.userId} value={m.userId}>{m.nickname}{m.phoneLast4 ? ` (${m.phoneLast4})` : ''}</option>)}
-          </select>
-        )}
-      </td>
       <td className={`${td} text-[11px] text-[#aaa]`}>-</td>
       <td className={td}><input value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} placeholder="메모" className={`${input} w-full min-w-[120px]`} /></td>
       <td className={`${td} text-right whitespace-nowrap sticky right-0 bg-[#f8fbff] shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.12)]`}>

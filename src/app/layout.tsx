@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Noto_Sans_KR, Noto_Serif_KR, Gowun_Dodum, Nanum_Myeongjo, Black_Han_Sans } from 'next/font/google';
+import './amsterdam-font.css';
 import './globals.css';
 import Header from '@/components/Header';
 import { AdminProvider } from '@/components/AdminContext';
@@ -49,6 +50,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko" className={`${notoSans.variable} ${notoSerif.variable} ${gowunDodum.variable} ${nanumMyeongjo.variable} ${blackHanSans.variable}`}>
+      <head>
+        {/* 기본 글꼴 중 거의 모든 화면에 쓰이는 조각(영문·기호, 사이트 문구)은 미리 받는다 */}
+        <link rel="preload" href="/fonts/amsterdam/base.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/amsterdam/site.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+      </head>
       <body className="min-h-screen flex flex-col font-sans antialiased">
         <AdminProvider>
           <MemberProvider>

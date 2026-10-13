@@ -8,7 +8,8 @@ import { askConfirm, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
 import PaymentsTab from '@/components/PaymentsTab';
 import type { Center, Child } from '@/lib/timetable';
-import { getChildren, linkChild, setChildUses } from '@/lib/timetable';
+import { getChildren, getPaymentCounts, linkChild, setChildBalance, setChildUses } from '@/lib/timetable';
+import { addCharge } from '@/lib/prepaid';
 
 // 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자 표.
 // 이름(아이 이름)은 보호자가 가입할 때 입력한 것, 설명은 관리자가 적는다. 센터 닉네임(center_nickname)은 더 쓰지 않는다(있던 값만 남아 있음).
@@ -30,6 +31,14 @@ const SUPPORTS: { key: keyof Pick<MemberExtras, 'voucher' | 'gusen' | 'kkumideun
   { key: 'subsidy', label: '지원금' },
 ];
 
+// 미승인 탭 — 승인할 때 꼭 적는 칸(없으면 0). 선결제는 남은 횟수, 우진학교·지원금은 남은 금액(원)
+const APPROVE_FIELDS = [
+  { key: 'prepaid', label: '선결제', unit: '회' },
+  { key: 'woojin', label: '우진학교', unit: '원' },
+  { key: 'subsidy', label: '지원금', unit: '원' },
+] as const;
+type ApproveField = (typeof APPROVE_FIELDS)[number]['key'];
+
 const pad = (n: number) => String(n).padStart(2, '0');
 const fmtDate = (iso: string) => {
   const d = new Date(iso);
@@ -49,13 +58,23 @@ export default function MembersView({ center }: { center: Center }) {
   const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ nickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '', phone: '' });
-  const [showDates, setShowDates] = useState(false);   // 카카오계정번호·회원 코드·가입일자·마지막 로그인은 접어 둔다
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   const [kids, setKids] = useState<Child[]>([]);
   const loadKids = useCallback(() => { getChildren().then(setKids).catch(() => {}); }, []);
   useEffect(() => { if (isAdmin) loadKids(); }, [isAdmin, loadKids]);
+
+  // 미승인 탭 — 승인할 때 적는 선결제·우진학교·지원금("회원|칸" → 적은 숫자). 하나라도 비어 있으면 승인할 수 없다
+  const [approveInput, setApproveInput] = useState<Map<string, string>>(new Map());
+  // 승인 불가 까닭 말풍선 — 브라우저 기본(title)은 늦게 떠서 바로 뜨는 걸로. 표가 옆으로 스크롤돼도 안 잘리게 화면 기준(fixed)
+  const [tip, setTip] = useState<{ lines: string[]; x: number; y: number } | null>(null);
+  const tipOn = (lines: string[]) => lines.length ? {
+    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => { const r = e.currentTarget.getBoundingClientRect(); setTip({ lines, x: r.left, y: r.bottom + 6 }); },
+    onMouseLeave: () => setTip(null),
+  } : {};
+  const inputOf = (m: Member, f: ApproveField) => approveInput.get(`${m.userId}|${f}`) ?? '';
+  const filled = (m: Member) => APPROVE_FIELDS.every(f => inputOf(m, f.key) !== '');
 
   // 다른 지점 가입 신청 — "회원|지점" → 승인 시각(null = 대기)
   const [extraCenters, setExtraCenters] = useState<Map<string, string | null>>(new Map());
@@ -192,6 +211,26 @@ export default function MembersView({ center }: { center: Center }) {
     return k;
   };
 
+  // 승인할 때 적은 값을 이어진 아이에게 — 선결제는 지금 잔여(충전 합 − 확정된 사용)와의 차이를 카드의 [수정] 기록으로, 우진학교·지원금은 남은 금액 그대로
+  const saveApproveInput = async (m: Member, k?: Child) => {
+    if (!filled(m)) return;
+    const prepaid = Number(inputOf(m, 'prepaid')), woojin = Number(inputOf(m, 'woojin')), subsidy = Number(inputOf(m, 'subsidy'));
+    if (!k) { await showAlert(`아이 명단과 연결되지 않아 선결제(${prepaid}회)·우진학교(${woojin.toLocaleString('ko-KR')}원)·지원금(${subsidy.toLocaleString('ko-KR')}원)은 저장하지 못했어요.\n연결한 뒤 결제내역·기존아이명단 탭에서 맞춰 주세요.`); return; }
+    try {
+      const used = (await getPaymentCounts('2000-01-01', '2999-12-31')).get(k.id)?.prepaid ?? 0;
+      const fresh = (await getChildren()).find(x => x.id === k.id) ?? k;
+      const diff = prepaid - ((fresh.prepaidTotal ?? 0) - used);
+      if (diff) {
+        const d = new Date();
+        await addCharge(k.id, `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, diff, '승인할 때 잔여 입력', true);
+      }
+      await setChildBalance(k.id, 'woojin', woojin);
+      await setChildBalance(k.id, 'subsidy', subsidy);
+      setApproveInput(mp => { const n = new Map(mp); APPROVE_FIELDS.forEach(f => n.delete(`${m.userId}|${f.key}`)); return n; });
+      loadKids();
+    } catch (e) { await showAlert(`선결제·우진학교·지원금을 저장하지 못했어요.\n${(e as Error).message}`); }
+  };
+
   // 승인 — 승인 버튼만 누르면 된다(같은 이름이어도 뒷번호·회원 코드로 아이를 구분해서 잇는다)
   const setApproved = async (m: Member, approve: boolean) => {
     if (!approve && !(await askConfirm(`"${m.nickname}" 회원의 승인을 취소할까요?\n${centerLabel} 아이 명단과의 연결도 끊어요.`))) return;
@@ -208,8 +247,8 @@ export default function MembersView({ center }: { center: Center }) {
       const here = kidOf(m.userId);
       if (!approve && here) { await linkChild(here.id, null); loadKids(); autoTried.current.add(`${m.userId}|${center}`); }
       if (approve) {
-        // 아이 명단의 같은 아이(이름·뒷번호)와 잇는다
-        await matchChild(m);
+        // 아이 명단의 같은 아이(이름·뒷번호)와 잇고, 적은 선결제·우진학교·지원금을 그 아이에게 맞춘다
+        await saveApproveInput(m, await matchChild(m));
       }
       load();
     } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
@@ -276,7 +315,7 @@ export default function MembersView({ center }: { center: Center }) {
       const here = kidOf(m.userId);
       if (!approve && here) { await linkChild(here.id, null); loadKids(); autoTried.current.add(`${m.userId}|${center}`); }
       // 추가 지점 승인 — 이 지점 명단의 같은 아이(이름·뒷번호)와도 잇는다 (지점마다 회원 코드가 따로라서)
-      if (approve) await matchChild(m);
+      if (approve) await saveApproveInput(m, await matchChild(m));
       load();
     }
     catch (e) { showAlert(`저장하지 못했어요. 다시 시도해 주세요.\n${(e as Error).message ?? ''}`); load(); loadKids(); }
@@ -299,6 +338,25 @@ export default function MembersView({ center }: { center: Center }) {
       if (linked) loadKids();
     })();
   };
+  // 승인할 수 있는지 — 이미 이 지점 아이와 이어졌거나, 이름·뒷번호가 같은 아이가 딱 하나("승인 가능")여야 한다
+  const canLink = (m: Member) => !!kidOf(m.userId) || sameKidsHere(m, kids).length === 1;
+  // 승인 못 하는 까닭들 — 비어 있으면 승인 가능
+  const blockers = (m: Member): string[] => {
+    const why: string[] = [];
+    if (!canLink(m)) {
+      const n = sameKidsHere(m, kids).length;
+      why.push(!m.phoneLast4 ? '뒷번호가 없어요' : n ? `이름·뒷번호가 같은 아이가 ${n}명이에요 (한 명이어야 해요)` : '이름·뒷번호가 같은 아이가 명단에 없어요');
+    }
+    const empty = APPROVE_FIELDS.filter(f => inputOf(m, f.key) === '').map(f => f.label);
+    if (empty.length) why.push(`${empty.join('·')}을(를) 안 적었어요 (없으면 0)`);
+    return why;
+  };
+  const approveBadge = (m: Member) => {
+    const why = blockers(m);
+    return why.length
+      ? <span className="inline-block mb-0.5 text-[11px] text-[#e11d48] border border-[#fecdd3] bg-[#fff1f2] rounded px-1.5 cursor-help" {...tipOn(why)}>승인 불가</span>
+      : <span className="inline-block mb-0.5 text-[11px] text-[#16a34a] border border-[#86efac] bg-[#f0fdf4] rounded px-1.5">승인 가능</span>;
+  };
   // 미승인 회원이 지금 아이 명단에 있는지 — 이미 연결된 아이, 아니면 이 센터에서 이름(닉네임·관리자 닉네임, 앞뒤 숫자 포함)이나 가입할 때 적은 회원 코드가 같은 아이
   const rosterOf = (m: Member): Child[] => {
     const linked = kidOf(m.userId);
@@ -311,10 +369,10 @@ export default function MembersView({ center }: { center: Center }) {
     ));
   };
   const list = filter === 'waiting' ? waiting : approved;
-  // 미승인 목록은 접기 없이 늘 펼친다(카카오계정번호·가입신청일자)
-  const datesOn = filter === 'waiting' || (filter === 'approved' && showDates);
+  // 승인·미승인 목록은 접기 없이 늘 펼친다(카카오계정번호·회원 코드·가입일자·마지막 로그인)
+  const datesOn = filter === 'waiting' || filter === 'approved';
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
-  const input = 'w-full min-w-[90px] border-b border-[var(--brand)] py-1 text-[14px] outline-none bg-transparent';
+  const input = `w-full min-w-[90px] border-b border-[var(--brand)] py-1 ${filter === 'waiting' ? 'text-[12px]' : 'text-[14px]'} outline-none bg-transparent`;
   const th = 'text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
   const td = 'px-3 py-3 align-middle';
 
@@ -324,7 +382,7 @@ export default function MembersView({ center }: { center: Center }) {
       <h1 className="display-heading mb-6">회원 관리 <span className="text-[0.7em] text-[#888]">({centerLabel})</span></h1>
 
       <div role="tablist" className="flex gap-1.5 mb-5">
-        {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`], ['methods', '결제방식 관리'], ['children', `아이 명단 ${kids.filter(k => (k.center ?? 'eunpyeong') === center).length}`], ['payments', '결제내역']] as const).map(([key, label]) => (
+        {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`], ['methods', '결제방식 관리'], ['payments', '결제내역'], ['children', `기존아이명단 ${kids.filter(k => (k.center ?? 'eunpyeong') === center).length}`]] as const).map(([key, label]) => (
           <button key={key} role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}
             className={[
               'text-[13px] px-4 py-2 border transition-colors',
@@ -349,25 +407,13 @@ export default function MembersView({ center }: { center: Center }) {
         <p className="mb-2 text-[12px] text-[#888]">승인된 회원이 쓰는 결제방식이에요. 체크하면 바로 저장되고, 아이 명단의 쓰는 결제와 같은 값이에요.</p>
       )}
       {filter === 'waiting' && (
-        <p className="mb-2 text-[12px] text-[#888]">아이 명단에 <b className="font-normal text-[#555]">아이 이름 · 휴대전화 뒷번호</b>가 같은 아이가 등록돼 있으면 <span className="text-[#16a34a]">승인 가능</span>이에요. 승인하면 그 아이와 자동으로 이어져요.</p>
+        <p className="mb-2 text-[12px] text-[#888]">아이 명단에 <b className="font-normal text-[#555]">아이 이름 · 휴대전화 뒷번호</b>가 같은 아이가 딱 한 명 등록돼 있고, <b className="font-normal text-[#555]">선결제(남은 횟수) · 우진학교 · 지원금(남은 금액)</b>을 모두 적으면(없으면 0) <span className="text-[#16a34a]">승인 가능</span>이에요. 승인하면 그 아이와 자동으로 이어져요.</p>
       )}
       <div className="overflow-x-auto border-t border-[#e5e5e5]">
-        <table className="w-full text-[14px] text-[#333] border-collapse">
+        <table className={`w-full ${filter === 'waiting' ? 'text-[12px]' : 'text-[14px]'} text-[#333] border-collapse`}>
           <thead>
             <tr className="border-b border-[#e5e5e5]">
-              {filter === 'approved' && (
-              <th className={`${th} w-8 pr-0`}>
-                <button type="button" onClick={() => setShowDates(v => !v)}
-                  aria-label={showDates ? '카카오계정번호·회원 코드·가입일자·마지막 로그인 접기' : '카카오계정번호·회원 코드·가입일자·마지막 로그인 펼치기'} aria-expanded={showDates}
-                  title={showDates ? '접기' : '카카오계정번호·회원 코드·가입일자·마지막 로그인 펼치기'}
-                  className="w-5 h-5 inline-flex items-center justify-center rounded border border-[#ddd] text-[#888] hover:border-[var(--brand)] hover:text-[var(--brand)]">
-                  <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className={`transition-transform ${showDates ? 'rotate-180' : ''}`}>
-                    <path d="M3.5 1.5 7 5l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </th>
-              )}
-              {datesOn && <th className={th}>카카오계정번호</th>}
+              {filter === 'approved' && <th className={th}>카카오계정번호</th>}
               {datesOn && filter !== 'waiting' && <th className={th}>회원 코드</th>}
               {datesOn && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
               {datesOn && filter !== 'waiting' && <th className={th}>마지막 로그인</th>}
@@ -376,6 +422,7 @@ export default function MembersView({ center }: { center: Center }) {
               <th className={`${th} text-center`}>의정부점</th>
               <th className={th}>뒷번호</th>
               {filter === 'waiting' && <th className={th}>아이 명단</th>}
+              {filter === 'waiting' && APPROVE_FIELDS.map(f => <th key={f.key} className={`${th} text-center`} title={`승인하려면 꼭 적어야 해요 — 없으면 0`}>{f.label}<span className="block text-[10px] text-[#bbb]">{f.unit === '회' ? '남은 횟수' : '남은 금액(원)'}</span></th>)}
               {filter === 'methods' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {filter === 'methods' && <th className={`${th} text-center`}>선결제</th>}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
@@ -388,8 +435,7 @@ export default function MembersView({ center }: { center: Center }) {
               const on = editing === m.userId && filter !== 'methods';
               return (
                 <tr key={m.userId} className="border-b border-[#f0f0f0]">
-                  {filter === 'approved' && <td className={`${td} w-8 pr-0`} />}
-                  {datesOn && <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>}
+                  {filter === 'approved' && <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>}
                   {datesOn && filter !== 'waiting' && (<td className={`${td} whitespace-nowrap`}>
                     {on ? (
                       <input className={`${input} w-20 uppercase`} value={form.code} placeholder="W0001" list="member-codes"
@@ -429,10 +475,9 @@ export default function MembersView({ center }: { center: Center }) {
                     <td className={`${td} whitespace-nowrap text-[12px]`}>
                       {(() => {
                         const hits = rosterOf(m);
-                        if (!hits.length) return <span className="text-[#f59e0b]">현재 명단에 없음</span>;
+                        if (!hits.length) return <>{approveBadge(m)}<div className="text-[#f59e0b]">현재 명단에 없음</div></>;
                         // 이름·뒷번호가 같은 아이가 딱 하나면 승인 가능(승인하면 자동 연결)
-                        const ok = sameKidsHere(m, kids).length === 1;
-                        return <>{ok && <span className="inline-block mb-0.5 text-[11px] text-[#16a34a] border border-[#86efac] bg-[#f0fdf4] rounded px-1.5">승인 가능</span>}{hits.map(k => (
+                        return <>{approveBadge(m)}{hits.map(k => (
                           <div key={k.id}>
                             <span className="text-[#888] tabular-nums">{k.memberCode ?? '코드 없음'}</span> {k.name}{k.number ?? ''}
                             {m.phoneLast4 && k.phoneLast4 && k.phoneLast4 !== m.phoneLast4 && <span className="ml-1 text-[#bbb]">(뒷번호 {k.phoneLast4})</span>}
@@ -444,6 +489,16 @@ export default function MembersView({ center }: { center: Center }) {
                       })()}
                     </td>
                   )}
+                  {filter === 'waiting' && APPROVE_FIELDS.map(f => {
+                    const v = inputOf(m, f.key);
+                    return (
+                      <td key={f.key} className={`${td} text-center`}>
+                        <input value={v && f.unit === '원' ? Number(v).toLocaleString('ko-KR') : v} inputMode="numeric" placeholder="필수" aria-label={`${m.nickname} ${f.label}`}
+                          onChange={e => { const n = e.target.value.replace(/\D/g, '').slice(0, f.unit === '원' ? 9 : 4); setApproveInput(mp => new Map(mp).set(`${m.userId}|${f.key}`, n)); }}
+                          className={`${f.unit === '원' ? 'w-20 text-right' : 'w-12 text-center'} text-[12px] tabular-nums border-b outline-none bg-transparent focus:border-[var(--brand)] ${v ? 'border-[#e5e5e5]' : 'border-[#f59e0b] placeholder:text-[#f59e0b]'}`} />
+                      </td>
+                    );
+                  })}
                   {filter === 'methods' && SUPPORTS.map(x => (
                     <td key={x.key} className={`${td} text-center`}>
                       <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname} aria-label={`${m.nickname} ${x.label}`}
@@ -500,7 +555,10 @@ export default function MembersView({ center }: { center: Center }) {
                         <>
                           {m.nickname && (approvedHere(m)
                             ? <button onClick={() => setApprovedHere(m, false)} className={`${btn} border-[#e5e5e5] text-[#888] hover:bg-[#f8f8f8]`}>승인 취소</button>
-                            : <button onClick={() => setApprovedHere(m, true)} className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>승인</button>)}
+                            : <span className="inline-flex" {...tipOn(blockers(m))}>{/* 꺼진 버튼은 마우스 이벤트가 안 와서 감싼 칸에 말풍선 */}
+                                <button onClick={() => setApprovedHere(m, true)} disabled={blockers(m).length > 0}
+                                  className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed disabled:pointer-events-none`}>승인</button>
+                              </span>)}
                           <button onClick={() => startEdit(m)} className={`${btn} border-[#e5e5e5] hover:bg-[#f8f8f8]`}>수정</button>
                           {m.nickname && <button onClick={() => remove(m)} className={`${btn} border-[#e5e5e5] text-red-400 hover:bg-red-50`}>삭제</button>}
                         </>
@@ -514,6 +572,11 @@ export default function MembersView({ center }: { center: Center }) {
         </table>
       </div>
 
+      {tip && (
+        <div className="fixed z-[600] pointer-events-none bg-[#27272a] text-white text-[11px] leading-[1.7] rounded px-2.5 py-1.5 shadow-lg whitespace-nowrap" style={{ left: tip.x, top: tip.y }}>
+          {tip.lines.map(w => <div key={w}>· {w}</div>)}
+        </div>
+      )}
       {loaded && !failed && list.length === 0 && (
         <p className="text-[14px] text-[#bbb] py-16 text-center">아직 없어요.</p>
       )}
