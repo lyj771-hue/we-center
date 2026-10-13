@@ -5,7 +5,9 @@ import UsageCard from '@/components/UsageCard';
 import type { LedgerRow } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import { useEffect, useState } from 'react';
-import { addDays, getHolidayNames, parseYmd, thisMonday } from '@/lib/schedule';
+import type { Teacher } from '@/lib/schedule';
+import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday } from '@/lib/schedule';
+import { worksAt } from '@/lib/timetable';
 
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
 
@@ -71,6 +73,14 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
     return () => { alive = false; };
   }, [years]);
 
+  // 선생님 출근 요일 — 원래 출근하는 요일이 아닌 날(예: 설영수 선생님 은평 월·토)은 왼쪽 칸이어도 '고정'이 아니다
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  useEffect(() => { getTeachers().then(setTeachers).catch(() => {}); }, []);
+  const isRegular = (l: MyLesson, weekday: number) => {
+    const t = teachers.find(x => x.name === l.teacher);
+    return !t || worksAt(t, l.center, weekday);
+  };
+
   // 이 지점 승인 전 — 칸마다 내용 대신 "승인 대기 중"
   if (!approved) return (
     <div className="space-y-6">
@@ -131,8 +141,8 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                       <span className="tabular-nums">{l.time}</span>
                       <span>{l.teacher} 선생님</span>
                       {l.oral && <span className="text-[11px] text-[#8b5cf6]">구강</span>}
-                      {/* 고정 수업만 '고정' 표시 (빈타임·신청은 표시 없음). 공휴일·일요일은 고정도 빈타임도 아니라 표시 없음 */}
-                      {l.source !== 'booking' && l.side === 'fixed' && !holidays[d] && dd.getDay() !== 0 && <span className="text-[11px] px-1.5 rounded border border-[#eee] text-[#888]">고정</span>}
+                      {/* 고정 수업만 '고정' 표시 (빈타임·신청은 표시 없음). 공휴일·일요일, 선생님이 원래 출근하지 않는 요일은 표시 없음 */}
+                      {l.source !== 'booking' && l.side === 'fixed' && !holidays[d] && dd.getDay() !== 0 && isRegular(l, dd.getDay()) && <span className="text-[11px] px-1.5 rounded border border-[#eee] text-[#888]">고정</span>}
                       {l.payment.replace(/[x~]/gi, '') && <span className="text-[11px] text-[#999]">{payName(payKind(l.payment))}</span>}
                       {l.status === 'cancel_requested' && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded">취소 신청 중</span>}
                       {l.status === 'cancelled' && <span className="text-[11px] no-underline">취소</span>}
