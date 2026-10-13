@@ -28,11 +28,30 @@ const fromRow = (r: Record<string, unknown>): MessageTemplate => ({
   condition: (r.condition as string) ?? '', sort: (r.sort as number) ?? 0, updatedAt: r.updated_at as string,
 });
 
+/** 기본 알림 종류 — DB에 아직 없어도 표에 나온다 (처음 저장할 때 DB에 들어간다) */
+export const DEFAULT_TEMPLATES: Omit<MessageTemplate, 'updatedAt'>[] = [
+  { id: 'lesson_tomorrow', grp: 'lesson',    label: '내일 수업 시간 알림', sort: 10 },
+  { id: 'notice',          grp: 'lesson',    label: '공지 알림', sort: 20 },
+  { id: 'schedule_notice', grp: 'lesson',    label: '스케줄 공지 알림', sort: 30 },
+  { id: 'booking_result',  grp: 'timetable', label: '시간표 신청/취소 확정 알림', sort: 10 },
+  { id: 'prepaid_use',     grp: 'prepaid',   label: '선결제 차감 알림', sort: 10 },
+  { id: 'prepaid_charge',  grp: 'prepaid',   label: '선결제 충전 알림', sort: 20 },
+  { id: 'prepaid_adjust',  grp: 'prepaid',   label: '선결제 잔여 횟수 변경 알림', sort: 30 },
+  { id: 'member_approved', grp: 'member',    label: '회원가입 승인 알림', sort: 10 },
+  { id: 'fixed_change',    grp: 'fixed',     label: '고정 스케줄 변동 알림(확정/취소/변동)', sort: 10 },
+].map(t => ({ ...t, body: '', condition: '' }));
+
+/** 저장된 것 + 아직 저장 안 된 기본 종류 */
 export async function getMessageTemplates(): Promise<MessageTemplate[]> {
   const { data, error } = await supabase.from('message_templates').select('*').order('sort');
   if (error) throw error;
-  return (data ?? []).map(fromRow);
+  const rows = (data ?? []).map(fromRow);
+  const missing = DEFAULT_TEMPLATES.filter(d => !rows.some(r => r.id === d.id)).map(d => ({ ...d, updatedAt: '' }));
+  return [...rows, ...missing].sort((a, b) => a.sort - b.sort);
 }
+
+/** 테이블이 아직 없음 (supabase/message-templates.sql 을 안 돌림) */
+export const isMissingTable = (e: unknown) => (e as { code?: string })?.code === 'PGRST205' || (e as { code?: string })?.code === '42P01';
 
 export async function saveMessageTemplate(t: Omit<MessageTemplate, 'updatedAt'>): Promise<MessageTemplate> {
   const { data, error } = await supabase.from('message_templates')

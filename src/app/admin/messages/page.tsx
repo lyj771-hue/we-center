@@ -3,29 +3,33 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import type { MessageTemplate } from '@/lib/messages';
-import { MESSAGE_GROUPS, deleteMessageTemplate, fillVars, getMessageTemplates, saveMessageTemplate } from '@/lib/messages';
+import { DEFAULT_TEMPLATES, MESSAGE_GROUPS, deleteMessageTemplate, fillVars, getMessageTemplates, isMissingTable, saveMessageTemplate } from '@/lib/messages';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 
 // 알림 메시지 (관리자) — 알림 종류마다 메시지 포맷과 알림 조건을 적어 둔다.
 // 포맷의 #{변수}는 보낼 때 아이·날짜 등으로 바뀐다 (카카오 알림톡 템플릿과 같은 모양). 아직 보내지는 않고 적어 두는 곳.
 
-// SQL에서 넣는 기본 종류 — 지우지 않는다
-const BUILT_IN = ['lesson_tomorrow', 'notice', 'schedule_notice', 'booking_result', 'prepaid_use', 'prepaid_charge', 'prepaid_adjust', 'member_approved', 'fixed_change'];
+// 기본 종류 — 지우지 않는다
+const BUILT_IN = DEFAULT_TEMPLATES.map(t => t.id);
+const SQL_HINT = 'Supabase SQL Editor에서 supabase/message-templates.sql 을 한 번 실행해야 저장돼요.';
 
 export default function MessagesPage() {
   const { isAdmin } = useAdmin();
   const [saved, setSaved] = useState<MessageTemplate[]>([]);
   const [drafts, setDrafts] = useState<Record<string, { body: string; condition: string }>>({});
   const [failed, setFailed] = useState('');
+  const [noTable, setNoTable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setSaved(await getMessageTemplates()); setFailed('');
+      setSaved(await getMessageTemplates()); setFailed(''); setNoTable(false);
     } catch (e) {
-      setFailed((e as Error).message);
+      // 테이블이 아직 없어도 기본 종류는 보여 주고 적을 수 있게 — 저장만 안 된다
+      if (isMissingTable(e)) { setNoTable(true); setSaved(DEFAULT_TEMPLATES.map(t => ({ ...t, updatedAt: '' }))); }
+      else setFailed((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -44,7 +48,7 @@ export default function MessagesPage() {
       setSaved(s => s.map(x => (x.id === t.id ? next : x)));
       setDrafts(d => { const { [t.id]: _, ...rest } = d; return rest; });
     } catch (e) {
-      showAlert(`저장하지 못했어요.\n${(e as Error).message}`);
+      showAlert(isMissingTable(e) ? `저장하지 못했어요.\n${SQL_HINT}` : `저장하지 못했어요.\n${(e as Error).message}`);
     } finally {
       setBusy(null);
     }
@@ -58,7 +62,7 @@ export default function MessagesPage() {
       const t = await saveMessageTemplate({ id: `custom_${Date.now().toString(36)}`, grp, label, body: '', condition: '', sort });
       setSaved(s => [...s, t]);
     } catch (e) {
-      showAlert(`추가하지 못했어요.\n${(e as Error).message}`);
+      showAlert(isMissingTable(e) ? `추가하지 못했어요.\n${SQL_HINT}` : `추가하지 못했어요.\n${(e as Error).message}`);
     }
   };
 
@@ -69,7 +73,7 @@ export default function MessagesPage() {
       const next = await saveMessageTemplate({ ...t, label });
       setSaved(s => s.map(x => (x.id === t.id ? { ...next, body: x.body, condition: x.condition } : x)));
     } catch (e) {
-      showAlert(`바꾸지 못했어요.\n${(e as Error).message}`);
+      showAlert(isMissingTable(e) ? `바꾸지 못했어요.\n${SQL_HINT}` : `바꾸지 못했어요.\n${(e as Error).message}`);
     }
   };
 
@@ -94,16 +98,12 @@ export default function MessagesPage() {
       <div className="max-w-[1200px] mx-auto">
         <h1 className="display-heading mb-2">알림 메시지</h1>
         <p className="text-[12px] text-[#999] mb-6 leading-[1.8]">
-          알림마다 보낼 글(메시지 포맷)과 보내는 때(알림 조건)를 적어 두는 곳이에요. 아직 실제로 보내지는 않아요.<br />
-          포맷에 <code className="text-[#555]">#{'{'}아이이름{'}'}</code>처럼 쓰면 보낼 때 그 아이의 값으로 바뀌어요 — 아래 회색 단추를 누르면 들어가요.
+          알림마다 메시지 내용과 알림 조건을 칸에 직접 써 주세요. 고친 뒤 [저장]을 누르면 돼요.<br />
+          회색 단추는 쓰고 싶을 때만 — 누르면 <code className="text-[#555]">#{'{'}아이이름{'}'}</code>처럼 보낼 때 바뀌는 자리가 들어가요.
         </p>
         {loading && <p className="text-[12px] text-[#aaa] mb-4">불러오는 중…</p>}
-        {failed && (
-          <p className="text-[13px] text-red-400 mb-4">
-            불러오지 못했어요. ({failed})<br />
-            <span className="text-[12px] text-[#999]">처음이라면 Supabase SQL Editor에서 supabase/message-templates.sql 을 먼저 실행해 주세요.</span>
-          </p>
-        )}
+        {failed && <p className="text-[13px] text-red-400 mb-4">불러오지 못했어요. ({failed})</p>}
+        {noTable && <p className="text-[13px] text-[#b45309] bg-[#fffbeb] border border-[#fde68a] rounded-md px-3 py-2 mb-4">적어 볼 수는 있지만 아직 저장은 안 돼요. {SQL_HINT}</p>}
 
         <div className="overflow-x-auto rounded-xl border border-[#e5e5e5] bg-white">
           <table className="w-full min-w-[820px] text-[14px] border-collapse table-fixed">
