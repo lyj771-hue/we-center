@@ -1,12 +1,13 @@
 'use client';
 
 import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
+import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import UsageCard from '@/components/UsageCard';
 import type { LedgerRow } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import { useEffect, useState } from 'react';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday } from '@/lib/schedule';
+import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday, toYmd } from '@/lib/schedule';
 import { worksAt } from '@/lib/timetable';
 
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
@@ -34,6 +35,8 @@ export interface MyPageViewProps {
   /** 결제별 사용 기록 (바우처·굳센·꿈이든·지원금) — 지난 달도 쌓인다 */
   history?: MyPaymentUse[];
   today: string;
+  /** 보는 지점 — 사설 수업을 셀 때 이 지점 수업만 */
+  center?: string;
   failed?: string;
   /** 맨 위(보는 지점)·맨 아래(지점 가입) — 페이지가 만들어 넘긴다 */
   top?: React.ReactNode;
@@ -48,7 +51,7 @@ const USAGE_CARDS: { method: MyPayment['method']; label: string }[] = [
 // 년/월/일 (주별 시간표 날짜 넘기기)
 const ymd = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, failed, top, bottom }: MyPageViewProps) {
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, center, failed, top, bottom }: MyPageViewProps) {
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
   const payRows = [...payments].sort((a, b) => (a.method === 'prepaid' ? -1 : b.method === 'prepaid' ? 1 : 0));   // 선결제를 맨 위로
 
@@ -63,6 +66,28 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   const shiftMonth = (ym: string, n: number) => { const d = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
   const usedIn = (p: MyPayment) => payMonth === thisMonth ? p.used : history.filter(h => h.method === p.method && h.day.startsWith(payMonth)).length;
   const payMonthLabel = `${payMonth.slice(0, 4)}년 ${Number(payMonth.slice(5, 7))}월`;
+
+  // 사설 — 그 달(오늘까지) 실제로 한 수업 중 바우처·굳센·꿈이든·우진학교·지원금으로 하지 않은 수업 수 (선결제·카드·현금·결제 글자 없음 포함).
+  // 결석·옮김·미정·수업 안 함, 공휴일의 고정 수업은 세지 않는다
+  const [monthLessons, setMonthLessons] = useState<MyLesson[] | null>(null);
+  const [monthHols, setMonthHols] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    const first = `${payMonth}-01`;
+    const last = toYmd(new Date(Number(payMonth.slice(0, 4)), Number(payMonth.slice(5, 7)), 0));
+    const end = last < today ? last : today;
+    if (first > end) { setMonthLessons([]); return; }
+    Promise.all([getMyLessons(first, end), getHolidayNames(payMonth.slice(0, 4)).catch(() => ({}))])
+      .then(([ls, h]) => { if (alive) { setMonthLessons(ls); setMonthHols(h); } })
+      .catch(() => { if (alive) setMonthLessons(null); });
+    return () => { alive = false; };
+  }, [payMonth, today]);
+  const SUPPORT = ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy'];
+  // 지원 결제로 한 수업인지 — [결제 완료] 기록이 있으면 그것, 없으면 칸의 결제 글자(b·e·c·우·지)
+  const bySupport = (l: MyLesson) => history.some(h => h.day === l.day && h.time === l.time && SUPPORT.includes(h.method))
+    || /[bec우지]/.test(l.payment.toLowerCase().replace(/x/g, ''));
+  const privateCount = monthLessons?.filter(l => (!center || l.center === center) && isRealLesson(l) && !l.absent
+    && !(monthHols[l.day] && l.source === 'fixed') && !bySupport(l)).length;
   // 공휴일 — 그 주에 걸친 해(연말·연초는 두 해)의 공휴일 이름
   const [holidays, setHolidays] = useState<Record<string, string>>({});
   const years = [...new Set([days[0].slice(0, 4), days[5].slice(0, 4)])].join(',');
@@ -171,6 +196,13 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
           <table className="w-full text-[15px]">
             <tbody>
+              {/* 사설 — 선결제 위 */}
+              <tr className="border-t border-[#f0f0f0] first:border-t-0">
+                <td className="py-2.5">사설</td>
+                <td className="py-2.5 text-right tabular-nums text-[var(--brand)]">
+                  <span className="text-[12px] text-[#999] mr-1">{payMonth === thisMonth ? '이번 달' : `${Number(payMonth.slice(5, 7))}월`}</span>{privateCount ?? '-'}<span className="text-[12px] text-[#999] ml-1">회</span>
+                </td>
+              </tr>
               {payRows.map(p => (
                 <tr key={p.method} className="border-t border-[#f0f0f0] first:border-t-0">
                   <td className="py-2.5">{PAY_ROW_LABEL[p.method]}</td>
