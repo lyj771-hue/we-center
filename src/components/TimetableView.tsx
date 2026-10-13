@@ -283,7 +283,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   // 테스트 화면 — 이 아이 칸만 고칠 수 있고, 다른 아이가 있는 칸은 잠근다
   const isTest = !!testChildName;
-  const testKid = isTest ? children.find(c => c.name === testChildName) : undefined;
+  // 테스트 아이 — 이 센터 명단의 그 아이 (두 센터를 다니면 센터마다 아이 기록이 따로)
+  const testKid = isTest ? children.find(c => c.name === testChildName && (c.center ?? 'eunpyeong') === center) : undefined;
   const testId = testKid?.id;
   const locked = (c: CellView) => isTest && c.status !== 'empty' && c.status !== 'none' && c.childId !== testId;
   const pickKids = isTest ? (testKid ? [testKid] : []) : children.filter(c => (c.center ?? 'eunpyeong') === center);   // 이 센터 아이만
@@ -560,10 +561,10 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
               ))}
             </span>
             <button onClick={clearTestRecords} className="ml-auto text-[12px] border border-[#d97706] text-[#b45309] bg-white px-3 py-1.5 rounded-full hover:bg-[#fffbeb]">테스트 기록 지우기</button>
-            <a href="/admin/timetable" className="text-[12px] underline underline-offset-2">시간표 관리로</a>
+            <a href={center === 'uijeongbu' ? '/admin/timetable/uijeongbu' : '/admin/timetable'} className="text-[12px] underline underline-offset-2">시간표 관리로</a>
           </div>
         ) : (
-          <a href="/admin/timetable-test" className="inline-block mb-3 text-[12px] text-[#888] underline underline-offset-2">시간표(테스트) — 김유담으로 연습하기 →</a>
+          <a href={center === 'uijeongbu' ? '/admin/timetable-test/uijeongbu' : '/admin/timetable-test'} className="inline-block mb-3 text-[12px] text-[#888] underline underline-offset-2">시간표(테스트) — 김유담으로 연습하기 →</a>
         )}
 
         {/* 보기 고르기 */}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
-import { deleteProfile, getMemberCenters, getMembers, saveMemberProfile, setMemberCenterApproved } from '@/lib/store';
+import { deleteMemberCenter, deleteProfile, getMemberCenters, promoteMemberCenter, getMembers, saveMemberProfile, setMemberCenterApproved } from '@/lib/store';
 import type { Member, MemberExtras } from '@/lib/types';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
@@ -233,10 +233,46 @@ export default function MembersView({ center }: { center: Center }) {
   };
 
   const remove = async (m: Member) => {
-    if (!confirm(`"${m.nickname}" 회원의 닉네임·설명을 지울까요?\n다음에 로그인하면 보호자 닉네임을 다시 정하게 돼요.`)) return;
-    try { await deleteProfile(m.userId); load(); }
-    catch { alert('지우지 못했어요. 다시 시도해 주세요.'); }
+    // 처음 가입한 지점이 다른 지점이면 — 이 지점에서만 빠진다(처음 지점 가입·프로필·다른 지점 아이 연결은 그대로)
+    if (isExtra(m)) {
+      if (!(await askConfirm(`"${m.nickname}" 회원을 ${centerLabel}에서만 뺄까요?\n${(m.center ?? 'eunpyeong') === 'uijeongbu' ? '의정부' : '수색'} 가입은 그대로예요. ${centerLabel} 아이 명단과의 연결은 끊어요.`))) return;
+      try {
+        const here = kidOf(m.userId);
+        if (here) await linkChild(here.id, null);
+        autoTried.current.add(`${m.userId}|${center}`);
+        await deleteMemberCenter(m.userId, center);
+        loadKids(); load();
+      } catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }
+      return;
+    }
+    // 처음 가입한 지점에서 지울 때 — 다른 지점에도 가입돼 있으면 그 지점이 기본 지점이 되고 이 지점에서만 빠진다
+    const other = (['eunpyeong', 'uijeongbu'] as const).find(c => c !== center && extraCenters.has(`${m.userId}|${c}`));
+    if (other) {
+      const otherLabel = other === 'uijeongbu' ? '의정부' : '수색';
+      if (!(await askConfirm(`"${m.nickname}" 회원을 ${centerLabel}에서만 뺄까요?\n${otherLabel} 가입은 그대로예요. ${centerLabel} 아이 명단과의 연결은 끊어요.`))) return;
+      try {
+        const here = kidOf(m.userId);
+        if (here) await linkChild(here.id, null);
+        autoTried.current.add(`${m.userId}|${center}`);
+        await promoteMemberCenter(m.userId, other);
+        loadKids(); load();
+      } catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }
+      return;
+    }
+    if (!(await askConfirm(`"${m.nickname}" 회원을 지울까요?\n닉네임·설명이 지워지고 아이 명단과의 연결도 끊어요. 다음에 로그인하면 다시 가입하게 돼요.\n(결제 기록은 아이 명단에 남아서, 다시 승인해 같은 아이와 이어지면 그대로 보여요)`))) return;
+    try {
+      const here = kidOf(m.userId);
+      if (here) await linkChild(here.id, null);
+      autoTried.current.add(`${m.userId}|${center}`);
+      await deleteProfile(m.userId);
+      loadKids(); load();
+    }
+    catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }
   };
+  // 이 회원이 가입한 지점들 — 처음 지점(프로필) + 다른 지점 가입 기록. 승인 전이면 (대기)
+  const branchesOf = (m: Member) => (['eunpyeong', 'uijeongbu'] as const)
+    .map(c => ({ c, label: c === 'uijeongbu' ? '의정부' : '수색', at: c === (m.center ?? 'eunpyeong') ? m.approvedAt ?? null : extraCenters.get(`${m.userId}|${c}`) }))
+    .filter(b => b.at !== undefined);
 
   // 카카오 로그인만 하고 가입 창(아이 이름·뒷번호)을 안 채운 계정은 숨긴다
   // 이 센터 보호자만 (가입할 때 고른 센터, 없으면 수색)
@@ -381,7 +417,12 @@ export default function MembersView({ center }: { center: Center }) {
                   <td className={td}>
                     {on ? <input className={input} value={form.nickname} maxLength={20} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} />
                       : <>{m.nickname || <span className="text-[#ccc]">아직 안 정함</span>}
-                        {isExtra(m) && <span className="ml-1.5 text-[10px] text-[#b45309] border border-[#fcd34d] rounded px-1" title={`처음 가입한 지점은 ${(m.center ?? 'eunpyeong') === 'uijeongbu' ? '의정부' : '수색'}`}>추가 지점</span>}</>}
+                        {/* 가입한 지점 — 지점마다 따로 승인·관리 */}
+                        <span className="block text-[11px] text-[#999]">
+                          {branchesOf(m).map((b, i) => (
+                            <span key={b.c}>{i > 0 && ' · '}<span className={b.at ? 'text-[var(--brand)]' : 'text-[#f59e0b]'}>{b.label}{b.at ? '' : '(대기)'}</span></span>
+                          ))}
+                        </span></>}
                   </td>
                   <td className={td}>
                     {on ? <input className={input} value={form.centerNickname} maxLength={20} placeholder="예: 김민준" onChange={e => setForm(f => ({ ...f, centerNickname: e.target.value }))} />

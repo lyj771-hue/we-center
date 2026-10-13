@@ -407,6 +407,21 @@ export async function getMemberCenters(): Promise<Map<string, string | null>> {
   return new Map((data ?? []).map(r => [`${r.user_id}|${r.center}`, (r.approved_at as string | null) ?? null]));
 }
 
+/** 관리자: 다른 지점 가입 기록 지우기 — 그 지점에서만 빠진다(처음 지점 가입·프로필은 그대로) */
+export async function deleteMemberCenter(userId: string, center: string): Promise<void> {
+  const { error } = await supabase.from('member_centers').delete().match({ user_id: userId, center });
+  if (error) throw error;
+}
+
+/** 관리자: 처음 가입한 지점에서 빠질 때 — 다른 지점 가입 기록을 기본 지점으로 올린다(그 지점 승인 상태 그대로). 닉네임·뒷번호 등 프로필은 그대로 */
+export async function promoteMemberCenter(userId: string, center: string): Promise<void> {
+  const { data, error: e0 } = await supabase.from('member_centers').select('approved_at').match({ user_id: userId, center }).single();
+  if (e0) throw e0;
+  const { error: e1 } = await supabase.from('profiles').update({ center, approved_at: data?.approved_at ?? null }).eq('user_id', userId);
+  if (e1) throw e1;
+  await deleteMemberCenter(userId, center);
+}
+
 /** 관리자: 다른 지점 가입 승인 / 승인 취소 */
 export async function setMemberCenterApproved(userId: string, center: string, approve: boolean): Promise<void> {
   const { error } = await supabase.from('member_centers').update({ approved_at: approve ? new Date().toISOString() : null }).match({ user_id: userId, center });
