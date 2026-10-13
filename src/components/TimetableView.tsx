@@ -59,7 +59,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const [folded, setFolded] = useState<Set<string>>(() => new Set(['이원재']));
   const toggleFold = (name: string) => setFolded(f => { const n = new Set(f); if (n.has(name)) n.delete(name); else n.add(name); return n; });
   const [day, setDay] = useState(() => toYmd(new Date()));
-  const [weekday, setWeekday] = useState(() => new Date().getDay() || 1);
+  const [weekday, setWeekday] = useState(() => new Date().getDay());
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [children, setChildren] = useState<Child[]>([]);
   // 그날 결제 체크(디비) — "아이|시간" → 결제
@@ -155,7 +155,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         out.push([`${dt.getMonth() + 1}/${dt.getDate()}(${DOW[wdd]})${holiday ? ' 공휴일' : ''}`]);
         out.push(['시간', ...ts.flatMap(t => [t.name, '', ''])]);
         out.push(['', ...ts.flatMap(() => ['고정', '빈타임', '결제방식'])]);
-        for (const time of rowsForDay(dd)) {
+        for (const time of rowsForDay(dd, [...b.fixed.keys(), ...b.open.keys()], center)) {
           const row: Cell[] = [`${time.replace(/^0/, '')}${ROW_LABEL[time] ? ` ${ROW_LABEL[time]}` : ''}`];
           for (const t of ts) {
             const l = cellOf(b.fixed, t.id, time), rr = cellOf(b.open, t.id, time);
@@ -293,7 +293,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
   };
 
-  const rows = useMemo(() => (mode === 'day' ? rowsForDay(day) : rowsForWeekday(weekday)), [mode, day, weekday]);
+  // 정해진 줄에 없는 시간의 칸(엑셀에서 옮긴 일요일 10:10 등)도 줄로 보인다
+  const rows = useMemo(() => {
+    const keys = [...board.fixed.keys(), ...board.open.keys()];
+    return mode === 'day' ? rowsForDay(day, keys, center) : rowsForWeekday(weekday, keys, center);
+  }, [mode, day, weekday, board, center]);
   const d = parseYmd(day);
 
   // 칸 변경은 바로 저장하지 않고 쌓아 둔다
@@ -577,7 +581,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             </>
           ) : (
             <div className="flex gap-1">
-              {[1, 2, 3, 4, 5, 6].map(w => (
+              {[1, 2, 3, 4, 5, 6, 0].map(w => (
                 <button key={w} onClick={() => guard(() => setWeekday(w))}
                   className={`text-[13px] w-9 h-8 border ${weekday === w ? 'border-[#0a0a0a] bg-[#0a0a0a] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>{DOW[w]}</button>
               ))}

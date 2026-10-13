@@ -82,14 +82,29 @@ export interface CellInput {
 
 // ── 시간 줄 ─────────────────────────────────────────────────────────
 
-/** 월~금 시간 줄 — 12:20 점심, 16:30 쉬는 시간 (센터 스케줄표와 같다) */
-const WEEKDAY_ROWS = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '14:00', '14:50', '15:40', '16:30', '16:50', '17:40', '18:30', '19:20'];
+/** 월~금 시간 줄 — 12:20 점심, 16:30 쉬는 시간 (센터 스케줄표와 같다), 20:10 늦은 수업 */
+const WEEKDAY_ROWS = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '14:00', '14:50', '15:40', '16:30', '16:50', '17:40', '18:30', '19:20', '20:10'];
 const SATURDAY_ROWS = ['09:00', '09:50', '10:40', '11:30', '12:20', '13:10', '13:30', '14:20', '15:10', '16:00', '16:50', '17:40', '18:30', '19:20'];
+/** 은평 일요일 시간 줄 — 2026-10-01부터 (센터 스케줄표의 일요일 표와 같다). 그 전 일요일은 엑셀에서 옮긴 칸의 시간 그대로 */
+const SUNDAY_ROWS = ['11:00', '11:50', '12:40', '13:30', '14:20', '15:10', '16:00', '16:50', '17:40', '18:30', '19:20'];
+export const SUNDAY_FROM = '2026-10-01';
+/** 일요일에 일하는 선생님 — 센터마다 */
+export const SUNDAY_TEACHERS: Record<Center, string[]> = { eunpyeong: ['설영수', '이정길'], uijeongbu: ['설영수'] };
 /** 아무도 없을 때 칸에 흐리게 보이는 글 */
 export const ROW_LABEL: Record<string, string> = { '12:20': 'Lunch', '16:30': '쉬는 시간' };
 
-export const rowsForWeekday = (weekday: number) => (weekday === 6 || weekday === 0 ? SATURDAY_ROWS : WEEKDAY_ROWS);
-export const rowsForDay = (day: string) => rowsForWeekday(parseYmd(day).getDay());
+/** 시간 줄 — 요일마다 정해진 줄 + 그 줄에 없는 시간에 들어 있는 칸(cellKeys = "선생님|시간")이 있으면 그 시간도 */
+//  일요일 — 은평은 일요일 줄, 의정부는 토요일과 같은 줄
+export const rowsForWeekday = (weekday: number, cellKeys: Iterable<string> = [], center: Center = 'eunpyeong') => {
+  const base = weekday === 0 ? (center === 'eunpyeong' ? SUNDAY_ROWS : SATURDAY_ROWS) : weekday === 6 ? SATURDAY_ROWS : WEEKDAY_ROWS;
+  const extra = [...cellKeys].map(k => k.split('|')[1]).filter(t => t && !base.includes(t));
+  return extra.length ? [...new Set([...base, ...extra])].sort() : base;
+};
+export const rowsForDay = (day: string, cellKeys: Iterable<string> = [], center: Center = 'eunpyeong') => {
+  const wd = parseYmd(day).getDay();
+  if (wd === 0 && center === 'eunpyeong' && day < SUNDAY_FROM) return [...new Set([...cellKeys].map(k => k.split('|')[1]).filter(Boolean))].sort();
+  return rowsForWeekday(wd, cellKeys, center);
+};
 
 /** 결제 글자 → 글자 색. b(바우처)=하늘색, 결제 글자 없음=빨강, 그 밖(e 굳센·c 꿈이든·v …)=검정 */
 export function paymentColor(payment: string): string {
@@ -484,9 +499,11 @@ export async function getMonthRoundLessons(upTo: string, children: Child[]): Pro
 
 // ── 센터별 출근 요일 · 날짜별 선생님 추가 ─────────────────────────────
 
-/** 이 선생님이 그 요일에 그 센터에서 일하는지 (출근 요일이 따로 없으면 그 센터 모든 요일) */
-export function worksAt(t: { centers: string[]; workDays?: Record<string, number[]> }, center: Center, weekday: number): boolean {
+/** 이 선생님이 그 요일에 그 센터에서 일하는지 (출근 요일이 따로 없으면 그 센터 모든 요일).
+ *  일요일은 은평 설영수·이정길, 의정부 설영수 선생님만 — 다른 선생님은 [이 날 선생님 추가]로 */
+export function worksAt(t: { name?: string; centers: string[]; workDays?: Record<string, number[]> }, center: Center, weekday: number): boolean {
   if (!t.centers.includes(center)) return false;
+  if (weekday === 0) return SUNDAY_TEACHERS[center].includes(t.name ?? '');
   const days = t.workDays?.[center];
   return !days || days.includes(weekday);
 }
