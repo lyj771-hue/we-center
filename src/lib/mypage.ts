@@ -106,7 +106,7 @@ export const BRANCHES: { key: BranchKey; label: string }[] = [{ key: 'eunpyeong'
 export type BranchStatus = 'primary' | 'approved' | 'pending' | 'none';
 export interface MyBranch { key: BranchKey; label: string; status: BranchStatus }
 
-export async function getMyBranches(userId: string, primary: BranchKey): Promise<MyBranch[]> {
+export async function getMyBranches(userId: string, primary: BranchKey | 'none'): Promise<MyBranch[]> {
   const { data } = await supabase.from('member_centers').select('center, approved_at').eq('user_id', userId);
   const rows = new Map((data ?? []).map(r => [r.center as string, r.approved_at as string | null]));
   return BRANCHES.map(b => ({
@@ -115,8 +115,23 @@ export async function getMyBranches(userId: string, primary: BranchKey): Promise
   }));
 }
 
-/** 다른 지점도 가입 신청 (관리자가 그 지점 회원관리에서 승인) */
-export async function requestBranch(userId: string, center: BranchKey): Promise<void> {
-  const { error } = await supabase.from('member_centers').insert({ user_id: userId, center });
+/** 지점 가입 신청 (관리자가 그 지점 회원관리에서 승인) — 가입한 지점이 없으면 그 지점이 기본 지점 */
+export async function requestBranch(_userId: string, center: BranchKey): Promise<void> {
+  const { data, error } = await supabase.rpc('join_center', { p_center: center });
   if (error) throw error;
+  if (data !== 'ok' && data !== 'already') throw new Error(data as string);
+}
+
+/** 지점 가입 취소 — 그 지점 아이 연결을 끊고 빠진다. 마지막 지점이면 'last'(계정은 남고 미승인으로) */
+export async function leaveBranch(center: BranchKey): Promise<'ok' | 'last' | string> {
+  const { data, error } = await supabase.rpc('leave_center', { p_center: center });
+  if (error) throw error;
+  return data as string;
+}
+
+/** 회원 탈퇴 — 아이 연결·지점 가입·프로필·로그인 계정을 지운다(수업·결제 기록은 센터 아이 명단에 남는다) */
+export async function withdrawMember(): Promise<void> {
+  const { data, error } = await supabase.rpc('withdraw_member');
+  if (error) throw error;
+  if (data !== 'ok') throw new Error(data as string);
 }

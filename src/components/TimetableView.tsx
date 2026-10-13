@@ -286,6 +286,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   // 테스트 아이 — 이 센터 명단의 그 아이 (두 센터를 다니면 센터마다 아이 기록이 따로)
   const testKid = isTest ? children.find(c => c.name === testChildName && (c.center ?? 'eunpyeong') === center) : undefined;
   const testId = testKid?.id;
+  // 빈타임에 직접 작성한 칸인데 회원(보호자 계정과 이어진 아이)이 아님 — 다른 색으로
+  const isNonMember = (c: CellView) => c.status === 'child' && c.source === 'override'
+    && !(c.childId && children.find(k => k.id === c.childId)?.guardianUserId);
   const locked = (c: CellView) => isTest && c.status !== 'empty' && c.status !== 'none' && c.childId !== testId;
   const pickKids = isTest ? (testKid ? [testKid] : []) : children.filter(c => (c.center ?? 'eunpyeong') === center);   // 이 센터 아이만
   // 테스트 아이의 고정 수업 — 그 요일로 바로 가는 버튼 (월요일엔 수업이 없어 빈 표만 보일 수 있어서)
@@ -740,7 +743,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                             const b = e.currentTarget.getBoundingClientRect();
                             setPicking({ teacher: t, time, side: 'open', cell: right, rect: { left: b.left, top: b.top, bottom: b.bottom } });
                           }}>
-                            <CellText cell={right} label={ROW_LABEL[time]} />
+                            <CellText cell={right} label={ROW_LABEL[time]} nonMember={isNonMember(right)} />
                           </td>}
                           {kindTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
@@ -801,7 +804,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
         <p className="text-[11px] text-[#999] mt-3 leading-[2]">
           칸을 누르면 고칠 수 있어요. 앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정
-          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span> · <span className="text-[#dc2626] font-bold ring-2 ring-[#dc2626] px-1 rounded">바우처6!</span> = 월 횟수 넘침(바우처 6회째·굳센 4회째부터)</>}
+          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span> · <span className="text-[#0d9488]">청록 이름</span> = 빈타임에 직접 작성(회원 아님) · <span className="text-[#dc2626] font-bold ring-2 ring-[#dc2626] px-1 rounded">바우처6!</span> = 월 횟수 넘침(바우처 6회째·굳센 4회째부터)</>}
         </p>
       </div>
 
@@ -837,14 +840,15 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
 }
 
 /** 칸 글자 — 3김채현 처럼 (숫자 + 이름) */
-function CellText({ cell, label, muted }: { cell: CellView; label?: string; muted?: boolean }) {
+function CellText({ cell, label, muted, nonMember }: { cell: CellView; label?: string; muted?: boolean; nonMember?: boolean }) {
   if (cell.status === 'empty' || cell.status === 'none') {
     return label ? <span className="text-[#c4c4cc]">{label}</span> : null;
   }
   if (cell.status === 'undecided') return <span className="text-[#71717a]">?</span>;
   if (cell.status === 'off') return <span className="text-[#a1a1aa]">수업 안 함</span>;
   return (
-    <span title={cell.note} className={`${muted ? 'text-[#8a8a93]' : 'text-[#27272a]'} ${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-50' : ''}`}>
+    <span title={nonMember ? `회원 아님 — 직접 작성${cell.note ? ` · ${cell.note}` : ''}` : cell.note}
+      className={`${muted ? 'text-[#8a8a93]' : nonMember ? 'text-[#0d9488]' : 'text-[#27272a]'} ${cell.moved ? 'line-through' : ''} ${cell.absent ? 'opacity-50' : ''}`}>
       {cell.name}{cell.number ?? ''}
       {cell.absent && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">결석</span>}
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}

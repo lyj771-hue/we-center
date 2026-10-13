@@ -304,7 +304,7 @@ function fromProfileRow(row: ProfileRow): Profile {
     centerNickname: row.center_nickname ?? undefined,
     phoneLast4: row.phone_last4 ?? undefined,
     requestedCode: row.requested_code ?? undefined,
-    center: row.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
+    center: row.center === 'uijeongbu' ? 'uijeongbu' : row.center === 'none' ? 'none' : 'eunpyeong',
     memo: row.memo ?? undefined,
     approvedAt: row.approved_at ?? undefined,
   };
@@ -420,6 +420,12 @@ export async function promoteMemberCenter(userId: string, center: string): Promi
   const { error: e1 } = await supabase.from('profiles').update({ center, approved_at: data?.approved_at ?? null }).eq('user_id', userId);
   if (e1) throw e1;
   await deleteMemberCenter(userId, center);
+}
+
+/** 관리자: 마지막 지점에서 빠질 때 — 계정·닉네임은 남기고 가입한 지점 없음('none')으로 */
+export async function clearMemberBranch(userId: string): Promise<void> {
+  const { error } = await supabase.from('profiles').update({ center: 'none', approved_at: null }).eq('user_id', userId);
+  if (error) throw error;
 }
 
 /** 관리자: 다른 지점 가입 승인 / 승인 취소 */

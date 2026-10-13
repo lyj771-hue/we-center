@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
-import { deleteMemberCenter, deleteProfile, getMemberCenters, promoteMemberCenter, getMembers, saveMemberProfile, setMemberCenterApproved } from '@/lib/store';
+import { clearMemberBranch, deleteMemberCenter, getMemberCenters, promoteMemberCenter, getMembers, saveMemberProfile, setMemberCenterApproved } from '@/lib/store';
 import type { Member, MemberExtras } from '@/lib/types';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
@@ -259,12 +259,13 @@ export default function MembersView({ center }: { center: Center }) {
       } catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }
       return;
     }
-    if (!(await askConfirm(`"${m.nickname}" 회원을 지울까요?\n닉네임·설명이 지워지고 아이 명단과의 연결도 끊어요. 다음에 로그인하면 다시 가입하게 돼요.\n(결제 기록은 아이 명단에 남아서, 다시 승인해 같은 아이와 이어지면 그대로 보여요)`))) return;
+    // 마지막 지점 — 계정은 지우지 않고 가입한 지점 없음으로(아이 연결만 끊는다). 완전히 그만두는 건 보호자가 마이페이지 [회원 탈퇴]로
+    if (!(await askConfirm(`"${m.nickname}" 회원을 ${centerLabel}에서 뺄까요?\n다른 지점 가입이 없어서 가입한 지점이 없는 회원이 돼요(계정은 남아요). ${centerLabel} 아이 명단과의 연결은 끊어요.\n(결제 기록은 아이 명단에 남아서, 다시 가입해 같은 아이와 이어지면 그대로 보여요)`))) return;
     try {
       const here = kidOf(m.userId);
       if (here) await linkChild(here.id, null);
       autoTried.current.add(`${m.userId}|${center}`);
-      await deleteProfile(m.userId);
+      await clearMemberBranch(m.userId);
       loadKids(); load();
     }
     catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }

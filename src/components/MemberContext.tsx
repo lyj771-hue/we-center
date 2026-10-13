@@ -22,13 +22,15 @@ interface MemberCtx {
   /** 지점(수색/의정부) 가입 상태 — 처음 가입한 지점 + 추가 신청한 지점 */
   branches: MyBranch[];
   refreshBranches: () => void;
+  /** 프로필 다시 읽기 (지점 가입 취소 등으로 기본 지점·승인이 바뀌었을 때) */
+  refreshProfile: () => void;
   /** 이 지점 수업스케쥴·마이페이지를 볼 수 있는지 (처음 지점은 승인, 다른 지점은 그 지점 승인) */
   canUse: (b: BranchKey) => boolean;
 }
 
 const Ctx = createContext<MemberCtx>({
   userId: null, profile: null, loading: true, login: () => {}, logout: () => {},
-  branches: [], refreshBranches: () => {}, canUse: () => false,
+  branches: [], refreshBranches: () => {}, refreshProfile: () => {}, canUse: () => false,
 });
 
 export function MemberProvider({ children }: { children: ReactNode }) {
@@ -70,6 +72,10 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   }, []);
   const logout = useCallback(() => { supabase.auth.signOut(); }, []);
 
+  const refreshProfile = useCallback(() => {
+    if (userId) getMyProfile(userId).then(setProfile).catch(() => {});
+  }, [userId]);
+
   const memberId = isAdmin ? null : userId;
   const canUse = useCallback((b: BranchKey) => {
     const st = branches.find(x => x.key === b)?.status ?? (b === (profile?.center ?? 'eunpyeong') ? 'primary' : 'none');
@@ -78,7 +84,7 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const needsNickname = !!memberId && !loading && !profile;
 
   return (
-    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, logout, branches: memberId ? branches : [], refreshBranches, canUse }}>
+    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse }}>
       {children}
       {needsNickname && <NicknameSetup userId={memberId} onDone={setProfile} onCancel={logout} />}
     </Ctx.Provider>

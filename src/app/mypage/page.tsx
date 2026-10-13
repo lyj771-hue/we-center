@@ -9,7 +9,7 @@ import { getMyLedger } from '@/lib/prepaid';
 import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
 import { getMyChild, getMyChildCenters, getMyLessons, getMyPaymentHistory, getMyPayments } from '@/lib/mypage';
 import type { BranchKey, MyPaymentUse } from '@/lib/mypage';
-import { BRANCHES, requestBranch } from '@/lib/mypage';
+import { BRANCHES, leaveBranch, requestBranch, withdrawMember } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import { addDays, thisMonday, toYmd } from '@/lib/schedule';
 
@@ -18,13 +18,16 @@ import { addDays, thisMonday, toYmd } from '@/lib/schedule';
 
 export default function MyPage() {
   const { isAdmin } = useAdmin();
-  const { userId, profile, loading, login, branches, canUse, refreshBranches } = useMember();
+  const { userId, profile, loading, login, logout, branches, canUse, refreshBranches, refreshProfile } = useMember();
   // 보는 지점 — 처음 가입한 지점이 기본, 승인된 다른 지점으로 바꿀 수 있다
-  const primary = profile?.center ?? 'eunpyeong';
+  // 기본 지점 — 'none'(모든 지점 취소)이면 가입한 지점이 없다
+  const noBranch = profile?.center === 'none';
+  const primary: BranchKey = profile?.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong';
   const [sel, setSel] = useState<BranchKey | null>(null);
   // 아이가 이어진 지점 — 가입 승인이 없어도 그 지점 아이가 이어져 있으면 볼 수 있다(두 지점을 다니는 아이)
   const [linked, setLinked] = useState<BranchKey[]>([]);
-  useEffect(() => { if (userId) getMyChildCenters().then(setLinked).catch(() => {}); }, [userId]);
+  const refreshLinked = useCallback(() => { if (userId) getMyChildCenters().then(setLinked).catch(() => {}); }, [userId]);
+  useEffect(() => { refreshLinked(); }, [refreshLinked]);
   const viewable = (b: BranchKey) => canUse(b) || linked.includes(b);
   const branch: BranchKey = sel && viewable(sel) ? sel : primary;
   const usable = branches.filter(b => viewable(b.key));
@@ -49,7 +52,7 @@ export default function MyPage() {
       setFailed((e as Error).message);
     }
   }, [week, branch]);
-  useEffect(() => { if (userId && profile) load(); }, [userId, profile, load]);
+  useEffect(() => { if (userId && profile && !noBranch) load(); }, [userId, profile, noBranch, load]);
 
   const wrap = (body: React.ReactNode) => (
     <div className="max-w-[720px] mx-auto px-4 pt-8 pb-14 md:pt-14 fade-up">
@@ -76,7 +79,7 @@ export default function MyPage() {
   const join = async (b: BranchKey) => {
     if (!userId) return;
     if (!(await askConfirm(`${labelOf(b)}도 가입할까요?\n센터에서 승인하면 ${labelOf(b)} 수업스케쥴과 마이페이지를 볼 수 있어요.`))) return;
-    try { await requestBranch(userId, b); refreshBranches(); await showAlert(`${labelOf(b)} 가입을 신청했어요. 승인되면 열려요.`); }
+    try { await requestBranch(userId, b); refreshBranches(); refreshProfile(); await showAlert(`${labelOf(b)} 가입을 신청했어요. 승인되면 열려요.`); }
     catch (e) { showAlert(`신청하지 못했어요.\n${(e as Error).message}`); }
   };
 
@@ -91,31 +94,72 @@ export default function MyPage() {
       ))}
     </div>
   );
-  // 맨 아래 — 지점 가입 (처음 지점은 활성, 다른 지점은 눌러서 가입 신청)
+  // 가입했거나 신청한 지점을 다시 누르면 — 취소할지 묻고, 그 지점 아이 연결을 끊고 빠진다(마지막 지점이면 계정은 남고 미승인으로)
+  const joined = branches.filter(b => b.status !== 'none' || linked.includes(b.key));
+  const leave = async (b: { key: BranchKey; label: string; status: string }) => {
+    const pending = b.status === 'pending' || (b.status === 'primary' && !profile?.approvedAt);
+    const last = joined.length <= 1;
+    const msg = pending
+      ? `${b.label} 가입 신청을 취소할까요?`
+      : `${b.label} 가입을 취소할까요?\n${b.label} 아이 연결이 끊기고 ${b.label} 수업·결제가 안 보여요.\n다시 신청해서 승인되면 지난 기록도 그대로 다시 보여요.${last ? '\n\n마지막 지점이라 취소하면 가입한 지점이 없어져요. (회원 정보는 남아요)' : ''}`;
+    if (!(await askConfirm(msg))) return;
+    try {
+      await leaveBranch(b.key);
+      setSel(null); refreshBranches(); refreshProfile(); refreshLinked();
+      await showAlert(pending ? '가입 신청을 취소했어요.' : `${b.label} 가입을 취소했어요.`);
+    } catch (e) { showAlert(`취소하지 못했어요.\n${(e as Error).message}`); }
+  };
+  const withdraw = async () => {
+    if (!(await askConfirm('회원 탈퇴할까요?\n보호자 정보와 모든 지점 가입이 지워지고 로그아웃돼요.\n(아이 수업·결제 기록은 센터에 남아요)'))) return;
+    if (!(await askConfirm('정말 탈퇴할까요? 되돌릴 수 없어요.'))) return;
+    try { await withdrawMember(); await showAlert('탈퇴했어요. 그동안 고마웠어요.'); logout(); }
+    catch (e) { showAlert(`탈퇴하지 못했어요.\n${(e as Error).message}`); }
+  };
+
+  // 맨 아래 — 지점 가입 (안 한 지점은 눌러서 가입 신청, 가입했거나 신청한 지점은 다시 누르면 취소)
   const bottom = (
     <div className={`${MYPAGE_CARD} space-y-3`}>
       <h2 className="text-[17px] text-[#27272a]">지점</h2>
       <div className="flex gap-2">
         {branches.map(b => (
           <button key={b.key} type="button"
-            onClick={() => (viewable(b.key) ? setSel(b.key) : b.status === 'none' ? join(b.key) : undefined)}
+            onClick={() => (b.status === 'none' && !linked.includes(b.key) ? join(b.key) : leave(b))}
             className={`flex-1 py-2.5 text-[14px] rounded-full border ${
               b.status === 'primary' || b.status === 'approved' || linked.includes(b.key) ? 'border-[var(--brand)] text-[var(--brand)] bg-[#eef5fe]'
-              : b.status === 'pending' ? 'border-[#f59e0b] text-[#b45309] bg-[#fffbeb] cursor-default'
+              : b.status === 'pending' ? 'border-[#f59e0b] text-[#b45309] bg-[#fffbeb]'
               : 'border-[#ddd] text-[#888] hover:bg-[#f8f8f8]'}`}>
             {b.label}
             <span className="block text-[11px] mt-0.5 opacity-80">
-              {b.status === 'primary' ? (profile?.approvedAt ? '가입됨(처음 지점)' : '승인 대기') : b.status === 'approved' || linked.includes(b.key) ? '가입됨' : b.status === 'pending' ? '승인 대기' : '눌러서 가입 신청'}
+              {b.status === 'primary' ? (profile?.approvedAt ? '가입됨' : '승인 대기') : b.status === 'approved' || linked.includes(b.key) ? '가입됨' : b.status === 'pending' ? '승인 대기' : '눌러서 가입 신청'}
             </span>
           </button>
         ))}
       </div>
+      <p className="text-[11px] text-[#aaa]">가입했거나 신청한 지점을 다시 누르면 취소할 수 있어요.</p>
+    </div>
+  );
+  // 맨 아래 작게 — 회원 탈퇴
+  const withdrawLink = (
+    <div className="text-center pt-2">
+      <button type="button" onClick={withdraw} className="text-[12px] text-[#bbb] underline underline-offset-2 hover:text-red-400">회원 탈퇴</button>
     </div>
   );
 
+  // 가입한 지점이 하나도 없으면 — 지점 정보는 모두 숨기고 지점 신청 버튼과 회원 탈퇴만
+  if (noBranch) return wrap(
+    <div className="space-y-6">
+      <p className="text-[14px] text-[#888]">가입한 지점이 없어요. 다니는 지점을 눌러 가입을 신청해 주세요.</p>
+      {bottom}
+      {withdrawLink}
+    </div>,
+  );
+
   return wrap(
-    <MyPageView child={child} nickname={profile?.nickname} approved={viewable(branch)} week={week} setWeek={setWeek}
-      weekLessons={lessonsHere} payments={paymentsHere} ledger={ledger} history={historyHere} today={today} failed={failed}
-      top={top} bottom={bottom} />,
+    <div className="space-y-6">
+      <MyPageView child={child} nickname={profile?.nickname} approved={viewable(branch)} week={week} setWeek={setWeek}
+        weekLessons={lessonsHere} payments={paymentsHere} ledger={ledger} history={historyHere} today={today} failed={failed}
+        top={top} bottom={bottom} />
+      {withdrawLink}
+    </div>,
   );
 }

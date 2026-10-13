@@ -45,7 +45,8 @@ export interface Profile {
   /** 가입할 때 적은 회원 코드 (맞지 않았어도 남겨 둔다) */
   requestedCode?: string;
   /** 가입할 때 고른 센터 — 'eunpyeong'(수색) / 'uijeongbu'(의정부). 없으면 수색 */
-  center?: 'eunpyeong' | 'uijeongbu';
+  /** 기본 지점 — 'none' = 어느 지점에도 가입 안 함(모두 취소함) */
+  center?: 'eunpyeong' | 'uijeongbu' | 'none';
 }
 
 /** 회원 관리의 지원 항목(받으면 true)과 선결제 남은 횟수 — 관리자만 본다 */
