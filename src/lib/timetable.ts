@@ -258,19 +258,19 @@ export async function getDayBoard(day: string, children: Child[], center: Center
   const open = new Map<string, CellView>();
   for (const r of fixedRes.data ?? []) fixed.set(key(r.teacher_id, r.time), fromRow({ ...r, status: 'child' }, 'fixed', byId));
 
-  // 보호자 신청 — 보호자 닉네임(관리자 닉네임이 다르면 아래 작게). 아이 명단에서 그 보호자의 아이(또는 관리자 닉네임과 같은 이름)를 찾아 결제 글자를 붙인다
+  // 보호자 신청 — 그 보호자 계정과 이어진 이 센터 아이(없으면 가입할 때 쓴 이름과 같은 아이) 이름으로, 결제 글자를 붙인다
   const booked = (slotsRes.data ?? []).filter(sl => ((sl.schedules as { center?: string } | null)?.center ?? slotCenter.get(sl.teacher_id) ?? 'eunpyeong') === center);
   if (booked.length) {
     const ids = [...new Set(booked.map(s => s.booked_by as string))];
-    const { data: ps } = await supabase.from('profiles').select('user_id, nickname, center_nickname').in('user_id', ids);
+    const { data: ps } = await supabase.from('profiles').select('user_id, nickname').in('user_id', ids);
     const prof = new Map((ps ?? []).map(p => [p.user_id as string, p]));
     for (const s of booked) {
       if (s.cancel_state === 'approved') continue;
       const p = prof.get(s.booked_by);
-      const center = p?.center_nickname ?? undefined;
-      const child = children.find(c => c.guardianUserId === s.booked_by) ?? (center ? byName.get(center) : undefined) ?? (p ? byName.get(p.nickname) : undefined);
+      const child = children.find(c => c.guardianUserId === s.booked_by && (c.center ?? 'eunpyeong') === center)
+        ?? children.find(c => c.guardianUserId === s.booked_by) ?? (p ? byName.get(p.nickname) : undefined);
       open.set(key(s.teacher_id, s.time), {
-        ...blank, status: 'child', name: p?.nickname ?? '신청', subName: center && center !== p?.nickname ? center : undefined,
+        ...blank, status: 'child', name: child?.name ?? p?.nickname ?? '신청',
         number: child?.number, payment: '', childId: child?.id, source: 'booking',
         note: s.cancel_state === 'requested' ? '취소 신청 중' : undefined,
       });

@@ -2,20 +2,21 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
-import { clearMemberBranch, deleteMemberCenter, getMemberCenters, promoteMemberCenter, getMembers, saveMemberProfile, setMemberCenterApproved } from '@/lib/store';
+import { clearMemberBranch, deleteMemberCenter, getMemberCenterRequests, getMemberCenters, promoteMemberCenter, getMembers, saveMemberProfile, setMemberCenterApproved } from '@/lib/store';
 import type { Member, MemberExtras } from '@/lib/types';
-import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
+import { askConfirm, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
 import PaymentsTab from '@/components/PaymentsTab';
 import type { Center, Child } from '@/lib/timetable';
-import { childLabel, getChildren, linkChild, setChildUses } from '@/lib/timetable';
+import { getChildren, linkChild, setChildUses } from '@/lib/timetable';
 
 // 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자 표.
-// 보호자 닉네임은 보호자가 처음 입력한 것, 관리자 닉네임(center_nickname)·설명은 관리자가 정한다. 보호자 화면엔 늘 보호자 닉네임.
-// "승인"을 누르면 승인일자가 찍힌다(같은 닉네임 회원이 있을 때만 관리자 닉네임을 정해야 한다). 승인/미승인 탭으로 나눠 본다(승인 탭의 '가입일자'는 승인한 날, 미승인 탭의 '가입신청일자'는 처음 로그인한 날).
+// 이름(아이 이름)은 보호자가 가입할 때 입력한 것, 설명은 관리자가 적는다. 센터 닉네임(center_nickname)은 더 쓰지 않는다(있던 값만 남아 있음).
+// "승인"을 누르면 승인일자가 찍히고 이름·뒷번호가 같은 명단 아이와 이어진다. 승인/미승인 탭으로 나눠 본다(승인 탭의 '가입일자'는 승인한 날, 미승인 탭의 '가입신청일자'는 처음 로그인한 날).
+// 바우처~선결제 체크는 '결제방식 관리' 탭에서 승인된 회원만 따로 다룬다.
 // 메뉴에는 없고 관리자 모드 띠의 "회원 관리"로 들어온다.
 
-type Filter = 'waiting' | 'approved' | 'children' | 'payments';
+type Filter = 'waiting' | 'approved' | 'methods' | 'children' | 'payments';
 
 // 선결제 칸 — 지금은 가려 둔다(DB에는 칸이 있다). 다시 보이려면 true
 const SHOW_PREPAID = false;
@@ -47,7 +48,7 @@ export default function MembersView({ center }: { center: Center }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ nickname: '', centerNickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '', phone: '' });
+  const [form, setForm] = useState({ nickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '', phone: '' });
   const [showDates, setShowDates] = useState(false);   // 카카오계정번호·회원 코드·가입일자·마지막 로그인은 접어 둔다
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -58,8 +59,11 @@ export default function MembersView({ center }: { center: Center }) {
 
   // 다른 지점 가입 신청 — "회원|지점" → 승인 시각(null = 대기)
   const [extraCenters, setExtraCenters] = useState<Map<string, string | null>>(new Map());
+  // 다른 지점 가입 신청일 — "회원|지점" → 신청 시각
+  const [requestedAt, setRequestedAt] = useState<Map<string, string>>(new Map());
   const load = useCallback(() => {
     getMemberCenters().then(setExtraCenters).catch(() => setExtraCenters(new Map()));
+    getMemberCenterRequests().then(setRequestedAt).catch(() => setRequestedAt(new Map()));
     getMembers()
       .then(m => { setMembers(m); setFailed(false); })
       .catch(() => setFailed(true))
@@ -83,7 +87,7 @@ export default function MembersView({ center }: { center: Center }) {
   // [미연결 · 잇기] — 뒷번호가 달라 저절로 못 이었을 때, 이름이 같은 이 지점 아이를 보여 주고 확인받아 잇는다
   const linkByName = async (m: Member) => {
     const others = kids.filter(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') !== center);
-    const names = new Set([m.nickname, m.centerNickname ?? '', ...others.flatMap(k => [k.name, `${k.name}${k.number ?? ''}`])].map(x => x.trim()).filter(Boolean));
+    const names = new Set([m.nickname, ...others.flatMap(k => [k.name, `${k.name}${k.number ?? ''}`])].map(x => x.trim()).filter(Boolean));
     const hits = kids.filter(k => (k.center ?? 'eunpyeong') === center && (names.has(k.name) || names.has(`${k.name}${k.number ?? ''}`)));
     const label = [...names][0] ?? m.nickname;
     if (!hits.length) { await showAlert(`${centerLabel} 아이 명단에 "${label}"이(가) 없어요.\n아이 명단에 먼저 넣은 뒤 다시 눌러 주세요.`); return; }
@@ -98,10 +102,10 @@ export default function MembersView({ center }: { center: Center }) {
     catch (e) { showAlert(`잇지 못했어요.\n${(e as Error).message}`); }
   };
   const otherKidsOf = (userId: string) => kids.filter(k => k.guardianUserId === userId && (k.center ?? 'eunpyeong') !== center);
-  // 이 지점 명단에서 같은 아이 찾기 — 이름(보호자·관리자 닉네임, 다른 지점에 이어진 아이 이름)과 뒷번호 4자리가 둘 다 같고, 다른 계정에 안 이어진 아이
-  const sameKidsHere = (m: Member, list: Child[], centerNickname = m.centerNickname ?? '') => {
+  // 이 지점 명단에서 같은 아이 찾기 — 이름(가입할 때 쓴 이름, 다른 지점에 이어진 아이 이름)과 뒷번호 4자리가 둘 다 같고, 다른 계정에 안 이어진 아이
+  const sameKidsHere = (m: Member, list: Child[]) => {
     const others = list.filter(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') !== center);
-    const names = [m.nickname, centerNickname, ...others.flatMap(k => [k.name, `${k.name}${k.number ?? ''}`])].map(x => x.trim()).filter(Boolean);
+    const names = [m.nickname, ...others.flatMap(k => [k.name, `${k.name}${k.number ?? ''}`])].map(x => x.trim()).filter(Boolean);
     const phones = [m.phoneLast4, ...others.map(k => k.phoneLast4)].filter((x): x is string => !!x);
     return list.filter(k => (k.center ?? 'eunpyeong') === center && (!k.guardianUserId || k.guardianUserId === m.userId)
       && !!k.phoneLast4 && phones.includes(k.phoneLast4)
@@ -111,7 +115,7 @@ export default function MembersView({ center }: { center: Center }) {
   const startEdit = (m: Member) => {
     setEditing(m.userId);
     setForm({
-      nickname: m.nickname, centerNickname: m.centerNickname ?? '', memo: m.memo ?? '',
+      nickname: m.nickname, memo: m.memo ?? '',
       prepaidEunpyeong: String(m.prepaidEunpyeong), prepaidUijeongbu: String(m.prepaidUijeongbu),
       code: kidOf(m.userId)?.memberCode ?? '',
       phone: m.phoneLast4 ?? '',
@@ -119,13 +123,13 @@ export default function MembersView({ center }: { center: Center }) {
   };
 
   const save = async (m: Member) => {
-    if (!form.nickname.trim()) { alert('보호자 닉네임을 입력해 주세요.'); return; }
+    if (!form.nickname.trim()) { alert('이름을 입력해 주세요.'); return; }
     try {
       const r = await saveMemberProfile({
-        userId: m.userId, nickname: form.nickname, centerNickname: form.centerNickname, memo: form.memo, approvedAt: m.approvedAt, phoneLast4: form.phone,
+        userId: m.userId, nickname: form.nickname, memo: form.memo, approvedAt: m.approvedAt, phoneLast4: form.phone,
         prepaidEunpyeong: Number(form.prepaidEunpyeong) || 0, prepaidUijeongbu: Number(form.prepaidUijeongbu) || 0,
       });
-      if (r === 'taken') { alert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
+      if (r === 'taken') { alert('이미 다른 회원이 쓰는 이름이에요.'); return; }
       // 회원 코드로 아이와 잇기 (계정 하나 = 센터마다 아이 한 명)
       const code = form.code.trim().toUpperCase();
       const current = kidOf(m.userId);
@@ -153,7 +157,7 @@ export default function MembersView({ center }: { center: Center }) {
   const toggleSupport = async (m: Member, key: (typeof SUPPORTS)[number]['key']) => {
     const on = !supportOf(m, key);
     try {
-      await saveMemberProfile({ userId: m.userId, nickname: m.nickname, centerNickname: m.centerNickname, memo: m.memo, approvedAt: m.approvedAt, [key]: on });
+      await saveMemberProfile({ userId: m.userId, nickname: m.nickname, memo: m.memo, approvedAt: m.approvedAt, [key]: on });
       setMembers(ms => ms.map(x => (x.userId === m.userId ? { ...x, [key]: on } : x)));
       const k = kidOf(m.userId);
       if (k) {
@@ -164,14 +168,14 @@ export default function MembersView({ center }: { center: Center }) {
   };
 
   // 승인할 때 아이 명단과 자동 연결 — 이름(보호자 닉네임 또는 관리자 닉네임, 앞 숫자 포함 가능)과 뒷번호 4자리가 둘 다 같은 아이가 딱 하나면 잇는다
-  const matchChild = async (m: Member, centerNickname: string): Promise<Child | undefined> => {
+  const matchChild = async (m: Member): Promise<Child | undefined> => {
     if (kidOf(m.userId)) return kidOf(m.userId);   // 이미 연결됨
     // 화면을 연 뒤에 명단(뒷번호 등)이 바뀌었을 수 있으니 새로 읽어서 맞춘다
     const fresh = await getChildren().catch(() => kids);
     const already = fresh.find(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') === center);
     if (already) { setKids(fresh); return already; }
     if (!m.phoneLast4 && !fresh.some(k => k.guardianUserId === m.userId && k.phoneLast4)) { await showAlert('승인했어요.\n뒷번호가 없어서 아이 명단과는 연결하지 않았어요.'); return; }
-    const hits = sameKidsHere(m, fresh, centerNickname);
+    const hits = sameKidsHere(m, fresh);
     if (hits.length !== 1) {
       await showAlert(hits.length
         ? `승인했어요.\n이름·뒷번호가 같은 아이가 ${hits.length}명이라 자동 연결하지 않았어요. 회원 코드로 직접 연결해 주세요.`
@@ -188,45 +192,24 @@ export default function MembersView({ center }: { center: Center }) {
     return k;
   };
 
-  // 승인 — 승인 버튼만 누르면 된다. 다만 같은 닉네임을 쓰는 다른 회원이 있으면 관리자 닉네임을 정해야 승인된다
+  // 승인 — 승인 버튼만 누르면 된다(같은 이름이어도 뒷번호·회원 코드로 아이를 구분해서 잇는다)
   const setApproved = async (m: Member, approve: boolean) => {
-    let centerNickname = m.centerNickname ?? '';
-    if (approve) {
-      const same = (name: string) => members.some(o => o.userId !== m.userId && (o.nickname.trim() === name.trim() || (o.centerNickname ?? '').trim() === name.trim()));
-      if (!centerNickname && same(m.nickname)) {
-        while (true) {
-          const input = await askPrompt(`"${m.nickname}" 닉네임을 쓰는 회원이 이미 있어요.\n구분할 관리자 닉네임을 정해야 승인돼요.`, '');
-          if (input === null) return;
-          const v = input.trim();
-          if (!v) continue;
-          if (same(v)) { await showAlert(`"${v}"도 이미 쓰고 있어요. 다른 이름으로 정해 주세요.`); continue; }
-          centerNickname = v;
-          break;
-        }
-      }
-    } else if (!(await askConfirm(`"${m.nickname}" 회원의 승인을 취소할까요?\n${centerLabel} 아이 명단과의 연결도 끊어요.`))) {
-      return;
-    }
+    if (!approve && !(await askConfirm(`"${m.nickname}" 회원의 승인을 취소할까요?\n${centerLabel} 아이 명단과의 연결도 끊어요.`))) return;
     const approvedAt = approve ? new Date().toISOString() : undefined;
     try {
       const r = await saveMemberProfile({
         userId: m.userId,
         nickname: m.nickname,
-        centerNickname,
         memo: m.memo,
         approvedAt: approvedAt,
       });
-      if (r === 'taken') { await showAlert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
+      if (r === 'taken') { await showAlert('저장하지 못했어요. 다시 시도해 주세요.'); return; }
       // 승인 취소 — 이 지점 아이와의 연결도 끊는다 (다른 지점 연결은 그대로)
       const here = kidOf(m.userId);
       if (!approve && here) { await linkChild(here.id, null); loadKids(); autoTried.current.add(`${m.userId}|${center}`); }
       if (approve) {
-        // 아이 명단과 이어지면 관리자 닉네임 = 아이 이름+숫자 (예: 김채현3)
-        const k = await matchChild(m, centerNickname);
-        if (k && childLabel(k) !== centerNickname) {
-          const r2 = await saveMemberProfile({ userId: m.userId, nickname: m.nickname, centerNickname: childLabel(k), memo: m.memo, approvedAt });
-          if (r2 === 'taken') await showAlert(`관리자 닉네임 "${childLabel(k)}"을 이미 다른 회원이 쓰고 있어서 바꾸지 않았어요.`);
-        }
+        // 아이 명단의 같은 아이(이름·뒷번호)와 잇는다
+        await matchChild(m);
       }
       load();
     } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
@@ -293,7 +276,7 @@ export default function MembersView({ center }: { center: Center }) {
       const here = kidOf(m.userId);
       if (!approve && here) { await linkChild(here.id, null); loadKids(); autoTried.current.add(`${m.userId}|${center}`); }
       // 추가 지점 승인 — 이 지점 명단의 같은 아이(이름·뒷번호)와도 잇는다 (지점마다 회원 코드가 따로라서)
-      if (approve) await matchChild(m, m.centerNickname ?? '');
+      if (approve) await matchChild(m);
       load();
     }
     catch (e) { showAlert(`저장하지 못했어요. 다시 시도해 주세요.\n${(e as Error).message ?? ''}`); load(); loadKids(); }
@@ -320,7 +303,7 @@ export default function MembersView({ center }: { center: Center }) {
   const rosterOf = (m: Member): Child[] => {
     const linked = kidOf(m.userId);
     if (linked) return [linked];
-    const names = [m.nickname, m.centerNickname ?? ''].map(x => x.trim()).filter(Boolean);
+    const names = [m.nickname].map(x => x.trim()).filter(Boolean);
     const code = m.requestedCode?.trim().toUpperCase();
     return kids.filter(k => (k.center ?? 'eunpyeong') === center && (
       (!!code && k.memberCode === code) ||
@@ -329,7 +312,7 @@ export default function MembersView({ center }: { center: Center }) {
   };
   const list = filter === 'waiting' ? waiting : approved;
   // 미승인 목록은 접기 없이 늘 펼친다(카카오계정번호·가입신청일자)
-  const datesOn = showDates || filter === 'waiting';
+  const datesOn = filter === 'waiting' || (filter === 'approved' && showDates);
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
   const input = 'w-full min-w-[90px] border-b border-[var(--brand)] py-1 text-[14px] outline-none bg-transparent';
   const th = 'text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
@@ -338,13 +321,10 @@ export default function MembersView({ center }: { center: Center }) {
   return (
     <div className="px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
       {/* 폭 제한 없음 — PC에서 화면을 축소하면 표도 옆으로 넓어진다 */}
-      <h1 className="display-heading mb-3">회원 관리 <span className="text-[0.7em] text-[#888]">({centerLabel})</span></h1>
-      <p className="text-[14px] text-[#666] leading-[2] mb-8">
-        카카오로 로그인한 보호자예요. 승인한 회원만 수업 신청 등을 할 수 있어요.
-      </p>
+      <h1 className="display-heading mb-6">회원 관리 <span className="text-[0.7em] text-[#888]">({centerLabel})</span></h1>
 
       <div role="tablist" className="flex gap-1.5 mb-5">
-        {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`], ['children', `아이 명단 ${kids.filter(k => (k.center ?? 'eunpyeong') === center).length}`], ['payments', '결제내역']] as const).map(([key, label]) => (
+        {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`], ['methods', '결제방식 관리'], ['children', `아이 명단 ${kids.filter(k => (k.center ?? 'eunpyeong') === center).length}`], ['payments', '결제내역']] as const).map(([key, label]) => (
           <button key={key} role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}
             className={[
               'text-[13px] px-4 py-2 border transition-colors',
@@ -365,6 +345,9 @@ export default function MembersView({ center }: { center: Center }) {
       ) : filter === 'children' ? (
         <ChildrenTab members={members} center={center} onLinked={loadKids} onMembersChanged={load} />
       ) : (<>
+      {filter === 'methods' && (
+        <p className="mb-2 text-[12px] text-[#888]">승인된 회원이 쓰는 결제방식이에요. 체크하면 바로 저장되고, 아이 명단의 쓰는 결제와 같은 값이에요.</p>
+      )}
       {filter === 'waiting' && (
         <p className="mb-2 text-[12px] text-[#888]">아이 명단에 <b className="font-normal text-[#555]">아이 이름 · 휴대전화 뒷번호</b>가 같은 아이가 등록돼 있으면 <span className="text-[#16a34a]">승인 가능</span>이에요. 승인하면 그 아이와 자동으로 이어져요.</p>
       )}
@@ -372,7 +355,7 @@ export default function MembersView({ center }: { center: Center }) {
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
             <tr className="border-b border-[#e5e5e5]">
-              {filter !== 'waiting' && (
+              {filter === 'approved' && (
               <th className={`${th} w-8 pr-0`}>
                 <button type="button" onClick={() => setShowDates(v => !v)}
                   aria-label={showDates ? '카카오계정번호·회원 코드·가입일자·마지막 로그인 접기' : '카카오계정번호·회원 코드·가입일자·마지막 로그인 펼치기'} aria-expanded={showDates}
@@ -388,25 +371,24 @@ export default function MembersView({ center }: { center: Center }) {
               {datesOn && filter !== 'waiting' && <th className={th}>회원 코드</th>}
               {datesOn && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
               {datesOn && filter !== 'waiting' && <th className={th}>마지막 로그인</th>}
-              <th className={th}>보호자 닉네임</th>
+              <th className={th}>이름</th>
               <th className={`${th} text-center`}>수색점</th>
               <th className={`${th} text-center`}>의정부점</th>
-              <th className={th}>관리자 닉네임</th>
               <th className={th}>뒷번호</th>
               {filter === 'waiting' && <th className={th}>아이 명단</th>}
-              {filter !== 'waiting' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
-              {filter !== 'waiting' && <th className={`${th} text-center`}>선결제</th>}
+              {filter === 'methods' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
+              {filter === 'methods' && <th className={`${th} text-center`}>선결제</th>}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
               <th className={th}>설명</th>
-              <th className={th}><span className="sr-only">관리</span></th>
+              {filter !== 'methods' && <th className={th}><span className="sr-only">관리</span></th>}
             </tr>
           </thead>
           <tbody>
             {list.map(m => {
-              const on = editing === m.userId;
+              const on = editing === m.userId && filter !== 'methods';
               return (
                 <tr key={m.userId} className="border-b border-[#f0f0f0]">
-                  {filter !== 'waiting' && <td className={`${td} w-8 pr-0`} />}
+                  {filter === 'approved' && <td className={`${td} w-8 pr-0`} />}
                   {datesOn && <td className={`${td} text-[12px] text-[#999] whitespace-nowrap`} title={`카카오 회원번호 ${m.kakaoId}`}>{m.kakaoId || '-'}</td>}
                   {datesOn && filter !== 'waiting' && (<td className={`${td} whitespace-nowrap`}>
                     {on ? (
@@ -423,7 +405,7 @@ export default function MembersView({ center }: { center: Center }) {
                       <span key={k.id} className="block text-[11px] text-[#aaa] tabular-nums">{(k.center ?? 'eunpyeong') === 'uijeongbu' ? '의정부' : '수색'} {k.memberCode}</span>
                     ))}
                   </td>)}
-                  {datesOn && <td className={`${td} whitespace-nowrap`}>{fmtDate(approvedHere(m) ?? m.joinedAt)}</td>}
+                  {datesOn && <td className={`${td} whitespace-nowrap`}>{fmtDate(approvedHere(m) ?? (isExtra(m) ? requestedAt.get(`${m.userId}|${center}`) : undefined) ?? m.joinedAt)}</td>}
                   {datesOn && filter !== 'waiting' && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
                   <td className={td}>
                     {on ? <input className={input} value={form.nickname} maxLength={20} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} />
@@ -438,10 +420,6 @@ export default function MembersView({ center }: { center: Center }) {
                       </td>
                     );
                   })}
-                  <td className={td}>
-                    {on ? <input className={input} value={form.centerNickname} maxLength={20} placeholder="예: 김민준" onChange={e => setForm(f => ({ ...f, centerNickname: e.target.value }))} />
-                      : m.centerNickname ? <span className="text-[var(--brand)]">{m.centerNickname}</span> : <span className="text-[#ccc]">-</span>}
-                  </td>
                   <td className={`${td} whitespace-nowrap tabular-nums`}>
                     {on ? <input className={`${input} w-14 text-center`} value={form.phone} inputMode="numeric" maxLength={4} placeholder="1234"
                       onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 4) }))} />
@@ -466,13 +444,13 @@ export default function MembersView({ center }: { center: Center }) {
                       })()}
                     </td>
                   )}
-                  {filter !== 'waiting' && SUPPORTS.map(x => (
+                  {filter === 'methods' && SUPPORTS.map(x => (
                     <td key={x.key} className={`${td} text-center`}>
-                      <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname} aria-label={`${m.centerNickname || m.nickname} ${x.label}`}
+                      <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname} aria-label={`${m.nickname} ${x.label}`}
                         onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />
                     </td>
                   ))}
-                  {filter !== 'waiting' && (
+                  {filter === 'methods' && (
                     <td className={`${td} text-center`}>
                       {/* 선결제 — 아이 명단의 체크와 같은 칸(연결된 아이가 있어야 체크할 수 있다) */}
                       <input type="checkbox" checked={!!kidOf(m.userId)?.uses?.prepaid} disabled={!kidOf(m.userId)}
@@ -511,7 +489,7 @@ export default function MembersView({ center }: { center: Center }) {
                     {on ? <input className={input} value={form.memo} placeholder="메모" onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} />
                       : <span className="text-[#666] whitespace-pre-line">{m.memo || ''}</span>}
                   </td>
-                  <td className={`${td} text-right`}>
+                  {filter !== 'methods' && <td className={`${td} text-right`}>
                     <div className="flex justify-end gap-1">
                       {on ? (
                         <>
@@ -528,7 +506,7 @@ export default function MembersView({ center }: { center: Center }) {
                         </>
                       )}
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               );
             })}

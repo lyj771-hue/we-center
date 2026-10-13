@@ -67,7 +67,7 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
       // 연결된 보호자 계정의 지원 항목도 같이
       const g = k.guardianUserId ? memberOf.get(k.guardianUserId) : undefined;
       if (g && (PROFILE_KEYS as UsesKey[]).includes(key) && g[key as MonthKey] !== on) {
-        await saveMemberProfile({ userId: g.userId, nickname: g.nickname, centerNickname: g.centerNickname, memo: g.memo, approvedAt: g.approvedAt, [key]: on });
+        await saveMemberProfile({ userId: g.userId, nickname: g.nickname, memo: g.memo, approvedAt: g.approvedAt, [key]: on });
         onMembersChanged();
       }
       onLinked();   // 회원 관리 화면이 들고 있는 아이 명단도 새로 — 승인 탭 체크가 이걸 보여 준다
@@ -278,7 +278,7 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
           <select value={form.guardian} onChange={e => setForm(f => ({ ...f, guardian: e.target.value }))}
             className="text-[13px] border border-[#ddd] bg-white px-2 py-1 max-w-[160px]">
             <option value="">연결 안 함</option>
-            {approved.map(m => <option key={m.userId} value={m.userId}>{m.nickname}{m.centerNickname && m.centerNickname !== m.nickname ? ` (${m.centerNickname})` : ''}</option>)}
+            {approved.map(m => <option key={m.userId} value={m.userId}>{m.nickname}{m.phoneLast4 ? ` (${m.phoneLast4})` : ''}</option>)}
           </select>
         )}
       </td>

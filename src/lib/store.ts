@@ -400,6 +400,13 @@ export async function deleteProfile(userId: string): Promise<void> {
   if (error) throw error;
 }
 
+/** 관리자: 다른 지점 가입 신청일 — "회원|지점" → 신청 시각 */
+export async function getMemberCenterRequests(): Promise<Map<string, string>> {
+  const { data, error } = await supabase.from('member_centers').select('user_id, center, requested_at');
+  if (error) throw error;
+  return new Map((data ?? []).map(r => [`${r.user_id}|${r.center}`, r.requested_at as string]));
+}
+
 /** 관리자: 다른 지점 가입 신청 전부 — "회원|지점" → 승인 시각(없으면 null = 승인 대기) */
 export async function getMemberCenters(): Promise<Map<string, string | null>> {
   const { data, error } = await supabase.from('member_centers').select('user_id, center, approved_at');
