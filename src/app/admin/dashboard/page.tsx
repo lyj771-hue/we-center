@@ -48,23 +48,24 @@ export default function DashboardPage() {
   }, [month]);
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
 
-  // 센터별 선생님 — 소속 센터로(은평: 이정길·허홍석·선우용·이원재 / 의정부: 김영훈·문석현). 이원재는 수요일만 의정부라 은평 소속, 설영수는 뺀다
-  // 표 순서 — 은평: 이정길·허홍석·선우용·이원재, 의정부: 김영훈·문석현 (그 밖의 선생님은 뒤에)
-  const ORDER = ['이정길', '허홍석', '선우용', '이원재', '김영훈', '문석현'];
-  const orderOf = (name: string) => (ORDER.indexOf(name) + 1 || 99);
-  const HOME: Record<string, Center> = { 이원재: 'eunpyeong' };
-  const branchOf = (t: Teacher) => HOME[t.name] ?? (t.centers.length === 1 ? (t.centers[0] as Center) : null);
+  // 센터별 선생님 — 그 센터에서 일하는 선생님(은평: 이정길·허홍석·선우용·이원재 / 의정부: 김영훈·문석현·이원재). 설영수는 뺀다.
+  // 두 센터 선생님(이원재: 수요일 의정부)은 센터마다 그 센터 수업만 센다
+  // 표 순서 — 은평: 이정길·허홍석·선우용·이원재, 의정부: 김영훈·문석현·이원재 (그 밖의 선생님은 뒤에)
+  const ORDER: Record<string, string[]> = { eunpyeong: ['이정길', '허홍석', '선우용', '이원재'], uijeongbu: ['김영훈', '문석현', '이원재'] };
+  const orderOf = (name: string, c: string) => ((ORDER[c] ?? []).indexOf(name) + 1 || 99);
+  const EXCLUDE = ['설영수'];
+  const keyOf = (tid: string, c: string) => `${tid}|${c}`;
   const sections = CENTERS.filter(c => center === 'all' || c.key === center)
-    .map(c => ({ ...c, teachers: teachers.filter(t => branchOf(t) === c.key).sort((x, y) => orderOf(x.name) - orderOf(y.name)) }));
-  const inShown = useMemo(() => new Set(sections.flatMap(sct => sct.teachers.map(t => t.id))), [sections]);
-  const filtered = useMemo(() => rows.filter(r => r.teacher_id && inShown.has(r.teacher_id)), [rows, inShown]);
+    .map(c => ({ ...c, teachers: teachers.filter(t => !EXCLUDE.includes(t.name) && t.centers.includes(c.key)).sort((x, y) => orderOf(x.name, c.key) - orderOf(y.name, c.key)) }));
+  const inShown = useMemo(() => new Set(sections.flatMap(sct => sct.teachers.map(t => keyOf(t.id, sct.key)))), [sections]);
+  const filtered = useMemo(() => rows.filter(r => r.teacher_id && inShown.has(keyOf(r.teacher_id, r.center ?? 'eunpyeong'))), [rows, inShown]);
   const done = filtered.filter(r => r.confirmed);
   const pendingCount = filtered.length - done.length;
   // 선생님 × 결제방식 → 횟수
   const grid = useMemo(() => {
     const g = new Map<string, Map<PayMethod, number>>();
     for (const r of done) {
-      const tid = r.teacher_id ?? '?';
+      const tid = keyOf(r.teacher_id ?? '?', r.center ?? 'eunpyeong');
       const m = g.get(tid) ?? new Map<PayMethod, number>();
       m.set(r.method, (m.get(r.method) ?? 0) + 1);
       g.set(tid, m);
@@ -76,8 +77,8 @@ export default function DashboardPage() {
   const sumOf = (tid: string, list: { key: PayMethod }[]) => list.reduce((a, x) => a + (grid.get(tid)?.get(x.key) ?? 0), 0);
   const groupTotal = (list: { key: PayMethod }[]) => list.reduce((a, x) => a + methodTotal(x.key), 0);
   // 센터 소계 — 그 센터 선생님들만
-  const secSum = (ts: Teacher[], list: { key: PayMethod }[]) => ts.reduce((a, t) => a + sumOf(t.id, list), 0);
-  const secMethod = (ts: Teacher[], k: PayMethod) => ts.reduce((a, t) => a + (grid.get(t.id)?.get(k) ?? 0), 0);
+  const secSum = (ts: Teacher[], c: string, list: { key: PayMethod }[]) => ts.reduce((a, t) => a + sumOf(keyOf(t.id, c), list), 0);
+  const secMethod = (ts: Teacher[], c: string, k: PayMethod) => ts.reduce((a, t) => a + (grid.get(keyOf(t.id, c))?.get(k) ?? 0), 0);
   // 표에 나오는 선생님 — 그 센터에서 일하거나 이 달 기록이 있는 선생님
   const cellMax = Math.max(1, ...[...grid.values()].flatMap(m => [...m.values()]));
   const [y, m] = month.split('-').map(Number);
@@ -87,8 +88,8 @@ export default function DashboardPage() {
     rows: [
       ['센터', '선생님', ...SUPPORT.map(x => x.label), '지원 합계', '사설', '전체 합계'],
       ...sections.flatMap(sct => [
-        ...sct.teachers.map(t => [sct.label, t.name, ...SUPPORT.map(x => grid.get(t.id)?.get(x.key) ?? 0), sumOf(t.id, SUPPORT), sumOf(t.id, PRIVATE), totalOf(t.id)]),
-        [sct.label, `${sct.label} 합계`, ...SUPPORT.map(x => secMethod(sct.teachers, x.key)), secSum(sct.teachers, SUPPORT), secSum(sct.teachers, PRIVATE), secSum(sct.teachers, [...SUPPORT, ...PRIVATE])],
+        ...sct.teachers.map(t => { const k = keyOf(t.id, sct.key); return [sct.label, t.name, ...SUPPORT.map(x => grid.get(k)?.get(x.key) ?? 0), sumOf(k, SUPPORT), sumOf(k, PRIVATE), totalOf(k)]; }),
+        [sct.label, `${sct.label} 합계`, ...SUPPORT.map(x => secMethod(sct.teachers, sct.key, x.key)), secSum(sct.teachers, sct.key, SUPPORT), secSum(sct.teachers, sct.key, PRIVATE), secSum(sct.teachers, sct.key, [...SUPPORT, ...PRIVATE])],
       ]),
       ...(sections.length > 1 ? [['', '전체 합계', ...SUPPORT.map(x => methodTotal(x.key)), groupTotal(SUPPORT), groupTotal(PRIVATE), done.length]] : []),
     ],
@@ -164,21 +165,22 @@ export default function DashboardPage() {
                     <td colSpan={SUPPORT.length + 4} className="px-3 pt-4 pb-1.5 text-[13px] text-[var(--brand)]">{sct.label}점</td>
                   </tr>
                   {sct.teachers.map(t => {
-                    const total = totalOf(t.id);
+                    const k = keyOf(t.id, sct.key);
+                    const total = totalOf(k);
                     return (
                       <tr key={t.id} className="border-b border-[#f3f3f3]">
                         <td className="px-3 py-2 pl-5 whitespace-nowrap sticky left-0 bg-white">{t.name}</td>
                         {SUPPORT.map(x => {
-                          const n = grid.get(t.id)?.get(x.key) ?? 0;
+                          const n = grid.get(k)?.get(x.key) ?? 0;
                           return (
                             <td key={x.key} className="px-1 py-1 text-center">
                               <span title={`${t.name} · ${x.label} ${n}회`} className={`block rounded-md py-1.5 tabular-nums ${n ? 'text-[#27272a]' : 'text-[#d4d4d8]'}`} style={{ background: shade(n) }}>{n}</span>
                             </td>
                           );
                         })}
-                        <td className="px-3 py-2 text-center tabular-nums text-[13px] bg-[#f1f5fb] text-[#27272a]" title={`${t.name} 지원 합계`}>{sumOf(t.id, SUPPORT)}</td>
+                        <td className="px-3 py-2 text-center tabular-nums text-[13px] bg-[#f1f5fb] text-[#27272a]" title={`${t.name} 지원 합계`}>{sumOf(k, SUPPORT)}</td>
                         <td className="px-3 py-2 text-center tabular-nums text-[13px] bg-[#f7f7f7] text-[#27272a]"
-                          title={`${t.name} 사설 — ${PRIVATE.map(x => `${x.label} ${grid.get(t.id)?.get(x.key) ?? 0}`).join(' · ')}`}>{sumOf(t.id, PRIVATE)}</td>
+                          title={`${t.name} 사설 — ${PRIVATE.map(x => `${x.label} ${grid.get(k)?.get(x.key) ?? 0}`).join(' · ')}`}>{sumOf(k, PRIVATE)}</td>
                         <td className="px-3 py-2 text-center tabular-nums text-[14px] text-[#27272a]" title={`${t.name} 전체 ${total}회`}>{total}</td>
                       </tr>
                     );
@@ -186,10 +188,10 @@ export default function DashboardPage() {
                   {/* 센터 소계 */}
                   <tr className="border-b border-[#e5e5e5] bg-[#fcfcfc]">
                     <td className="px-3 py-2 pl-5 text-[12px] text-[#888] sticky left-0 bg-[#fcfcfc]">{sct.label} 합계</td>
-                    {SUPPORT.map(x => <td key={x.key} className="px-1 py-2 text-center tabular-nums text-[13px] text-[#555]">{secMethod(sct.teachers, x.key)}</td>)}
-                    <td className="px-3 py-2 text-center tabular-nums text-[13px] bg-[#e9f0fa] text-[#27272a]">{secSum(sct.teachers, SUPPORT)}</td>
-                    <td className="px-3 py-2 text-center tabular-nums text-[13px] bg-[#f0f0f0] text-[#27272a]">{secSum(sct.teachers, PRIVATE)}</td>
-                    <td className="px-3 py-2 text-center tabular-nums text-[14px] text-[#27272a]">{secSum(sct.teachers, [...SUPPORT, ...PRIVATE])}</td>
+                    {SUPPORT.map(x => <td key={x.key} className="px-1 py-2 text-center tabular-nums text-[13px] text-[#555]">{secMethod(sct.teachers, sct.key, x.key)}</td>)}
+                    <td className="px-3 py-2 text-center tabular-nums text-[13px] bg-[#e9f0fa] text-[#27272a]">{secSum(sct.teachers, sct.key, SUPPORT)}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-[13px] bg-[#f0f0f0] text-[#27272a]">{secSum(sct.teachers, sct.key, PRIVATE)}</td>
+                    <td className="px-3 py-2 text-center tabular-nums text-[14px] text-[#27272a]">{secSum(sct.teachers, sct.key, [...SUPPORT, ...PRIVATE])}</td>
                   </tr>
                 </Fragment>
               ))}
