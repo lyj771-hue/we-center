@@ -490,7 +490,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   return (
     <div className="px-3 md:px-6 pt-6 pb-14 fade-up">
-      <div className="max-w-[1400px] mx-auto">
+      <div className="mx-auto">
         <h1 className="display-heading mb-5">{isTest ? '시간표(테스트)' : '시간표'}{fixedCenter && <span className="text-[0.7em] text-[#888]"> ({fixedCenter === 'uijeongbu' ? '의정부' : '수색'})</span>}</h1>
         {isTest ? (
           <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-[#fef3c7] px-4 py-3 text-[13px] text-[#92400e]">
