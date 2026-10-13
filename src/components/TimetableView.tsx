@@ -259,6 +259,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     if (st === dbAssign(id)) n.delete(id); else n.set(id, st);
     return n;
   });
+  // 의정부는 선생님이 적어서 메모 칸을 둔다 (40분 수업, 4시 시작 같은 것)
+  const showMemo = center === 'uijeongbu';
+
   // 테스트 화면 — 이 아이 칸만 고칠 수 있고, 다른 아이가 있는 칸은 잠근다
   const isTest = !!testChildName;
   const testKid = isTest ? children.find(c => c.name === testChildName) : undefined;
@@ -308,6 +311,15 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     const c = e.cell;
     if (c.status !== 'child') return;
     const input: CellInput = { status: 'child', childId: c.childId ?? null, name: c.name, payment: c.payment, kind, absent: c.absent, moved: c.moved, note: c.note };
+    stage(e, input, mode === 'day' && e.side === 'fixed' && c.source === 'fixed');
+  };
+
+  // 메모 고치기 — 수업 종류와 같은 규칙(고정 수업이면 이 날부터 / 오늘부터, 그날 칸이면 그날만)
+  const changeNote = async (e: Editing) => {
+    const c = e.cell;
+    const v = await askPrompt(`${c.name} — 메모`, c.note ?? '');
+    if (v === null || v.trim() === (c.note ?? '')) return;
+    const input: CellInput = { status: 'child', childId: c.childId ?? null, name: c.name, payment: c.payment, kind: c.kind ?? null, absent: c.absent, moved: c.moved, note: v.trim() };
     stage(e, input, mode === 'day' && e.side === 'fixed' && c.source === 'fixed');
   };
 
@@ -554,7 +566,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             <thead>
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white w-16`}>시간</th>
-                <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : mode === 'day' ? 4 : 2), 0) || 1}>
+                <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : (mode === 'day' ? 4 : 2) + (showMemo ? 1 : 0)), 0) || 1}>
                   {mode === 'day' ? `${DOW[d.getDay()]} / ${d.getMonth() + 1}월 ${d.getDate()}일` : `${DOW[weekday]}요일 고정 시간표`}
                   {mode === 'day' && holiday && <span className="ml-2 text-[12px] text-red-400">공휴일 — 고정 수업 없음</span>}
                 </th>
@@ -562,7 +574,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white`} />
                 {shown.map(t => (
-                  <th key={t.id} colSpan={folded.has(t.name) ? 1 : mode === 'day' ? 4 : 2} className={`${th} text-[14px] text-[#16a34a] whitespace-nowrap`}>
+                  <th key={t.id} colSpan={folded.has(t.name) ? 1 : (mode === 'day' ? 4 : 2) + (showMemo ? 1 : 0)} className={`${th} text-[14px] text-[#16a34a] whitespace-nowrap`}>
                     <button type="button" onClick={() => toggleFold(t.name)} title={folded.has(t.name) ? '펼치기' : '접기'}
                       className="inline-flex items-center gap-1 hover:opacity-70">
                       {t.name}<span className="text-[10px] text-[#aaa]">{folded.has(t.name) ? '▸' : '◂'}</span>
@@ -586,8 +598,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                   <FragmentPair key={t.id} left={<th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>고정</th>} right={mode === 'day' ? <>
                     <th className={`${th} text-[10px] text-[#999] min-w-[84px]`}>빈타임</th>
                     <th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>
+                    {showMemo && <th className={`${th} text-[10px] text-[#999] min-w-[90px]`}>메모</th>}
                     <th className={`${th} text-[10px] text-[#16a34a] min-w-[64px]`}>결제방식</th>
-                  </> : <th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>} />
+                  </> : <><th className={`${th} text-[10px] text-[#999] min-w-[46px] px-0.5`}>수업</th>{showMemo && <th className={`${th} text-[10px] text-[#999] min-w-[90px]`}>메모</th>}</>} />
                 ))}
               </tr>
             </thead>
@@ -620,6 +633,14 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                         ) : kc.status === 'child' && !locked(kc) ? <span className="text-[11px] text-[#71717a]">{kindLabel(kc.kind)}</span> : null}
                       </td>
                     );
+                    // 메모 칸 (의정부) — 누르면 고친다
+                    const memoTd = showMemo ? (
+                      <td className={`border border-[#e4e4e7] h-9 min-w-[90px] max-w-[160px] px-1.5 text-left align-middle text-[10px] leading-[1.3] text-[#71717a] ${kc.status === 'child' && !locked(kc) ? 'cursor-pointer hover:bg-[#f0f6fe]' : ''}`}
+                        title={kc.note ? `메모: ${kc.note}` : kc.status === 'child' ? '눌러서 메모 쓰기' : ''}
+                        onClick={() => { if (kc.status === 'child' && !locked(kc)) changeNote({ teacher: t, time, side: kSide, cell: kc }); }}>
+                        {kc.status === 'child' && !locked(kc) ? kc.note : null}
+                      </td>
+                    ) : null;
                     const pendL = view.pend.has(`fixed|${t.id}|${time}`);
                     const pendR = view.pend.has(`open|${t.id}|${time}`);
                     return (
@@ -640,6 +661,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                             <CellText cell={right} label={ROW_LABEL[time]} />
                           </td>}
                           {kindTd}
+                          {memoTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
                             {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved && !locked(c)).map((c, i) => (
@@ -650,7 +672,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                                 onPay={c.childId ? e => pay(c.childId!, t.id, time, e) : undefined} />
                             ))}
                           </td>
-                        </>) : kindTd}
+                        </>) : <>{kindTd}{memoTd}</>}
                       />
                     );
                   })}

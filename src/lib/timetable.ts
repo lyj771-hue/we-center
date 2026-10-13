@@ -315,7 +315,8 @@ export async function resetDayCell(day: string, teacherId: string, time: string,
 export async function saveFixed(weekday: number, teacherId: string, time: string, c: CellInput, center: Center = 'eunpyeong'): Promise<void> {
   const { error } = await supabase.from('fixed_lessons').upsert(
     { center, weekday, teacher_id: teacherId, time, child_id: c.childId ?? null, name: c.name?.trim() ?? '', payment: c.payment?.trim() ?? '',
-      oral: c.kind !== undefined ? c.kind === 'oral' : !!c.oral, ...(c.kind !== undefined ? { kind: c.kind } : {}) },
+      oral: c.kind !== undefined ? c.kind === 'oral' : !!c.oral, ...(c.kind !== undefined ? { kind: c.kind } : {}),
+      ...(c.note !== undefined ? { note: c.note.trim() || null } : {}) },
     { onConflict: 'center,teacher_id,weekday,time' },
   );
   if (error) throw error;
