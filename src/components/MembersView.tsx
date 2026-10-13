@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { deleteProfile, getMemberCenters, getMembers, saveMemberProfile, setMemberCenterApproved } from '@/lib/store';
 import type { Member, MemberExtras } from '@/lib/types';
@@ -68,12 +68,45 @@ export default function MembersView({ center }: { center: Center }) {
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
 
+  // 이 지점 아이와 저절로 잇기(아래 autoLink.current) — 명단·회원을 새로 읽을 때마다
+  const autoTried = useRef(new Set<string>());
+  const autoLink = useRef<() => void>(() => {});
+  useEffect(() => { autoLink.current(); }, [kids, members, extraCenters, center]);
+
   if (!isAdmin) {
     return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
   }
 
   // 이 센터 명단에서 그 계정과 이어진 아이 (두 센터를 다니면 센터마다 따로 잇는다)
   const kidOf = (userId: string) => kids.find(k => k.guardianUserId === userId && (k.center ?? 'eunpyeong') === center);
+  // 다른 지점 명단에서 이 계정과 이어진 아이 (예: 수색에 먼저 등록된 김유담)
+  // [미연결 · 잇기] — 뒷번호가 달라 저절로 못 이었을 때, 이름이 같은 이 지점 아이를 보여 주고 확인받아 잇는다
+  const linkByName = async (m: Member) => {
+    const others = kids.filter(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') !== center);
+    const names = new Set([m.nickname, m.centerNickname ?? '', ...others.flatMap(k => [k.name, `${k.name}${k.number ?? ''}`])].map(x => x.trim()).filter(Boolean));
+    const hits = kids.filter(k => (k.center ?? 'eunpyeong') === center && (names.has(k.name) || names.has(`${k.name}${k.number ?? ''}`)));
+    const label = [...names][0] ?? m.nickname;
+    if (!hits.length) { await showAlert(`${centerLabel} 아이 명단에 "${label}"이(가) 없어요.\n아이 명단에 먼저 넣은 뒤 다시 눌러 주세요.`); return; }
+    if (hits.length > 1) { await showAlert(`${centerLabel} 아이 명단에 같은 이름이 ${hits.length}명 있어요 (${hits.map(k => `${k.memberCode} ${k.name}${k.number ?? ''}`).join(', ')}).\n[수정]에서 회원 코드를 적어 이어 주세요.`); return; }
+    const k = hits[0];
+    const phone = m.phoneLast4 ?? others.find(o => o.phoneLast4)?.phoneLast4;
+    const why = k.guardianUserId && k.guardianUserId !== m.userId ? `\n※ 지금 다른 계정(${members.find(x => x.userId === k.guardianUserId)?.nickname ?? '알 수 없음'})에 이어져 있어요 — 이 계정으로 옮겨요.`
+      : !k.phoneLast4 ? '\n(명단 아이의 뒷번호가 비어 있어서 저절로 잇지 못했어요)'
+      : k.phoneLast4 !== phone ? `\n(뒷번호가 달라서 저절로 잇지 못했어요: 명단 ${k.phoneLast4} / 보호자 ${phone ?? '없음'})` : '';
+    if (!(await askConfirm(`${centerLabel} ${k.memberCode} ${k.name}${k.number ?? ''} 와(과) 이 계정을 이을까요?${why}`))) return;
+    try { await linkChild(k.id, m.userId); loadKids(); await showAlert(`이었어요. ${centerLabel} ${k.memberCode} ${k.name}${k.number ?? ''}`); }
+    catch (e) { showAlert(`잇지 못했어요.\n${(e as Error).message}`); }
+  };
+  const otherKidsOf = (userId: string) => kids.filter(k => k.guardianUserId === userId && (k.center ?? 'eunpyeong') !== center);
+  // 이 지점 명단에서 같은 아이 찾기 — 이름(보호자·관리자 닉네임, 다른 지점에 이어진 아이 이름)과 뒷번호 4자리가 둘 다 같고, 다른 계정에 안 이어진 아이
+  const sameKidsHere = (m: Member, list: Child[], centerNickname = m.centerNickname ?? '') => {
+    const others = list.filter(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') !== center);
+    const names = [m.nickname, centerNickname, ...others.flatMap(k => [k.name, `${k.name}${k.number ?? ''}`])].map(x => x.trim()).filter(Boolean);
+    const phones = [m.phoneLast4, ...others.map(k => k.phoneLast4)].filter((x): x is string => !!x);
+    return list.filter(k => (k.center ?? 'eunpyeong') === center && (!k.guardianUserId || k.guardianUserId === m.userId)
+      && !!k.phoneLast4 && phones.includes(k.phoneLast4)
+      && names.some(n => n === k.name || n === `${k.name}${k.number ?? ''}` || n === `${k.number ?? ''}${k.name}`));
+  };
 
   const startEdit = (m: Member) => {
     setEditing(m.userId);
@@ -133,13 +166,12 @@ export default function MembersView({ center }: { center: Center }) {
   // 승인할 때 아이 명단과 자동 연결 — 이름(보호자 닉네임 또는 관리자 닉네임, 앞 숫자 포함 가능)과 뒷번호 4자리가 둘 다 같은 아이가 딱 하나면 잇는다
   const matchChild = async (m: Member, centerNickname: string): Promise<Child | undefined> => {
     if (kidOf(m.userId)) return kidOf(m.userId);   // 이미 연결됨
-    if (!m.phoneLast4) { await showAlert('승인했어요.\n뒷번호가 없어서 아이 명단과는 연결하지 않았어요.'); return; }
-    const names = [m.nickname, centerNickname].map(x => x.trim()).filter(Boolean);
     // 화면을 연 뒤에 명단(뒷번호 등)이 바뀌었을 수 있으니 새로 읽어서 맞춘다
     const fresh = await getChildren().catch(() => kids);
     const already = fresh.find(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') === center);
     if (already) { setKids(fresh); return already; }
-    const hits = fresh.filter(k => (k.center ?? 'eunpyeong') === center && k.phoneLast4 === m.phoneLast4 && names.some(n => n === k.name || n === `${k.name}${k.number ?? ''}` || n === `${k.number ?? ''}${k.name}`));
+    if (!m.phoneLast4 && !fresh.some(k => k.guardianUserId === m.userId && k.phoneLast4)) { await showAlert('승인했어요.\n뒷번호가 없어서 아이 명단과는 연결하지 않았어요.'); return; }
+    const hits = sameKidsHere(m, fresh, centerNickname);
     if (hits.length !== 1) {
       await showAlert(hits.length
         ? `승인했어요.\n이름·뒷번호가 같은 아이가 ${hits.length}명이라 자동 연결하지 않았어요. 회원 코드로 직접 연결해 주세요.`
@@ -172,7 +204,7 @@ export default function MembersView({ center }: { center: Center }) {
           break;
         }
       }
-    } else if (!(await askConfirm(`"${m.nickname}" 회원의 승인을 취소할까요?`))) {
+    } else if (!(await askConfirm(`"${m.nickname}" 회원의 승인을 취소할까요?\n${centerLabel} 아이 명단과의 연결도 끊어요.`))) {
       return;
     }
     const approvedAt = approve ? new Date().toISOString() : undefined;
@@ -185,6 +217,9 @@ export default function MembersView({ center }: { center: Center }) {
         approvedAt: approvedAt,
       });
       if (r === 'taken') { await showAlert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
+      // 승인 취소 — 이 지점 아이와의 연결도 끊는다 (다른 지점 연결은 그대로)
+      const here = kidOf(m.userId);
+      if (!approve && here) { await linkChild(here.id, null); loadKids(); autoTried.current.add(`${m.userId}|${center}`); }
       if (approve) {
         // 아이 명단과 이어지면 관리자 닉네임 = 아이 이름+숫자 (예: 김채현3)
         const k = await matchChild(m, centerNickname);
@@ -214,9 +249,35 @@ export default function MembersView({ center }: { center: Center }) {
   const approved = mine.filter(m => approvedHere(m));
   const setApprovedHere = async (m: Member, approve: boolean) => {
     if (!isExtra(m)) return setApproved(m, approve);
-    if (!approve && !(await askConfirm(`"${m.nickname}" 회원의 ${centerLabel} 가입 승인을 취소할까요?`))) return;
-    try { await setMemberCenterApproved(m.userId, center, approve); load(); }
-    catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
+    if (!approve && !(await askConfirm(`"${m.nickname}" 회원의 ${centerLabel} 가입 승인을 취소할까요?\n${centerLabel} 아이 명단과의 연결도 끊어요.`))) return;
+    try {
+      await setMemberCenterApproved(m.userId, center, approve);
+      // 승인 취소 — 이 지점 아이와의 연결도 끊는다 (다른 지점 연결은 그대로)
+      const here = kidOf(m.userId);
+      if (!approve && here) { await linkChild(here.id, null); loadKids(); autoTried.current.add(`${m.userId}|${center}`); }
+      // 추가 지점 승인 — 이 지점 명단의 같은 아이(이름·뒷번호)와도 잇는다 (지점마다 회원 코드가 따로라서)
+      if (approve) await matchChild(m, m.centerNickname ?? '');
+      load();
+    }
+    catch (e) { showAlert(`저장하지 못했어요. 다시 시도해 주세요.\n${(e as Error).message ?? ''}`); load(); loadKids(); }
+  };
+  // 이미 승인된 회원인데 이 지점 아이와 아직 안 이어졌으면 — 이름·뒷번호가 같은 아이가 딱 하나일 때 저절로 잇는다
+  // (수색에 먼저 등록되고 나중에 의정부를 신청한 아이 등). 한 번 시도한 회원은 다시 하지 않는다
+  autoLink.current = () => {
+    if (!kids.length || !members.length) return;
+    const todo = approved.filter(m => !kidOf(m.userId) && !autoTried.current.has(`${m.userId}|${center}`));
+    if (!todo.length) return;
+    (async () => {
+      let linked = 0;
+      for (const m of todo) {
+        autoTried.current.add(`${m.userId}|${center}`);
+        const hits = sameKidsHere(m, kids);
+        if (hits.length === 1 && !hits[0].guardianUserId) {
+          try { await linkChild(hits[0].id, m.userId); linked++; } catch { /* 다음에 수동으로 */ }
+        }
+      }
+      if (linked) loadKids();
+    })();
   };
   // 미승인 회원이 지금 아이 명단에 있는지 — 이미 연결된 아이, 아니면 이 센터에서 이름(닉네임·관리자 닉네임, 앞뒤 숫자 포함)이나 가입할 때 적은 회원 코드가 같은 아이
   const rosterOf = (m: Member): Child[] => {
@@ -306,7 +367,14 @@ export default function MembersView({ center }: { center: Center }) {
                         onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
                     ) : kidOf(m.userId) ? (
                       <span className="text-[12px]"><span className="text-[#888] tabular-nums">{kidOf(m.userId)!.memberCode}</span> {kidOf(m.userId)!.name}{kidOf(m.userId)!.number ?? ''}</span>
+                    ) : otherKidsOf(m.userId).length ? (
+                      <button type="button" onClick={() => linkByName(m)} className="text-[12px] text-[#f59e0b] underline underline-offset-2 hover:text-[#b45309]"
+                        title={`${centerLabel} 아이 명단과 아직 안 이어졌어요 — 눌러서 같은 이름 아이와 잇기`}>{centerLabel} 미연결 · 잇기</button>
                     ) : m.requestedCode ? <span className="text-[12px] text-[#f59e0b]" title="가입할 때 적은 회원 코드 — 아직 연결 안 됨">요청 {m.requestedCode}</span> : <span className="text-[#ccc]">-</span>}
+                    {/* 다른 지점 회원 코드 — 두 지점을 다니면 지점마다 코드가 있다 */}
+                    {!on && otherKidsOf(m.userId).map(k => (
+                      <span key={k.id} className="block text-[11px] text-[#aaa] tabular-nums">{(k.center ?? 'eunpyeong') === 'uijeongbu' ? '의정부' : '수색'} {k.memberCode}</span>
+                    ))}
                   </td>)}
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(approvedHere(m) ?? m.joinedAt)}</td>}
                   {showDates && filter !== 'waiting' && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
@@ -337,8 +405,18 @@ export default function MembersView({ center }: { center: Center }) {
                           <div key={k.id}>
                             <span className="text-[#888] tabular-nums">{k.memberCode ?? '코드 없음'}</span> {k.name}{k.number ?? ''}
                             {m.phoneLast4 && k.phoneLast4 && k.phoneLast4 !== m.phoneLast4 && <span className="ml-1 text-[#bbb]">(뒷번호 {k.phoneLast4})</span>}
-                            {k.guardianUserId === m.userId ? <span className="ml-1 text-[var(--brand)]">연결됨</span>
-                              : k.guardianUserId && <span className="ml-1 text-[#bbb]">다른 계정 연결</span>}
+                            {k.guardianUserId === m.userId ? <>
+                              <span className="ml-1 text-[var(--brand)]">연결됨</span>
+                              {/* 승인 전인데 이어져 있으면 끊을 수 있게 (가입할 때 회원 코드로 이었거나, 승인 취소 전에 이어진 것) */}
+                              <button type="button" className="ml-1 text-[11px] text-[#aaa] underline underline-offset-2 hover:text-red-400"
+                                onClick={async () => {
+                                  if (!(await askConfirm(`${centerLabel} ${k.memberCode} ${k.name}${k.number ?? ''}와(과)의 연결을 끊을까요?`))) return;
+                                  try { await linkChild(k.id, null); autoTried.current.add(`${m.userId}|${center}`); loadKids(); }
+                                  catch (e) { showAlert(`끊지 못했어요.\n${(e as Error).message}`); }
+                                }}>끊기</button>
+                            </>
+                              : k.guardianUserId ? <span className="ml-1 text-[#bbb]">다른 계정 연결</span>
+                              : <span className="ml-1 text-[#bbb]" title="이름이 같은 명단 아이 — 승인하면 이어져요">(연결 안 됨)</span>}
                           </div>
                         ));
                       })()}
