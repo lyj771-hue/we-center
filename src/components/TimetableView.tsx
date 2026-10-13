@@ -282,12 +282,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   // 테스트 기록 지우기 — 이 아이의 결제 기록·그날 칸을 지운다(고정 수업·선결제 충전은 그대로)
   const clearTestRecords = async () => {
     if (!testId) return;
-    if (!(await askConfirm(`${testChildName}의 테스트 기록을 지울까요?\n· 결제 기록(선택·확정) 전부\n· 날짜별로 넣거나 바꾼 칸(빈타임 포함) 전부\n고정 수업과 선결제 충전·차감 기록은 그대로예요. 되돌릴 수 없어요.`))) return;
+    if (!(await askConfirm(`${testChildName}의 테스트 기록을 지울까요?\n· 결제 기록(선택·확정) 전부\n· 날짜별로 넣거나 바꾼 칸(빈타임 포함) 전부 — 단, [이 날부터 고정] 전의 지난 수업 칸은 남기고 결석·메모만 되돌려요\n고정 수업과 선결제 충전·차감 기록은 그대로예요. 되돌릴 수 없어요.`))) return;
     try {
-      const cells = await clearChildTestData(testId);
+      const r = await clearChildTestData(testId);
       setDraft(new Map()); setOps(new Map());
       await load();
-      showAlert(`지웠어요. (그날 칸 ${cells.length}개)`);
+      showAlert(`지웠어요. (그날 칸 ${r.deleted}개${r.kept ? ` · [이 날부터 고정] 전 지난 수업 ${r.kept}개는 남기고 결석·메모만 되돌림` : ''})`);
     } catch (e) {
       showAlert(`지우지 못했어요.\n${(e as Error).message}`);
     }

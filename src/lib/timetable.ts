@@ -529,17 +529,29 @@ export async function setDayAssign(day: string, teacherId: string, center: Cente
 }
 
 /** 시간표(테스트) — 이 아이의 결제 기록·그날 칸·이번 달 사용 횟수를 모두 지운다. 지운 칸을 돌려준다 */
-export async function clearChildTestData(childId: string): Promise<{ day: string; teacher_id: string; time: string; side: 'fixed' | 'open'; center: Center }[]> {
-  const { data: cells, error: e0 } = await supabase.from('board_cells').select('day, teacher_id, time, side, center').eq('child_id', childId);
-  if (e0) throw e0;
-  const [a, b, c] = await Promise.all([
+export async function clearChildTestData(childId: string): Promise<{ deleted: number; kept: number }> {
+  const [cellsRes, fixedRes] = await Promise.all([
+    supabase.from('board_cells').select('id, day, teacher_id, time, side, center, status').eq('child_id', childId),
+    supabase.from('fixed_lessons').select('center, teacher_id, weekday, time, start_date'),
+  ]);
+  if (cellsRes.error) throw cellsRes.error;
+  if (fixedRes.error) throw fixedRes.error;
+  // [이 날부터 고정]이 지난 날짜에 남긴 칸 — 고정 칸인데 그날을 덮는 고정 수업이 없는 칸(새 고정 시작일 전 등).
+  // 지우면 그날 수업이 통째로 사라지니, 지우지 않고 결석·옮김·메모만 되돌린다
+  const covered = (c: Row) => (fixedRes.data ?? []).some(f => f.center === c.center && f.teacher_id === c.teacher_id && f.time === c.time
+    && f.weekday === parseYmd(c.day as string).getDay() && ((f.start_date as string | null) ?? '2026-10-01') <= (c.day as string));
+  const cells = (cellsRes.data ?? []) as Row[];
+  const keep = cells.filter(c => c.side === 'fixed' && c.status === 'child' && !covered(c)).map(c => c.id as string);
+  const drop = cells.filter(c => !keep.includes(c.id as string)).map(c => c.id as string);
+  const [a, b, c, d] = await Promise.all([
     supabase.from('lesson_payments').delete().eq('child_id', childId),
-    supabase.from('board_cells').delete().eq('child_id', childId),
+    drop.length ? supabase.from('board_cells').delete().in('id', drop) : Promise.resolve({ error: null }),
+    keep.length ? supabase.from('board_cells').update({ absent: false, moved: false, note: null, updated_at: new Date().toISOString() }).in('id', keep) : Promise.resolve({ error: null }),
     supabase.from('child_month_usage').delete().eq('child_id', childId),
   ]);
-  for (const r of [a, b]) if (r.error) throw r.error;
-  void c;   // 표가 없어도(SQL 전) 괜찮다
-  return (cells ?? []) as { day: string; teacher_id: string; time: string; side: 'fixed' | 'open'; center: Center }[];
+  for (const r of [a, b, c]) if (r.error) throw r.error;
+  void d;   // 표가 없어도(SQL 전) 괜찮다
+  return { deleted: drop.length, kept: keep.length };
 }
 
 // ── 결제내역(월별) ──────────────────────────────────────────────────
