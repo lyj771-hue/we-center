@@ -19,6 +19,9 @@ export default function Footer() {
           </span>
         ))}
       </p>
+      <p className="mt-2">
+        <a href="/privacy" className="text-[#777] font-bold hover:text-[#333]">개인정보처리방침</a>
+      </p>
       <p className="mt-2 tracking-widest">© {new Date().getFullYear()} We 센터</p>
     </footer>
   );
