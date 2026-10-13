@@ -48,11 +48,12 @@ export default function DashboardPage() {
   }, [month]);
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
 
-  // 센터별 선생님 — 한 센터에서만 일하는 선생님만(은평: 이정길·허홍석·선우용·이원재 / 의정부: 김영훈·문석현). 두 센터 선생님(설영수)은 뺀다
+  // 센터별 선생님 — 소속 센터로(은평: 이정길·허홍석·선우용·이원재 / 의정부: 김영훈·문석현). 이원재는 수요일만 의정부라 은평 소속, 설영수는 뺀다
   // 표 순서 — 은평: 이정길·허홍석·선우용·이원재, 의정부: 김영훈·문석현 (그 밖의 선생님은 뒤에)
   const ORDER = ['이정길', '허홍석', '선우용', '이원재', '김영훈', '문석현'];
   const orderOf = (name: string) => (ORDER.indexOf(name) + 1 || 99);
-  const branchOf = (t: Teacher) => (t.centers.length === 1 ? (t.centers[0] as Center) : null);
+  const HOME: Record<string, Center> = { 이원재: 'eunpyeong' };
+  const branchOf = (t: Teacher) => HOME[t.name] ?? (t.centers.length === 1 ? (t.centers[0] as Center) : null);
   const sections = CENTERS.filter(c => center === 'all' || c.key === center)
     .map(c => ({ ...c, teachers: teachers.filter(t => branchOf(t) === c.key).sort((x, y) => orderOf(x.name) - orderOf(y.name)) }));
   const inShown = useMemo(() => new Set(sections.flatMap(sct => sct.teachers.map(t => t.id))), [sections]);
