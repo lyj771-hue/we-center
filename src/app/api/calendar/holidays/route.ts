@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { supabaseFor } from '@/lib/supabaseServer';
-import { koreanHolidayList, koreanHolidays } from '@/lib/googleCalendar';
+import { koreanHolidayList, koreanHolidays } from '@/lib/holidays';
 
 // 관리자 전용 — 대한민국 공휴일 날짜들. 시간표 관리에서 공휴일엔 고정 수업을 비운다.
 // ?from=YYYY-MM-DD&to=YYYY-MM-DD

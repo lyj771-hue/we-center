@@ -10,7 +10,7 @@ import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import {
   CENTERS, LESSON_KINDS, PAY_METHODS, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
-  rowsForDay, rowsForWeekday, saveDayCell, syncTimetable, clearChildTestData, getFixedByChild,
+  rowsForDay, rowsForWeekday, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
 } from '@/lib/timetable';
 
 // 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임 | 결제방식] 세 칸.
@@ -32,7 +32,7 @@ interface Editing {
   cell: CellView;
 }
 
-/** 아직 저장 안 한 시간표 변경 — [스케줄 변경 완료]에서 차례로 디비·캘린더에 반영한다.
+/** 아직 저장 안 한 시간표 변경 — [스케줄 변경 완료]에서 차례로 디비에 반영한다.
  *  day = 날짜별 칸, from = 날짜별 화면에서 "이 날부터 고정"(null = 이 날부터 고정 수업 없음), fixed = 고정 시간표 칸.
  *  auto = 선생님 빼기로 생긴 변경(다시 넣으면 같이 취소) */
 type Op =
@@ -129,12 +129,6 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     return () => window.removeEventListener('beforeunload', warn);
   }, [unsaved]);
 
-  // 칸을 고칠 때마다 그 칸만 구글 캘린더에 맞춘다(뒤에서). 실패하면 위에 알려 준다
-  const [syncMsg, setSyncMsg] = useState('');
-  const [fullSyncing, setFullSyncing] = useState(false);
-  const sync = (body: Parameters<typeof syncTimetable>[0]) => {
-    syncTimetable(body).then(() => setSyncMsg('')).catch(e => setSyncMsg(`캘린더 반영 실패: ${(e as Error).message}`));
-  };
   // 월별 내려받기 — 그 달 날짜별 시간표를 주마다 시트 하나로 (이 센터)
   const [exportMonth, setExportMonth] = useState(() => toYmd(new Date()).slice(0, 7));
   const [exporting, setExporting] = useState('');
@@ -201,19 +195,6 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       showAlert(`내려받지 못했어요.\n${(e as Error).message}`);
     } finally {
       setExporting('');
-    }
-  };
-
-  const fullSync = async () => {
-    if (!(await askConfirm('시간표 전체를 선생님 구글 캘린더에 반영할까요?\n(고정 수업은 이번 주부터 매주 반복, 공휴일은 빼요. 1분쯤 걸릴 수 있어요)'))) return;
-    setFullSyncing(true);
-    try {
-      const r = await syncTimetable({ action: 'full' });
-      await showAlert(`캘린더에 반영했어요.\n고정 수업 ${r.fixed}개 · 그날 바꾼 칸 ${r.cells}개 · 지운 일정 ${r.removed}개${r.errorCount ? `\n실패 ${r.errorCount}건: ${(r.errors as string[]).join(' / ')}` : ''}`);
-    } catch (e) {
-      await showAlert(`반영하지 못했어요.\n${(e as Error).message}`);
-    } finally {
-      setFullSyncing(false);
     }
   };
 
@@ -298,13 +279,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     getFixedByChild().then(m => setTestFixed((m.get(testId) ?? []).map(f => ({ weekday: f.weekday, time: f.time, teacher: f.teacher })))).catch(() => {});
   }, [testId]);
   const nextDay = (wd: number) => { const t = toYmd(new Date()); return addDays(t, (wd - parseYmd(t).getDay() + 7) % 7); };
-  // 테스트 기록 지우기 — 이 아이의 결제 기록·그날 칸을 지우고 캘린더도 맞춘다(고정 수업·선결제 충전은 그대로)
+  // 테스트 기록 지우기 — 이 아이의 결제 기록·그날 칸을 지운다(고정 수업·선결제 충전은 그대로)
   const clearTestRecords = async () => {
     if (!testId) return;
     if (!(await askConfirm(`${testChildName}의 테스트 기록을 지울까요?\n· 결제 기록(선택·확정) 전부\n· 날짜별로 넣거나 바꾼 칸(빈타임 포함) 전부\n고정 수업과 선결제 충전·차감 기록은 그대로예요. 되돌릴 수 없어요.`))) return;
     try {
       const cells = await clearChildTestData(testId);
-      for (const c of cells) sync({ action: 'cell', day: c.day, teacherId: c.teacher_id, time: c.time, side: c.side, center: c.center });
       setDraft(new Map()); setOps(new Map());
       await load();
       showAlert(`지웠어요. (그날 칸 ${cells.length}개)`);
@@ -398,19 +378,18 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   const applyOp = async (o: Op) => {
     if (o.kind === 'from') {
-      // "이 날부터 고정" — 그날 따로 바꿔 둔 칸은 지우고, 이전 고정 수업은 전날까지·새 고정 수업은 이 날부터 (디비·캘린더 모두 서버에서)
+      // "이 날부터 고정" — 그날 따로 바꿔 둔 칸은 지우고, 이전 고정 수업은 전날까지·새 고정 수업은 이 날부터 (서버에서)
       await resetDayCell(day, o.teacherId, o.time, 'fixed', center);
-      await syncTimetable({ action: 'fixedFrom', from: day, teacherId: o.teacherId, weekday: d.getDay(), time: o.time, center, input: o.input });
+      await saveFixedFrom({ from: day, teacherId: o.teacherId, weekday: d.getDay(), time: o.time, center, input: o.input });
     } else if (o.kind === 'fixed') {
-      // 고정 시간표에서 고친 것도 오늘부터 앞으로만 (지난 날짜·캘린더 지난 일정은 그대로) — 아이·수업 종류·결제방식 모두
-      await syncTimetable({
-        action: 'fixedFrom', from: toYmd(new Date()), teacherId: o.teacherId, weekday, time: o.time, center,
+      // 고정 시간표에서 고친 것도 오늘부터 앞으로만 (지난 날짜는 그대로) — 아이·수업 종류·결제방식 모두
+      await saveFixedFrom({
+        from: toYmd(new Date()), teacherId: o.teacherId, weekday, time: o.time, center,
         input: o.input === 'reset' || o.input.status !== 'child' ? null : o.input,
       });
     } else {
       if (o.input === 'reset') await resetDayCell(day, o.teacherId, o.time, o.side, center);
       else await saveDayCell(day, o.teacherId, o.time, o.side, o.input, center);
-      sync({ action: 'cell', day, teacherId: o.teacherId, time: o.time, side: o.side, center });
     }
   };
   const saveSchedule = async () => {
@@ -606,12 +585,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           )}
         </div>
         <div className={`flex flex-wrap items-center gap-3 mb-3 ${isTest ? 'hidden' : ''}`}>
-          <button onClick={fullSync} disabled={fullSyncing}
-            className="shrink-0 whitespace-nowrap text-[12px] border border-[#0a0a0a] px-3 py-1.5 hover:bg-[#0a0a0a] hover:text-white disabled:opacity-50">
-            {fullSyncing ? '캘린더에 반영 중…' : '구글 캘린더 전체 반영'}
-          </button>
-          <span className="text-[11px] text-[#999]">칸을 고친 뒤 아래 [스케줄 변경 완료]를 누르면 디비와 캘린더에 반영돼요. 어긋났을 때만 전체 반영을 눌러 주세요.</span>
-          {syncMsg && <span className="text-[12px] text-red-400">{syncMsg}</span>}
+          <span className="text-[11px] text-[#999]">칸을 고친 뒤 아래 [스케줄 변경 완료]를 눌러야 저장돼요.</span>
           <span className="ml-auto flex items-center gap-1.5">
             <input type="month" value={exportMonth} onChange={e => e.target.value && setExportMonth(e.target.value)} className="text-[12px] border border-[#ddd] px-2 h-8" title="내려받을 달" />
             <button onClick={() => exportFile('xlsx')} disabled={!!exporting} title="엑셀 파일(.xlsx) — 주마다 시트 하나. 맥 Numbers 에서도 열려요"
@@ -1056,7 +1030,7 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
             </button>
             <button onClick={onClose} className={`${chip} border-transparent text-[#888]`}>닫기</button>
           </div>
-          <p className="text-[11px] text-[#aaa] leading-[1.7]">[스케줄 변경 완료]를 누르면 {mode === 'day' ? dayLabel : '오늘'}부터 매주 이렇게(아이·수업·결제방식) 바뀌고, 선생님 구글 캘린더도 그날부터 바뀌어요. 지난 날짜는 그대로 남아요.</p>
+          <p className="text-[11px] text-[#aaa] leading-[1.7]">[스케줄 변경 완료]를 누르면 {mode === 'day' ? dayLabel : '오늘'}부터 매주 이렇게(아이·수업·결제방식) 바뀌어요. 지난 날짜는 그대로 남아요.</p>
         </div>
       </div>
     );

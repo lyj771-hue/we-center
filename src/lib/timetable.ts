@@ -330,25 +330,20 @@ export async function deleteFixed(weekday: number, teacherId: string, time: stri
   if (error) throw error;
 }
 
-// ── 구글 캘린더 ─────────────────────────────────────────────────────
+// ── 이 날부터 고정 (서버에서 디비 여러 곳을 한 번에) ─────────────────────
 
-export type TimetableSync =
-  | { action: 'full' }
-  | { action: 'fixed'; teacherId: string; weekday: number; time: string; center?: Center; start?: string }
-  | { action: 'fixedFrom'; from: string; teacherId: string; weekday: number; time: string; center?: Center; input: CellInput | null }
-  | { action: 'cell'; day: string; teacherId: string; time: string; side: 'fixed' | 'open'; center?: Center };
+export interface FixedFromBody { from: string; teacherId: string; weekday: number; time: string; center?: Center; input: CellInput | null }
 
-/** 시간표를 선생님 구글 캘린더에 맞춘다 (관리자). 결과를 그대로 돌려준다 */
-export async function syncTimetable(body: TimetableSync): Promise<Record<string, unknown>> {
+/** "이 날부터 고정" — 이전 고정 수업은 전날까지(지난 날짜는 그날 칸으로 남김), 이 날부터 새 고정 수업 (관리자) */
+export async function saveFixedFrom(body: FixedFromBody): Promise<void> {
   const { data } = await supabase.auth.getSession();
-  const res = await fetch('/api/calendar/timetable', {
+  const res = await fetch('/api/timetable/fixed-from', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {}) },
     body: JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(json.error ?? `오류 ${res.status}`);
-  return json;
 }
 
 // ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
@@ -516,7 +511,7 @@ export async function setDayAssign(day: string, teacherId: string, center: Cente
   if (error) throw error;
 }
 
-/** 시간표(테스트) — 이 아이의 결제 기록·그날 칸·이번 달 사용 횟수를 모두 지운다. 지운 칸을 돌려준다(캘린더 맞추기용) */
+/** 시간표(테스트) — 이 아이의 결제 기록·그날 칸·이번 달 사용 횟수를 모두 지운다. 지운 칸을 돌려준다 */
 export async function clearChildTestData(childId: string): Promise<{ day: string; teacher_id: string; time: string; side: 'fixed' | 'open'; center: Center }[]> {
   const { data: cells, error: e0 } = await supabase.from('board_cells').select('day, teacher_id, time, side, center').eq('child_id', childId);
   if (e0) throw e0;

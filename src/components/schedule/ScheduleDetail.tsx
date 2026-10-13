@@ -12,7 +12,7 @@ import ScheduleEditor from './ScheduleEditor';
 import ScheduleGate from './ScheduleGate';
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import {
-  approveCancel, bookSlot, cancelSlot, deleteSchedule, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, syncCalendar, withdrawCancel,
+  approveCancel, bookSlot, cancelSlot, deleteSchedule, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, withdrawCancel,
 } from '@/lib/schedule';
 import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -80,7 +80,6 @@ export default function ScheduleDetail({ id }: { id: string }) {
     setBusySlot(slot.id);
     try {
       const r = await bookSlot(slot.id);
-      if (r === 'ok') syncCalendar(slot.id);
       if (r === 'taken') setPopup('방금 다른 분이 먼저 신청했어요.\n다른 시간을 골라 주세요.');
       if (r === 'not_approved') setPopup('센터 승인 후 신청할 수 있어요.');
       if (r === 'conflict') setPopup('그 시간에는 이미 우리 아이 수업이 있어요.\n다른 시간을 골라 주세요.');
@@ -95,7 +94,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const handleCancel = async (slot: Slot, teacher: Teacher) => {
     if (!(await askConfirm(`${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}\n${slot.owner ?? ''} 님의 신청을 취소할까요?\n(시간이 다시 열려요)`))) return;
     setBusySlot(slot.id);
-    try { await cancelSlot(slot.id); syncCalendar(slot.id); }
+    try { await cancelSlot(slot.id); }
     catch { showAlert('취소하지 못했어요. 다시 시도해 주세요.'); }
     finally { setBusySlot(null); load(); }
   };
@@ -106,8 +105,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
     setBusySlot(slot.id);
     try {
       const r = await fn(slot.id);
-      if (r === 'ok') syncCalendar(slot.id);
-      else setPopup(fail);
+      if (r !== 'ok') setPopup(fail);
     } catch {
       setPopup('처리하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
