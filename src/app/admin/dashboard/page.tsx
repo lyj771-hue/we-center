@@ -53,7 +53,8 @@ export default function DashboardPage() {
   // 표 순서 — 시간표와 같게 은평: 설영수·이정길·허홍석·선우용·이원재, 의정부: 설영수·김영훈·문석현·이원재 (그 밖의 선생님은 뒤에)
   const ORDER: Record<string, string[]> = { eunpyeong: ['설영수', '이정길', '허홍석', '선우용', '이원재'], uijeongbu: ['설영수', '김영훈', '문석현', '이원재'] };
   const orderOf = (name: string, c: string) => ((ORDER[c] ?? []).indexOf(name) + 1 || 99);
-  const EXCLUDE: string[] = [];
+  // 현황에서 빼는 선생님 — 표·합계·엑셀 모두에서 빠진다
+  const EXCLUDE: string[] = ['설영수'];
   const BY_WORKPLACE = ['설영수', '이원재'];
   const keyOf = (tid: string, c: string) => `${tid}|${c}`;
   const teacherById = useMemo(() => new Map(teachers.map(t => [t.id, t])), [teachers]);

@@ -10,20 +10,26 @@ import {
 } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
-// 관리자 로그인은 이 고정 계정 하나만 사용한다. 실제 "비밀번호"는
-// Supabase 대시보드 → Authentication → Users에서 이 계정에 설정한 값이다.
+// 관리자 로그인은 고정 계정 둘 — 비밀번호만 넣으면 맞는 계정으로 들어간다. 실제 "비밀번호"는
+// Supabase 대시보드 → Authentication → Users에서 각 계정에 설정한 값이다(두 계정의 비밀번호는 달라야 한다).
+//   admin@we-center.local — 전체 관리자(수업 현황까지)
+//   staff@we-center.local — 직원(수업 현황 메뉴가 안 보인다). DB 권한은 같다(supabase/admin-staff.sql)
 const ADMIN_EMAIL = 'admin@we-center.local';
+const STAFF_EMAIL = 'staff@we-center.local';
 
 interface AdminCtx {
   isAdmin: boolean;
+  /** 수업 현황을 볼 수 있는지 — 전체 관리자만 */
+  canSeeStats: boolean;
   requestAdmin: () => void;
   logout: () => void;
 }
 
-const Ctx = createContext<AdminCtx>({ isAdmin: false, requestAdmin: () => {}, logout: () => {} });
+const Ctx = createContext<AdminCtx>({ isAdmin: false, canSeeStats: false, requestAdmin: () => {}, logout: () => {} });
 
 export function AdminProvider({ children }: { children: ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [canSeeStats, setCanSeeStats] = useState(false);
   const [modal, setModal] = useState(false);
   const [pw, setPw] = useState('');
   const [err, setErr] = useState(false);
@@ -31,7 +37,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // 로그인했다고 다 관리자가 아니다 — 카카오로 로그인한 학부모와 구분한다.
     // (실제 쓰기 권한은 DB의 admins 표와 정책이 막는다: supabase/admin-roles.sql)
-    const check = (email?: string) => setIsAdmin(email === ADMIN_EMAIL);
+    const check = (email?: string) => { setIsAdmin(email === ADMIN_EMAIL || email === STAFF_EMAIL); setCanSeeStats(email === ADMIN_EMAIL); };
     supabase.auth.getSession().then(({ data }) => check(data.session?.user.email));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       check(session?.user.email);
@@ -47,7 +53,9 @@ export function AdminProvider({ children }: { children: ReactNode }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: pw });
+    // 전체 관리자 비밀번호인지 먼저, 아니면 직원 비밀번호인지
+    let { error } = await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: pw });
+    if (error) ({ error } = await supabase.auth.signInWithPassword({ email: STAFF_EMAIL, password: pw }));
     if (error) {
       setErr(true);
     } else {
@@ -58,7 +66,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Ctx.Provider value={{ isAdmin, requestAdmin, logout }}>
+    <Ctx.Provider value={{ isAdmin, canSeeStats, requestAdmin, logout }}>
       {children}
 
       {modal && (
