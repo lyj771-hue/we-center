@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
-import { deleteProfile, getMembers, saveMemberProfile } from '@/lib/store';
+import { deleteProfile, getMemberCenters, getMembers, saveMemberProfile, setMemberCenterApproved } from '@/lib/store';
 import type { Member, MemberExtras } from '@/lib/types';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
@@ -56,7 +56,10 @@ export default function MembersView({ center }: { center: Center }) {
   const loadKids = useCallback(() => { getChildren().then(setKids).catch(() => {}); }, []);
   useEffect(() => { if (isAdmin) loadKids(); }, [isAdmin, loadKids]);
 
+  // 다른 지점 가입 신청 — "회원|지점" → 승인 시각(null = 대기)
+  const [extraCenters, setExtraCenters] = useState<Map<string, string | null>>(new Map());
   const load = useCallback(() => {
+    getMemberCenters().then(setExtraCenters).catch(() => setExtraCenters(new Map()));
     getMembers()
       .then(m => { setMembers(m); setFailed(false); })
       .catch(() => setFailed(true))
@@ -201,9 +204,19 @@ export default function MembersView({ center }: { center: Center }) {
 
   // 카카오 로그인만 하고 가입 창(아이 이름·뒷번호)을 안 채운 계정은 숨긴다
   // 이 센터 보호자만 (가입할 때 고른 센터, 없으면 수색)
-  const mine = members.filter(m => (m.center ?? 'eunpyeong') === center);
-  const waiting = mine.filter(m => !m.approvedAt && m.nickname);
-  const approved = mine.filter(m => m.approvedAt);
+  //  + 다른 지점이 처음 지점인데 이 지점에도 가입 신청한 보호자(추가 지점)
+  const isExtra = (m: Member) => (m.center ?? 'eunpyeong') !== center;
+  const mine = members.filter(m => !isExtra(m) || extraCenters.has(`${m.userId}|${center}`));
+  // 이 지점 승인 시각 — 처음 지점이면 프로필, 추가 지점이면 그 지점 신청 기록
+  const approvedHere = (m: Member) => (isExtra(m) ? extraCenters.get(`${m.userId}|${center}`) ?? undefined : m.approvedAt);
+  const waiting = mine.filter(m => !approvedHere(m) && m.nickname);
+  const approved = mine.filter(m => approvedHere(m));
+  const setApprovedHere = async (m: Member, approve: boolean) => {
+    if (!isExtra(m)) return setApproved(m, approve);
+    if (!approve && !(await askConfirm(`"${m.nickname}" 회원의 ${centerLabel} 가입 승인을 취소할까요?`))) return;
+    try { await setMemberCenterApproved(m.userId, center, approve); load(); }
+    catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
+  };
   const list = filter === 'waiting' ? waiting : approved;
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
   const input = 'w-full min-w-[90px] border-b border-[var(--brand)] py-1 text-[14px] outline-none bg-transparent';
@@ -282,11 +295,12 @@ export default function MembersView({ center }: { center: Center }) {
                       <span className="text-[12px]"><span className="text-[#888] tabular-nums">{kidOf(m.userId)!.memberCode}</span> {kidOf(m.userId)!.name}{kidOf(m.userId)!.number ?? ''}</span>
                     ) : m.requestedCode ? <span className="text-[12px] text-[#f59e0b]" title="가입할 때 적은 회원 코드 — 아직 연결 안 됨">요청 {m.requestedCode}</span> : <span className="text-[#ccc]">-</span>}
                   </td>)}
-                  {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(m.approvedAt ?? m.joinedAt)}</td>}
+                  {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDate(approvedHere(m) ?? m.joinedAt)}</td>}
                   {showDates && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
                   <td className={td}>
                     {on ? <input className={input} value={form.nickname} maxLength={20} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} />
-                      : m.nickname || <span className="text-[#ccc]">아직 안 정함</span>}
+                      : <>{m.nickname || <span className="text-[#ccc]">아직 안 정함</span>}
+                        {isExtra(m) && <span className="ml-1.5 text-[10px] text-[#b45309] border border-[#fcd34d] rounded px-1" title={`처음 가입한 지점은 ${(m.center ?? 'eunpyeong') === 'uijeongbu' ? '의정부' : '수색'}`}>추가 지점</span>}</>}
                   </td>
                   <td className={td}>
                     {on ? <input className={input} value={form.centerNickname} maxLength={20} placeholder="예: 김민준" onChange={e => setForm(f => ({ ...f, centerNickname: e.target.value }))} />
@@ -350,9 +364,9 @@ export default function MembersView({ center }: { center: Center }) {
                         </>
                       ) : (
                         <>
-                          {m.nickname && (m.approvedAt
-                            ? <button onClick={() => setApproved(m, false)} className={`${btn} border-[#e5e5e5] text-[#888] hover:bg-[#f8f8f8]`}>승인 취소</button>
-                            : <button onClick={() => setApproved(m, true)} className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>승인</button>)}
+                          {m.nickname && (approvedHere(m)
+                            ? <button onClick={() => setApprovedHere(m, false)} className={`${btn} border-[#e5e5e5] text-[#888] hover:bg-[#f8f8f8]`}>승인 취소</button>
+                            : <button onClick={() => setApprovedHere(m, true)} className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>승인</button>)}
                           <button onClick={() => startEdit(m)} className={`${btn} border-[#e5e5e5] hover:bg-[#f8f8f8]`}>수정</button>
                           {m.nickname && <button onClick={() => remove(m)} className={`${btn} border-[#e5e5e5] text-red-400 hover:bg-red-50`}>삭제</button>}
                         </>

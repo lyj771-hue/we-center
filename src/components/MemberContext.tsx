@@ -1,5 +1,6 @@
 'use client';
 
+import { getMyBranches, type BranchKey, type MyBranch } from '@/lib/mypage';
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { claimChild, createMyProfile, getMyProfile, signInWithKakao } from '@/lib/store';
@@ -18,10 +19,16 @@ interface MemberCtx {
   loading: boolean;
   login: () => void;
   logout: () => void;
+  /** 지점(수색/의정부) 가입 상태 — 처음 가입한 지점 + 추가 신청한 지점 */
+  branches: MyBranch[];
+  refreshBranches: () => void;
+  /** 이 지점 수업스케쥴·마이페이지를 볼 수 있는지 (처음 지점은 승인, 다른 지점은 그 지점 승인) */
+  canUse: (b: BranchKey) => boolean;
 }
 
 const Ctx = createContext<MemberCtx>({
   userId: null, profile: null, loading: true, login: () => {}, logout: () => {},
+  branches: [], refreshBranches: () => {}, canUse: () => false,
 });
 
 export function MemberProvider({ children }: { children: ReactNode }) {
@@ -29,6 +36,12 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [branches, setBranches] = useState<MyBranch[]>([]);
+  const refreshBranches = useCallback(() => {
+    if (!userId || !profile) { setBranches([]); return; }
+    getMyBranches(userId, profile.center ?? 'eunpyeong').then(setBranches).catch(() => setBranches([]));
+  }, [userId, profile]);
+  useEffect(() => { refreshBranches(); }, [refreshBranches]);
 
   useEffect(() => {
     const apply = (id: string | null) => {
@@ -58,10 +71,14 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => { supabase.auth.signOut(); }, []);
 
   const memberId = isAdmin ? null : userId;
+  const canUse = useCallback((b: BranchKey) => {
+    const st = branches.find(x => x.key === b)?.status ?? (b === (profile?.center ?? 'eunpyeong') ? 'primary' : 'none');
+    return st === 'primary' ? !!profile?.approvedAt : st === 'approved';
+  }, [branches, profile]);
   const needsNickname = !!memberId && !loading && !profile;
 
   return (
-    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, logout }}>
+    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, logout, branches: memberId ? branches : [], refreshBranches, canUse }}>
       {children}
       {needsNickname && <NicknameSetup userId={memberId} onDone={setProfile} onCancel={logout} />}
     </Ctx.Provider>

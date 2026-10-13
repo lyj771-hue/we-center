@@ -8,7 +8,9 @@ import type { LedgerRow } from '@/lib/prepaid';
 import { getMyLedger } from '@/lib/prepaid';
 import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
 import { getMyChild, getMyLessons, getMyPaymentHistory, getMyPayments } from '@/lib/mypage';
-import type { MyPaymentUse } from '@/lib/mypage';
+import type { BranchKey, MyPaymentUse } from '@/lib/mypage';
+import { BRANCHES, requestBranch } from '@/lib/mypage';
+import { askConfirm, showAlert } from '@/lib/dialog';
 import { addDays, thisMonday, toYmd } from '@/lib/schedule';
 
 // 마이페이지(보호자) — 내 아이 정보, 결제 현황(바우처·굳센·꿈이든 이번 달, 선결제 누적), 주별 시간표.
@@ -16,7 +18,12 @@ import { addDays, thisMonday, toYmd } from '@/lib/schedule';
 
 export default function MyPage() {
   const { isAdmin } = useAdmin();
-  const { userId, profile, loading, login } = useMember();
+  const { userId, profile, loading, login, branches, canUse, refreshBranches } = useMember();
+  // 보는 지점 — 처음 가입한 지점이 기본, 승인된 다른 지점으로 바꿀 수 있다
+  const primary = profile?.center ?? 'eunpyeong';
+  const [sel, setSel] = useState<BranchKey | null>(null);
+  const branch: BranchKey = sel && canUse(sel) ? sel : primary;
+  const usable = branches.filter(b => canUse(b.key));
   const [child, setChild] = useState<MyChild | null>(null);
   const [week, setWeek] = useState(thisMonday());
   const [weekLessons, setWeekLessons] = useState<MyLesson[]>([]);
@@ -55,8 +62,58 @@ export default function MyPage() {
     </div>,
   );
 
+  // 지점별로 나눠 보기 — 수업·결제 기록은 그 지점 것만. 결제 현황 횟수는 두 지점을 쓰면 그 지점 이번 달 기록으로 센다
+  const lessonsHere = weekLessons.filter(l => l.center === branch);
+  const historyHere = history.filter(h => h.center === branch);
+  const ym = today.slice(0, 7);
+  const paymentsHere = usable.length > 1
+    ? payments.map(p => (p.method === 'prepaid' ? p : { ...p, used: historyHere.filter(h => h.method === p.method && h.day.startsWith(ym)).length }))
+    : payments;
+  const labelOf = (b: BranchKey) => BRANCHES.find(x => x.key === b)?.label ?? '';
+
+  const join = async (b: BranchKey) => {
+    if (!userId) return;
+    if (!(await askConfirm(`${labelOf(b)}도 가입할까요?\n센터에서 승인하면 ${labelOf(b)} 수업스케쥴과 마이페이지를 볼 수 있어요.`))) return;
+    try { await requestBranch(userId, b); refreshBranches(); await showAlert(`${labelOf(b)} 가입을 신청했어요. 승인되면 열려요.`); }
+    catch (e) { showAlert(`신청하지 못했어요.\n${(e as Error).message}`); }
+  };
+
+  // 맨 위 — 보는 지점 (승인된 지점이 둘이면 눌러서 바꾼다)
+  const top = (
+    <div className="flex items-center gap-2">
+      {(usable.length > 1 ? usable : [{ key: branch, label: labelOf(branch) }]).map(b => (
+        <button key={b.key} type="button" onClick={() => setSel(b.key)} disabled={usable.length < 2}
+          className={`text-[14px] px-4 py-1.5 rounded-full border ${b.key === branch ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#ddd] text-[#555] hover:bg-[#f8f8f8]'} disabled:cursor-default`}>
+          {b.label}
+        </button>
+      ))}
+    </div>
+  );
+  // 맨 아래 — 지점 가입 (처음 지점은 활성, 다른 지점은 눌러서 가입 신청)
+  const bottom = (
+    <div className={`${MYPAGE_CARD} space-y-3`}>
+      <h2 className="text-[17px] text-[#27272a]">지점</h2>
+      <div className="flex gap-2">
+        {branches.map(b => (
+          <button key={b.key} type="button"
+            onClick={() => (b.status === 'none' ? join(b.key) : canUse(b.key) ? setSel(b.key) : undefined)}
+            className={`flex-1 py-2.5 text-[14px] rounded-full border ${
+              b.status === 'primary' || b.status === 'approved' ? 'border-[var(--brand)] text-[var(--brand)] bg-[#eef5fe]'
+              : b.status === 'pending' ? 'border-[#f59e0b] text-[#b45309] bg-[#fffbeb] cursor-default'
+              : 'border-[#ddd] text-[#888] hover:bg-[#f8f8f8]'}`}>
+            {b.label}
+            <span className="block text-[11px] mt-0.5 opacity-80">
+              {b.status === 'primary' ? (profile?.approvedAt ? '가입됨(처음 지점)' : '승인 대기') : b.status === 'approved' ? '가입됨' : b.status === 'pending' ? '승인 대기' : '눌러서 가입 신청'}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return wrap(
-    <MyPageView child={child} nickname={profile?.nickname} approved={!!profile?.approvedAt} week={week} setWeek={setWeek}
-      weekLessons={weekLessons} payments={payments} ledger={ledger} history={history} today={today} failed={failed} />,
+    <MyPageView child={child} nickname={profile?.nickname} approved={canUse(branch)} week={week} setWeek={setWeek}
+      weekLessons={lessonsHere} payments={paymentsHere} ledger={ledger} history={historyHere} today={today} failed={failed}
+      top={top} bottom={bottom} />,
   );
 }

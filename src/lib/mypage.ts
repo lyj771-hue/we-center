@@ -26,6 +26,8 @@ export interface MyLesson {
   absent: boolean;
   moved: boolean;
   note?: string;
+  /** 지점 — 'eunpyeong'(수색) / 'uijeongbu'(의정부) */
+  center: BranchKey;
 }
 
 export async function getMyChild(): Promise<MyChild | null> {
@@ -60,6 +62,7 @@ export async function getMyLessons(from: string, to: string): Promise<MyLesson[]
     absent: !!r.absent,
     moved: !!r.moved,
     note: (r.note as string) ?? undefined,
+    center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
   }));
 }
 
@@ -76,12 +79,37 @@ export async function getMyPayments(): Promise<MyPayment[]> {
 }
 
 /** 결제별 사용 기록 전부 (바우처·굳센·꿈이든·지원금·우진학교) — [결제 완료]로 확정된 수업. 지난 달도 쌓인다 */
-export interface MyPaymentUse { day: string; method: MyPayment['method']; time: string; teacher: string; note?: string }
+export interface MyPaymentUse { day: string; method: MyPayment['method']; time: string; teacher: string; note?: string; center: BranchKey }
 
 export async function getMyPaymentHistory(): Promise<MyPaymentUse[]> {
   const { data, error } = await supabase.rpc('my_payment_history');
   if (error) throw error;
-  return (data ?? []).map((r: { day: string; method: MyPayment['method']; lesson_time: string; teacher_name: string | null; note: string | null }) => ({
+  return (data ?? []).map((r: { day: string; method: MyPayment['method']; lesson_time: string; teacher_name: string | null; note: string | null; center?: string | null }) => ({
     day: r.day, method: r.method, time: r.lesson_time, teacher: r.teacher_name ?? '', note: r.note ?? undefined,
+    center: r.center === 'uijeongbu' ? 'uijeongbu' as const : 'eunpyeong' as const,
   }));
+}
+
+// ── 지점(수색/의정부) 가입 ─────────────────────────────────────────────
+
+export type BranchKey = 'eunpyeong' | 'uijeongbu';
+export const BRANCHES: { key: BranchKey; label: string }[] = [{ key: 'eunpyeong', label: '수색점' }, { key: 'uijeongbu', label: '의정부점' }];
+
+/** 내 지점 가입 상태 — 처음 가입한 지점은 프로필(승인일), 다른 지점은 member_centers(신청·승인) */
+export type BranchStatus = 'primary' | 'approved' | 'pending' | 'none';
+export interface MyBranch { key: BranchKey; label: string; status: BranchStatus }
+
+export async function getMyBranches(userId: string, primary: BranchKey): Promise<MyBranch[]> {
+  const { data } = await supabase.from('member_centers').select('center, approved_at').eq('user_id', userId);
+  const rows = new Map((data ?? []).map(r => [r.center as string, r.approved_at as string | null]));
+  return BRANCHES.map(b => ({
+    ...b,
+    status: b.key === primary ? 'primary' : !rows.has(b.key) ? 'none' : rows.get(b.key) ? 'approved' : 'pending',
+  }));
+}
+
+/** 다른 지점도 가입 신청 (관리자가 그 지점 회원관리에서 승인) */
+export async function requestBranch(userId: string, center: BranchKey): Promise<void> {
+  const { error } = await supabase.from('member_centers').insert({ user_id: userId, center });
+  if (error) throw error;
 }

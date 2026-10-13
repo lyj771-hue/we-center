@@ -399,3 +399,16 @@ export async function deleteProfile(userId: string): Promise<void> {
   const { error } = await supabase.from('profiles').delete().eq('user_id', userId);
   if (error) throw error;
 }
+
+/** 관리자: 다른 지점 가입 신청 전부 — "회원|지점" → 승인 시각(없으면 null = 승인 대기) */
+export async function getMemberCenters(): Promise<Map<string, string | null>> {
+  const { data, error } = await supabase.from('member_centers').select('user_id, center, approved_at');
+  if (error) throw error;
+  return new Map((data ?? []).map(r => [`${r.user_id}|${r.center}`, (r.approved_at as string | null) ?? null]));
+}
+
+/** 관리자: 다른 지점 가입 승인 / 승인 취소 */
+export async function setMemberCenterApproved(userId: string, center: string, approve: boolean): Promise<void> {
+  const { error } = await supabase.from('member_centers').update({ approved_at: approve ? new Date().toISOString() : null }).match({ user_id: userId, center });
+  if (error) throw error;
+}

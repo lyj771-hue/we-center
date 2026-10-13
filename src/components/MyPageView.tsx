@@ -32,6 +32,9 @@ export interface MyPageViewProps {
   history?: MyPaymentUse[];
   today: string;
   failed?: string;
+  /** 맨 위(보는 지점)·맨 아래(지점 가입) — 페이지가 만들어 넘긴다 */
+  top?: React.ReactNode;
+  bottom?: React.ReactNode;
 }
 
 // 결제별 사용 카드 — 선결제 카드 아래에 이 순서로 (쓰는 결제이거나 이번 달 기록이 있는 것만)
@@ -39,7 +42,7 @@ const USAGE_CARDS: { method: MyPayment['method']; label: string }[] = [
   { method: 'voucher', label: '바우처' }, { method: 'gusen', label: '굳센' }, { method: 'kkumideun', label: '꿈이든' }, { method: 'subsidy', label: '지원금' },
 ];
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, failed }: MyPageViewProps) {
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, failed, top, bottom }: MyPageViewProps) {
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
   const payRows = [...payments].sort((a, b) => (a.method === 'prepaid' ? -1 : b.method === 'prepaid' ? 1 : 0));   // 선결제를 맨 위로
 
@@ -53,6 +56,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   return (
     <div className="space-y-6">
       {failed && <p className="text-[13px] text-red-400">불러오지 못했어요. ({failed})</p>}
+      {top}
 
       {/* 승인·연결 안내 (우리 아이 이름 칸은 없앴다) */}
       {(!approved || !child?.memberCode) && (
@@ -155,6 +159,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
           </section>
         );
       })}
+      {bottom}
     </div>
   );
 }
