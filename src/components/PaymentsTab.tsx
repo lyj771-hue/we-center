@@ -6,9 +6,11 @@ import type { Center, Child, MonthUse, PayCount } from '@/lib/timetable';
 import { getChildren, getMonthNotes, getMonthUses, getPaymentCounts, setMonthNote } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
+import Portal from '@/components/Portal';
+import PrepaidModal from '@/components/PrepaidModal';
 
 // 회원 관리 — "결제내역" 탭. 달을 골라 아이마다 그 달 결제별 사용 횟수(시간표 [결제 완료]로 확정된 것),
-// 선결제 잔여, 우진학교·지원금 남은 금액, 그 달 메모, 보호자 승인 날짜를 본다.
+// 선결제 잔여/충전([충전·차감·수정] 카드 창), 우진학교·지원금 남은 금액, 그 달 메모, 보호자 승인 날짜를 본다. 선결제는 센터(아이)마다 따로.
 
 const USE_COLS: { key: keyof MonthUse; label: string }[] = [
   { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'kkumideun', label: '꿈이든' },
@@ -29,6 +31,7 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
   const [q, setQ] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [failed, setFailed] = useState('');
+  const [cardFor, setCardFor] = useState<Child | null>(null);    // 선결제 카드 창을 연 아이
 
   const load = useCallback(async () => {
     try {
@@ -65,10 +68,10 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
   const sheet = (): Sheet => ({
     name: `${y}년 ${m}월 결제내역`,
     rows: [
-      ['이름', '번호', '뒷번호', ...USE_COLS.map(c => `${c.label} 사용`), '선결제 잔여', '우진학교 남은 금액', '지원금 남은 금액', '메모', '승인 날짜'],
+      ['이름', '번호', '뒷번호', ...USE_COLS.map(c => `${c.label} 사용`), '선결제 잔여/충전', '우진학교 남은 금액', '지원금 남은 금액', '메모', '승인 날짜'],
       ...list.map(k => [
         k.name, k.number ?? 1, k.phoneLast4 ?? '', ...USE_COLS.map(c => uses.get(k.id)?.[c.key] ?? 0),
-        prepaidLeft(k), k.woojinBalance ?? 0, k.subsidyBalance ?? 0, notes.get(k.id) ?? '',
+        (k.prepaidTotal ?? 0) || (allTime.get(k.id)?.prepaid ?? 0) ? `${prepaidLeft(k)}/${k.prepaidTotal ?? 0}` : '', k.woojinBalance ?? 0, k.subsidyBalance ?? 0, notes.get(k.id) ?? '',
         fmtDate(k.guardianUserId ? memberOf.get(k.guardianUserId)?.approvedAt : undefined),
       ]),
     ],
@@ -105,7 +108,7 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
               <th className={`${th} text-center`}>번호</th>
               <th className={th}>뒷번호</th>
               {USE_COLS.map(c => <th key={c.key} className={`${th} text-center`}>{c.label}<span className="block text-[10px] text-[#bbb]">{m}월 사용</span></th>)}
-              <th className={`${th} text-center`}>선결제<span className="block text-[10px] text-[#bbb]">잔여</span></th>
+              <th className={`${th} text-center`}>선결제<span className="block text-[10px] text-[#bbb]">잔여/충전</span></th>
               <th className={`${th} text-right`}>우진학교<span className="block text-[10px] text-[#bbb]">남은 금액</span></th>
               <th className={`${th} text-right`}>지원금<span className="block text-[10px] text-[#bbb]">남은 금액</span></th>
               <th className={th}>{m}월 메모</th>
@@ -125,7 +128,15 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
                     const n = u?.[c.key] ?? 0;
                     return <td key={c.key} className={`${td} text-center tabular-nums ${n ? 'text-[var(--brand)]' : k.uses?.[c.key] ? 'text-[#999]' : 'text-[#ddd]'}`}>{n}</td>;
                   })}
-                  <td className={`${td} text-center tabular-nums ${prepaidLeft(k) <= 0 && (k.prepaidTotal ?? 0) > 0 ? 'text-[#e11d48]' : ''}`}>{(k.prepaidTotal ?? 0) > 0 ? prepaidLeft(k) : <span className="text-[#ddd]">-</span>}</td>
+                  <td className={`${td} text-[12px] text-center whitespace-nowrap tabular-nums`}>
+                    {/* 선결제 잔여/충전 + [충전·차감·수정](카드 내역) */}
+                    <button type="button" onClick={() => setCardFor(k)} className="hover:underline" title="선결제 카드 — 충전 · 차감 · 수정">
+                      {(k.prepaidTotal ?? 0) || (allTime.get(k.id)?.prepaid ?? 0)
+                        ? <span className={prepaidLeft(k) <= 0 ? 'text-[#e11d48]' : ''}>{prepaidLeft(k)}/{k.prepaidTotal ?? 0}</span>
+                        : <span className="text-[#bbb]">-</span>}
+                      <span className="ml-1 text-[10px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">충전·차감·수정</span>
+                    </button>
+                  </td>
                   <td className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>{won(k.woojinBalance) || <span className="text-[#ddd]">-</span>}</td>
                   <td className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>{won(k.subsidyBalance) || <span className="text-[#ddd]">-</span>}</td>
                   <td className={`${td} min-w-[180px]`}>
@@ -141,6 +152,7 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
           </tbody>
         </table>
       </div>
+      {cardFor && <Portal><PrepaidModal child={cardFor} onClose={() => { setCardFor(null); load(); }} /></Portal>}
     </div>
   );
 }
