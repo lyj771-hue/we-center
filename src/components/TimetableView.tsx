@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import Portal from '@/components/Portal';
 import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFile';
@@ -259,6 +259,23 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     if (st === dbAssign(id)) n.delete(id); else n.set(id, st);
     return n;
   });
+  // 표를 화면 아래(아래 버튼 줄 위)까지 늘린다 — 브라우저를 축소하면 칸이 커져서 모든 시간이 한 화면에 나온다
+  const tableBox = useRef<HTMLDivElement>(null);
+  const barBox = useRef<HTMLDivElement>(null);
+  const [fillH, setFillH] = useState(0);
+  useEffect(() => {
+    const fit = () => {
+      const el = tableBox.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      setFillH(Math.max(0, window.innerHeight - top - (barBox.current?.offsetHeight ?? 0) - 8));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    const t = setTimeout(fit, 500); // 글꼴·위 줄이 늦게 그려지는 것까지
+    return () => { window.removeEventListener('resize', fit); clearTimeout(t); };
+  });
+
   // 선생님마다 맨 오른쪽에 메모 칸 (40분 수업, 4시 시작 같은 것). 수색은 접어 두고 머리 칸을 누르면 펼친다
   const showMemo = true;
   const [memoOpenFor, setMemoOpenFor] = useState<Set<Center>>(() => new Set<Center>(['uijeongbu']));
@@ -566,12 +583,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — 시간표 SQL(supabase/timetable.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
 
         {/* 표 — 이 센터 선생님만. 접은 선생님은 이름 칸만 좁게 */}
-        <div className="overflow-x-auto bg-white">
-          <table className="border-collapse text-[12px] min-w-full">
+        <div ref={tableBox} className="overflow-x-auto bg-white">
+          <table className="border-collapse text-[11px] min-w-full" style={fillH ? { height: fillH } : undefined}>
             <thead>
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white w-16`}>시간</th>
-                <th className={`${th} text-[14px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : (mode === 'day' ? 4 : 2) + (showMemo ? 1 : 0)), 0) || 1}>
+                <th className={`${th} text-[13px] text-[#c026d3]`} colSpan={shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : (mode === 'day' ? 4 : 2) + (showMemo ? 1 : 0)), 0) || 1}>
                   {mode === 'day' ? `${DOW[d.getDay()]} / ${d.getMonth() + 1}월 ${d.getDate()}일` : `${DOW[weekday]}요일 고정 시간표`}
                   {mode === 'day' && holiday && <span className="ml-2 text-[12px] text-red-400">공휴일 — 고정 수업 없음</span>}
                 </th>
@@ -579,7 +596,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
               <tr>
                 <th className={`${th} sticky left-0 z-10 bg-white`} />
                 {shown.map(t => (
-                  <th key={t.id} colSpan={folded.has(t.name) ? 1 : (mode === 'day' ? 4 : 2) + (showMemo ? 1 : 0)} className={`${th} text-[14px] text-[#16a34a] whitespace-nowrap`}>
+                  <th key={t.id} colSpan={folded.has(t.name) ? 1 : (mode === 'day' ? 4 : 2) + (showMemo ? 1 : 0)} className={`${th} text-[13px] text-[#16a34a] whitespace-nowrap`}>
                     <button type="button" onClick={() => toggleFold(t.name)} title={folded.has(t.name) ? '펼치기' : '접기'}
                       className="inline-flex items-center gap-1 hover:opacity-70">
                       {t.name}<span className="text-[10px] text-[#aaa]">{folded.has(t.name) ? '▸' : '◂'}</span>
@@ -693,7 +710,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         </div>
 
         {/* 저장 버튼 — [스케줄 변경 완료] = 시간표 변경·결제방식 선택 저장 / [결제 완료] = 그날 결제 확정 */}
-        <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 bg-white/95 border-t border-[#eee] py-3 mt-2">
+        <div ref={barBox} className="sticky bottom-0 z-20 flex flex-wrap items-center justify-end gap-x-3 gap-y-2 bg-white/95 border-t border-[#eee] py-3 mt-2">
           <span className="text-[12px] text-[#888]">
             {schedPending + draft.size
               ? `저장 안 한 변경 ${schedPending + draft.size}건 (시간표 ${schedPending} · 결제방식 ${draft.size})`
