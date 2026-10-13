@@ -114,7 +114,8 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         <div className="divide-y divide-[#f0f0f0]">
           {days.map(d => {
             // 공휴일에는 고정 수업을 하지 않는다(빈타임만) — 그날 넣은 칸·신청만 보인다
-            const list = weekLessons.filter(l => l.day === d && l.status !== 'none' && l.status !== 'off' && l.status !== 'undecided' && !(holidays[d] && l.source === 'fixed'));
+            // 결석한 수업은 아예 보이지 않는다
+            const list = weekLessons.filter(l => l.day === d && !l.absent && l.status !== 'none' && l.status !== 'off' && l.status !== 'undecided' && !(holidays[d] && l.source === 'fixed'));
             const dd = parseYmd(d);
             return (
               <div key={d} className={`flex gap-3 py-3 ${d === today ? 'bg-[#f8fbff] -mx-3 px-3 rounded-lg' : ''}`}>
@@ -130,9 +131,9 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                       <span className="tabular-nums">{l.time}</span>
                       <span>{l.teacher} 선생님</span>
                       {l.oral && <span className="text-[11px] text-[#8b5cf6]">구강</span>}
-                      <span className="text-[11px] px-1.5 rounded border border-[#eee] text-[#888]">{l.source === 'booking' ? '신청' : l.side === 'fixed' ? '고정' : '빈타임'}</span>
+                      {/* 고정 수업만 '고정' 표시 (빈타임·신청은 표시 없음). 공휴일·일요일은 고정도 빈타임도 아니라 표시 없음 */}
+                      {l.source !== 'booking' && l.side === 'fixed' && !holidays[d] && dd.getDay() !== 0 && <span className="text-[11px] px-1.5 rounded border border-[#eee] text-[#888]">고정</span>}
                       {l.payment.replace(/[x~]/gi, '') && <span className="text-[11px] text-[#999]">{payName(payKind(l.payment))}</span>}
-                      {l.absent && <span className="text-[11px] text-white bg-[#a1a1aa] px-1.5 rounded">결석</span>}
                       {l.status === 'cancel_requested' && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded">취소 신청 중</span>}
                       {l.status === 'cancelled' && <span className="text-[11px] no-underline">취소</span>}
                     </div>
