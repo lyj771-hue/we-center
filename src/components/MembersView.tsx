@@ -381,6 +381,8 @@ export default function MembersView({ center }: { center: Center }) {
               {showDates && <th className={th}>{filter === 'waiting' ? '가입신청일자' : '가입일자'}</th>}
               {showDates && filter !== 'waiting' && <th className={th}>마지막 로그인</th>}
               <th className={th}>보호자 닉네임</th>
+              <th className={`${th} text-center`}>수색점</th>
+              <th className={`${th} text-center`}>의정부점</th>
               <th className={th}>관리자 닉네임</th>
               <th className={th}>뒷번호</th>
               <th className={th}>설명</th>
@@ -417,14 +419,17 @@ export default function MembersView({ center }: { center: Center }) {
                   {showDates && filter !== 'waiting' && <td className={`${td} whitespace-nowrap`}>{fmtDateTime(m.lastSignInAt)}</td>}
                   <td className={td}>
                     {on ? <input className={input} value={form.nickname} maxLength={20} onChange={e => setForm(f => ({ ...f, nickname: e.target.value }))} />
-                      : <>{m.nickname || <span className="text-[#ccc]">아직 안 정함</span>}
-                        {/* 가입한 지점 — 지점마다 따로 승인·관리 */}
-                        <span className="block text-[11px] text-[#999]">
-                          {branchesOf(m).map((b, i) => (
-                            <span key={b.c}>{i > 0 && ' · '}<span className={b.at ? 'text-[var(--brand)]' : 'text-[#f59e0b]'}>{b.label}{b.at ? '' : '(대기)'}</span></span>
-                          ))}
-                        </span></>}
+                      : <>{m.nickname || <span className="text-[#ccc]">아직 안 정함</span>}</>}
                   </td>
+                  {/* 지점별 가입 — 승인(파랑) / 대기(노랑) / - */}
+                  {(['eunpyeong', 'uijeongbu'] as const).map(c => {
+                    const b = branchesOf(m).find(x => x.c === c);
+                    return (
+                      <td key={c} className={`${td} text-center text-[12px] whitespace-nowrap`}>
+                        {!b ? <span className="text-[#ddd]">-</span> : b.at ? <span className="text-[var(--brand)]">승인</span> : <span className="text-[#a16207] bg-[#fefce8] px-1.5 rounded">대기</span>}
+                      </td>
+                    );
+                  })}
                   <td className={td}>
                     {on ? <input className={input} value={form.centerNickname} maxLength={20} placeholder="예: 김민준" onChange={e => setForm(f => ({ ...f, centerNickname: e.target.value }))} />
                       : m.centerNickname ? <span className="text-[var(--brand)]">{m.centerNickname}</span> : <span className="text-[#ccc]">-</span>}
