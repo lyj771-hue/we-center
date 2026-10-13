@@ -598,7 +598,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — 시간표 SQL(supabase/timetable.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
 
         {/* 표 — 이 센터 선생님만. 접은 선생님은 이름 칸만 좁게 */}
-        <div ref={tableBox} className="overflow-x-auto bg-white">
+        <div ref={tableBox} className="overflow-x-hidden bg-white">
           {/* 고정 폭 표 — 칸 폭을 미리 정해서 화면 폭을 넘지 않는다(글꼴·브라우저가 달라도 가로 스크롤 없이). 너비를 안 정한 칸이 남는 폭을 나눠 가진다 */}
           <table className="border-collapse text-[11px] w-full table-fixed" style={fillH ? { height: fillH } : undefined}>
             <colgroup>
