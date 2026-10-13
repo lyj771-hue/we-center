@@ -77,6 +77,8 @@ export default function Header() {
             &nbsp;&nbsp;
             <Link href="/admin/dashboard" className="underline underline-offset-2 opacity-60 hover:opacity-100">수업 현황</Link>
             &nbsp;&nbsp;
+            <Link href="/admin/messages" className="underline underline-offset-2 opacity-60 hover:opacity-100">알림 메시지</Link>
+            &nbsp;&nbsp;
             <button onClick={logout} className="underline underline-offset-2 opacity-60 hover:opacity-100">
               종료
             </button>
