@@ -65,9 +65,9 @@ export async function deleteCharge(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** 보호자: 내 아이 카드 내역 */
-export async function getMyLedger(): Promise<LedgerRow[]> {
-  const { data, error } = await supabase.rpc('my_prepaid_ledger');
+/** 보호자: 내 아이 카드 내역 — 선결제는 지점마다 따로(center = 그 지점 아이) */
+export async function getMyLedger(center?: string): Promise<LedgerRow[]> {
+  const { data, error } = await supabase.rpc('my_prepaid_ledger', center ? { p_center: center } : {});
   if (error) throw error;
   return buildLedger((data ?? []).map((r: { day: string; kind: 'charge' | 'use' | 'adjust'; count: number; memo: string | null; at?: string | null }) =>
     r.kind === 'charge' && r.count < 0

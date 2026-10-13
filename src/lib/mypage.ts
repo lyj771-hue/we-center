@@ -30,8 +30,8 @@ export interface MyLesson {
   center: BranchKey;
 }
 
-export async function getMyChild(): Promise<MyChild | null> {
-  const { data, error } = await supabase.rpc('my_child');
+export async function getMyChild(center?: BranchKey): Promise<MyChild | null> {
+  const { data, error } = await supabase.rpc('my_child', center ? { p_center: center } : {});
   if (error) throw error;
   const r = (data ?? [])[0];
   if (!r) return null;
@@ -72,8 +72,8 @@ export const isRealLesson = (l: MyLesson) => (l.status === 'child' || l.status =
 /** 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용/제공(매월 1일 새로), 선결제는 지금까지 사용/충전(남은 = 충전 − 사용). 확정된 결제만 */
 export interface MyPayment { method: 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid'; used: number; total: number }
 
-export async function getMyPayments(): Promise<MyPayment[]> {
-  const { data, error } = await supabase.rpc('my_payments');
+export async function getMyPayments(center?: BranchKey): Promise<MyPayment[]> {
+  const { data, error } = await supabase.rpc('my_payments', center ? { p_center: center } : {});
   if (error) throw error;
   return (data ?? []) as MyPayment[];
 }
@@ -88,6 +88,13 @@ export async function getMyPaymentHistory(): Promise<MyPaymentUse[]> {
     day: r.day, method: r.method, time: r.lesson_time, teacher: r.teacher_name ?? '', note: r.note ?? undefined,
     center: r.center === 'uijeongbu' ? 'uijeongbu' as const : 'eunpyeong' as const,
   }));
+}
+
+/** 계정에 이어진 아이들이 다니는 지점 — 두 지점 아이가 이어져 있으면 마이페이지에서 둘 다 본다 */
+export async function getMyChildCenters(): Promise<BranchKey[]> {
+  const { data, error } = await supabase.rpc('my_child_centers');
+  if (error) throw error;
+  return ((data ?? []) as string[]).map(c => (c === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong'));
 }
 
 // ── 지점(수색/의정부) 가입 ─────────────────────────────────────────────

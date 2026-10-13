@@ -162,11 +162,14 @@ export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise
   if (error) throw error;
 }
 
-/** 아이를 보호자 계정과 잇는다(계정 하나 = 아이 한 명). null 이면 연결을 끊는다 */
+/** 아이를 보호자 계정과 잇는다(계정 하나 = 센터마다 아이 한 명 — 두 센터를 다니면 수색·의정부 명단의 아이를 각각 잇는다). null 이면 연결을 끊는다 */
 export async function linkChild(childId: string, userId: string | null): Promise<void> {
   if (userId) {
-    // 이 계정에 이미 이어진 다른 아이가 있으면 먼저 끊는다
-    const { error: e1 } = await supabase.from('children').update({ guardian_user_id: null }).eq('guardian_user_id', userId).neq('id', childId);
+    // 이 계정에 이미 이어진 같은 센터의 다른 아이가 있으면 먼저 끊는다
+    const { data: me, error: e0 } = await supabase.from('children').select('center').eq('id', childId).single();
+    if (e0) throw e0;
+    const { error: e1 } = await supabase.from('children').update({ guardian_user_id: null })
+      .eq('guardian_user_id', userId).eq('center', me?.center ?? 'eunpyeong').neq('id', childId);
     if (e1) throw e1;
   }
   const { error } = await supabase.from('children').update({ guardian_user_id: userId }).eq('id', childId);

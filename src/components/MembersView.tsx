@@ -72,7 +72,8 @@ export default function MembersView({ center }: { center: Center }) {
     return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
   }
 
-  const kidOf = (userId: string) => kids.find(k => k.guardianUserId === userId);
+  // 이 센터 명단에서 그 계정과 이어진 아이 (두 센터를 다니면 센터마다 따로 잇는다)
+  const kidOf = (userId: string) => kids.find(k => k.guardianUserId === userId && (k.center ?? 'eunpyeong') === center);
 
   const startEdit = (m: Member) => {
     setEditing(m.userId);
@@ -92,7 +93,7 @@ export default function MembersView({ center }: { center: Center }) {
         prepaidEunpyeong: Number(form.prepaidEunpyeong) || 0, prepaidUijeongbu: Number(form.prepaidUijeongbu) || 0,
       });
       if (r === 'taken') { alert('이미 다른 회원이 쓰는 관리자 닉네임이에요.'); return; }
-      // 회원 코드로 아이와 잇기 (계정 하나 = 아이 한 명)
+      // 회원 코드로 아이와 잇기 (계정 하나 = 센터마다 아이 한 명)
       const code = form.code.trim().toUpperCase();
       const current = kidOf(m.userId);
       if (code !== (current?.memberCode ?? '')) {
@@ -136,7 +137,7 @@ export default function MembersView({ center }: { center: Center }) {
     const names = [m.nickname, centerNickname].map(x => x.trim()).filter(Boolean);
     // 화면을 연 뒤에 명단(뒷번호 등)이 바뀌었을 수 있으니 새로 읽어서 맞춘다
     const fresh = await getChildren().catch(() => kids);
-    const already = fresh.find(k => k.guardianUserId === m.userId);
+    const already = fresh.find(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') === center);
     if (already) { setKids(fresh); return already; }
     const hits = fresh.filter(k => (k.center ?? 'eunpyeong') === center && k.phoneLast4 === m.phoneLast4 && names.some(n => n === k.name || n === `${k.name}${k.number ?? ''}` || n === `${k.number ?? ''}${k.name}`));
     if (hits.length !== 1) {

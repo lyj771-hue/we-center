@@ -143,7 +143,7 @@ export async function koreanHolidayList(from: string, to: string): Promise<{ dat
   const data = await res.json();
   return (data.items ?? [])
     .filter((e: { description?: string; start?: { date?: string } }) => (e.description ?? '').startsWith('공휴일') && e.start?.date)
-    .map((e: { summary?: string; start: { date: string } }) => ({ date: e.start.date, name: e.summary ?? '공휴일' }));
+    .map((e: { summary?: string; start: { date: string } }) => ({ date: e.start.date, name: (e.summary ?? '공휴일').replace(/^쉬는 ?날\s*/, '') }));   // 대체공휴일 "쉬는 날 개천절" → "개천절"
 }
 
 /** 고정 수업 반복 일정 넣기/고치기 — firstDay = 첫 수업 날짜, holidays = 빼는 날짜들,

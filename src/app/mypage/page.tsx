@@ -7,7 +7,7 @@ import MyPageView, { MYPAGE_CARD } from '@/components/MyPageView';
 import type { LedgerRow } from '@/lib/prepaid';
 import { getMyLedger } from '@/lib/prepaid';
 import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
-import { getMyChild, getMyLessons, getMyPaymentHistory, getMyPayments } from '@/lib/mypage';
+import { getMyChild, getMyChildCenters, getMyLessons, getMyPaymentHistory, getMyPayments } from '@/lib/mypage';
 import type { BranchKey, MyPaymentUse } from '@/lib/mypage';
 import { BRANCHES, requestBranch } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -22,8 +22,12 @@ export default function MyPage() {
   // 보는 지점 — 처음 가입한 지점이 기본, 승인된 다른 지점으로 바꿀 수 있다
   const primary = profile?.center ?? 'eunpyeong';
   const [sel, setSel] = useState<BranchKey | null>(null);
-  const branch: BranchKey = sel && canUse(sel) ? sel : primary;
-  const usable = branches.filter(b => canUse(b.key));
+  // 아이가 이어진 지점 — 가입 승인이 없어도 그 지점 아이가 이어져 있으면 볼 수 있다(두 지점을 다니는 아이)
+  const [linked, setLinked] = useState<BranchKey[]>([]);
+  useEffect(() => { if (userId) getMyChildCenters().then(setLinked).catch(() => {}); }, [userId]);
+  const viewable = (b: BranchKey) => canUse(b) || linked.includes(b);
+  const branch: BranchKey = sel && viewable(sel) ? sel : primary;
+  const usable = branches.filter(b => viewable(b.key));
   const [child, setChild] = useState<MyChild | null>(null);
   const [week, setWeek] = useState(thisMonday());
   const [weekLessons, setWeekLessons] = useState<MyLesson[]>([]);
@@ -36,14 +40,15 @@ export default function MyPage() {
 
   const load = useCallback(async () => {
     try {
-      const [c, w, p] = await Promise.all([getMyChild(), getMyLessons(week, addDays(week, 5)), getMyPayments()]);
+      // 아이 정보·결제 현황·선결제 카드는 보는 지점의 아이 것 (선결제는 지점마다 따로)
+      const [c, w, p] = await Promise.all([getMyChild(branch), getMyLessons(week, addDays(week, 5)), getMyPayments(branch)]);
       setChild(c); setWeekLessons(w); setPayments(p); setFailed('');
-      setLedger(await getMyLedger().catch(() => []));
+      setLedger(await getMyLedger(branch).catch(() => []));
       setHistory(await getMyPaymentHistory().catch(() => []));
     } catch (e) {
       setFailed((e as Error).message);
     }
-  }, [week]);
+  }, [week, branch]);
   useEffect(() => { if (userId && profile) load(); }, [userId, profile, load]);
 
   const wrap = (body: React.ReactNode) => (
@@ -62,13 +67,10 @@ export default function MyPage() {
     </div>,
   );
 
-  // 지점별로 나눠 보기 — 수업·결제 기록은 그 지점 것만. 결제 현황 횟수는 두 지점을 쓰면 그 지점 이번 달 기록으로 센다
+  // 지점별로 나눠 보기 — 수업·결제 기록은 그 지점 것만. 결제 현황·선결제 카드는 그 지점 아이 것으로 불러온다
   const lessonsHere = weekLessons.filter(l => l.center === branch);
   const historyHere = history.filter(h => h.center === branch);
-  const ym = today.slice(0, 7);
-  const paymentsHere = usable.length > 1
-    ? payments.map(p => (p.method === 'prepaid' ? p : { ...p, used: historyHere.filter(h => h.method === p.method && h.day.startsWith(ym)).length }))
-    : payments;
+  const paymentsHere = payments;
   const labelOf = (b: BranchKey) => BRANCHES.find(x => x.key === b)?.label ?? '';
 
   const join = async (b: BranchKey) => {
@@ -96,14 +98,14 @@ export default function MyPage() {
       <div className="flex gap-2">
         {branches.map(b => (
           <button key={b.key} type="button"
-            onClick={() => (b.status === 'none' ? join(b.key) : canUse(b.key) ? setSel(b.key) : undefined)}
+            onClick={() => (viewable(b.key) ? setSel(b.key) : b.status === 'none' ? join(b.key) : undefined)}
             className={`flex-1 py-2.5 text-[14px] rounded-full border ${
-              b.status === 'primary' || b.status === 'approved' ? 'border-[var(--brand)] text-[var(--brand)] bg-[#eef5fe]'
+              b.status === 'primary' || b.status === 'approved' || linked.includes(b.key) ? 'border-[var(--brand)] text-[var(--brand)] bg-[#eef5fe]'
               : b.status === 'pending' ? 'border-[#f59e0b] text-[#b45309] bg-[#fffbeb] cursor-default'
               : 'border-[#ddd] text-[#888] hover:bg-[#f8f8f8]'}`}>
             {b.label}
             <span className="block text-[11px] mt-0.5 opacity-80">
-              {b.status === 'primary' ? (profile?.approvedAt ? '가입됨(처음 지점)' : '승인 대기') : b.status === 'approved' ? '가입됨' : b.status === 'pending' ? '승인 대기' : '눌러서 가입 신청'}
+              {b.status === 'primary' ? (profile?.approvedAt ? '가입됨(처음 지점)' : '승인 대기') : b.status === 'approved' || linked.includes(b.key) ? '가입됨' : b.status === 'pending' ? '승인 대기' : '눌러서 가입 신청'}
             </span>
           </button>
         ))}
@@ -112,7 +114,7 @@ export default function MyPage() {
   );
 
   return wrap(
-    <MyPageView child={child} nickname={profile?.nickname} approved={canUse(branch)} week={week} setWeek={setWeek}
+    <MyPageView child={child} nickname={profile?.nickname} approved={viewable(branch)} week={week} setWeek={setWeek}
       weekLessons={lessonsHere} payments={paymentsHere} ledger={ledger} history={historyHere} today={today} failed={failed}
       top={top} bottom={bottom} />,
   );
