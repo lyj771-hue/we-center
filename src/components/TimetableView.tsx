@@ -334,11 +334,18 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     stage(e, input, mode === 'day' && e.side === 'fixed' && c.source === 'fixed');
   };
 
-  // 메모 고치기 — 수업 종류와 같은 규칙(고정 수업이면 이 날부터 / 오늘부터, 그날 칸이면 그날만)
+  // 메모 고치기 — 고정 수업 아이면 이 날부터(날짜별) / 오늘부터(고정 시간표) 이후 일정에도 저장.
+  // 그날 결석·결제를 바꾼 칸이라도 고정 아이 그대로면 고정 수업 메모로 고친다. 빈타임·그날 바뀐 아이 칸만 그날만
   const changeNote = async (e: Editing) => {
     const c = e.cell;
     const v = await askPrompt(`${c.name} — 메모`, c.note ?? '');
     if (v === null || v.trim() === (c.note ?? '')) return;
+    const base = cellOf(board.fixed, e.teacher.id, e.time);
+    const sameFixed = mode === 'day' && e.side === 'fixed' && c.source !== 'fixed' && base.status === 'child' && !!c.childId && c.childId === base.childId;
+    if (sameFixed) {
+      stage(e, { status: 'child', childId: base.childId ?? null, name: base.name, payment: base.payment, kind: base.kind ?? null, note: v.trim() }, true);
+      return;
+    }
     const input: CellInput = { status: 'child', childId: c.childId ?? null, name: c.name, payment: c.payment, kind: c.kind ?? null, absent: c.absent, moved: c.moved, note: v.trim() };
     stage(e, input, mode === 'day' && e.side === 'fixed' && c.source === 'fixed');
   };

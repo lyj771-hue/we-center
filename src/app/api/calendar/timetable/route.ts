@@ -200,6 +200,16 @@ export async function POST(request: Request) {
         };
         const { error } = await db.from('fixed_lessons').upsert(row, { onConflict: 'center,teacher_id,weekday,time' });
         if (error) throw new Error(error.message);
+        // 메모는 이 날부터 그날 바꾼 칸(결석·결제 등, 같은 아이)에도 똑같이
+        if (input.note !== undefined && row.child_id) {
+          const { data: same } = await db.from('board_cells').select('id, day')
+            .match({ center, teacher_id: teacherId, time, side: 'fixed', child_id: row.child_id }).gte('day', from);
+          const ids = (same ?? []).filter(c => new Date(`${c.day}T12:00:00Z`).getUTCDay() === weekday).map(c => c.id as string);
+          if (ids.length) {
+            const { error: e2 } = await db.from('board_cells').update({ note: input.note.trim() || null }).in('id', ids);
+            if (e2) throw new Error(e2.message);
+          }
+        }
         if (cal) {
           await upsertFixedLesson(cal, teacherId, weekday, time, firstDayFor(weekday, from), holidays,
             lessonText(row, childOf.get(row.child_id as string), '고정', false, CENTER_NAME[center]), center, from);
