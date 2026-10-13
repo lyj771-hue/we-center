@@ -1837,6 +1837,7 @@ imp2 as (
     order by ch.created_at
     limit 1
   ) c on true
+  where i.teacher <> '이원재'   -- 이원재 선생님은 9월에 수업하지 않았다(병가) — 엑셀에 있어도 넣지 않고, 있던 칸은 지운다
 ),
 -- 1) 9월 은평 날짜별 칸 — 엑셀로 덮어쓰기: 엑셀에 없는 칸은 지우고, 있는 칸은 엑셀대로
 del as (

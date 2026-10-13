@@ -606,6 +606,7 @@ imp2 as (
     order by coalesce(ch.number, 1), ch.created_at
     limit 1
   ) c on true
+  where i.teacher <> '이원재'   -- 이원재 선생님은 9월에 수업하지 않았다(병가) — 엑셀에 있어도 넣지 않고, 있던 칸은 지운다
 ),
 del as (
   delete from board_cells b
