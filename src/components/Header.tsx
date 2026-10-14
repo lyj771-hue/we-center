@@ -71,7 +71,7 @@ export default function Header() {
   // 관리자 메뉴(회원관리·시간표)는 위 검은 띠에만 / 로그인한 보호자 — 마이페이지
   // 수업스케쥴 메뉴는 두 지점 모두 늘 보인다 (신청은 그 지점 승인된 보호자만)
   const nav = isAdmin
-    ? NAV
+    ? [...TEACHER_NAV, ...NAV]   // 관리자도 선생님 시간표를 메인 메뉴 맨 앞에서
     : teacher ? [...TEACHER_NAV, ...NAV]   // 선생님은 시간표를 맨 앞에
     : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : NAV;
 
