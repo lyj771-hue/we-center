@@ -39,7 +39,7 @@ export async function getTeacherLessons(from: string, to: string): Promise<Teach
 
 // ── 관리자: 회원관리 "선생님" 탭 ─────────────────────────────
 
-export interface TeacherLogin { teacherId: string; name: string; centers: string[]; phone?: string; memberCode?: string; userId?: string; linkedAt?: string }
+export interface TeacherLogin { teacherId: string; name: string; centers: string[]; phone?: string; kakaoPhone?: string; memberCode?: string; userId?: string; linkedAt?: string }
 
 export async function getTeacherLogins(): Promise<TeacherLogin[]> {
   await supabase.rpc('ensure_teacher_logins');
@@ -55,7 +55,7 @@ export async function getTeacherLogins(): Promise<TeacherLogin[]> {
     const x = byId.get(r.id as string);
     return {
       teacherId: r.id as string, name: r.name as string, centers: (r.centers as string[] | null) ?? ['eunpyeong'],
-      phone: (x?.phone as string | null) ?? undefined, memberCode: (x?.member_code as string | null) ?? undefined,
+      phone: (x?.phone as string | null) ?? undefined, kakaoPhone: (x?.kakao_phone as string | null) ?? undefined, memberCode: (x?.member_code as string | null) ?? undefined,
       userId: (x?.user_id as string | null) ?? undefined, linkedAt: (x?.linked_at as string | null) ?? undefined,
     };
   }).sort((a, b) => (a.memberCode ?? '~').localeCompare(b.memberCode ?? '~'));

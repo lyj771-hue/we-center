@@ -415,6 +415,7 @@ export default function MembersView({ center }: { center: Center }) {
               <th className={`${th} text-center`}>수색점</th>
               <th className={`${th} text-center`}>의정부점</th>
               <th className={th}>뒷번호</th>
+              {filter !== 'waiting' && <th className={th}>전화번호</th>}
               {filter === 'waiting' && <th className={th}>아이 명단</th>}
               {filter === 'waiting' && APPROVE_FIELDS.map(f => <th key={f.key} className={`${th} text-center`} title={`승인하려면 꼭 적어야 해요 — 없으면 0`}>{f.label}<span className="block text-[10px] text-[#bbb]">{f.unit === '회' ? '남은 횟수' : '남은 금액(원)'}</span></th>)}
               {filter === 'methods' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
@@ -465,6 +466,10 @@ export default function MembersView({ center }: { center: Center }) {
                       onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 4) }))} />
                       : m.phoneLast4 ?? <span className="text-[#ccc]">-</span>}
                   </td>
+                  {/* 카카오계정 전화번호 — 다음 로그인 때 채워진다 */}
+                  {filter !== 'waiting' && (
+                    <td className={`${td} whitespace-nowrap tabular-nums text-[13px]`} title="카카오계정 전화번호">{m.phone ?? <span className="text-[#ccc]">-</span>}</td>
+                  )}
                   {filter === 'waiting' && (
                     <td className={`${td} whitespace-nowrap text-[12px]`}>
                       {(() => {

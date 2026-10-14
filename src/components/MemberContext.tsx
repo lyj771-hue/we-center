@@ -4,7 +4,7 @@ import { getMyBranches, type BranchKey, type MyBranch } from '@/lib/mypage';
 import { claimTeacher, getMyTeacher, type MyTeacher } from '@/lib/teacher';
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { createMyProfile, getMyProfile, signInWithKakao } from '@/lib/store';
+import { createMyProfile, fetchKakaoPhone, getMyProfile, saveMyPhone, signInWithKakao } from '@/lib/store';
 import type { Profile } from '@/lib/types';
 import { useAdmin } from './AdminContext';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -43,6 +43,10 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<MyBranch[]>([]);
   const [teacher, setTeacher] = useState<MyTeacher | null>(null);
+  // 카카오계정 전화번호 — 로그인 직후 한 번 카카오에서 읽는다(접근 토큰은 그때만 있다). 새로고침해도 가입 창에 쓰게 탭에 잠깐 둔다
+  const [kakaoPhone, setKakaoPhone] = useState<string | null>(() => {
+    try { return typeof window !== 'undefined' ? sessionStorage.getItem('kakaoPhone') : null; } catch { return null; }
+  });
   const refreshBranches = useCallback(() => {
     if (!userId || !profile) { setBranches([]); return; }
     getMyBranches(userId, profile.center ?? 'eunpyeong').then(setBranches).catch(() => setBranches([]));
@@ -65,8 +69,21 @@ export function MemberProvider({ children }: { children: ReactNode }) {
       history.replaceState(null, '', window.location.pathname);
       showAlert(`로그인하지 못했어요.\n(${err.replace(/\+/g, ' ')})`);
     }
-    supabase.auth.getSession().then(({ data }) => apply(data.session?.user.id ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => apply(session?.user.id ?? null));
+    // 카카오에서 막 돌아온 세션엔 카카오 접근 토큰이 있다 — 전화번호를 읽어 두고, 이미 가입한 분이면 프로필에도 저장
+    const seen = new Set<string>();
+    const capture = (session: { provider_token?: string | null; user: { id: string } } | null) => {
+      const token = session?.provider_token;
+      if (!token || seen.has(token)) return;
+      seen.add(token);
+      fetchKakaoPhone(token).then(p => {
+        if (!p) return;
+        setKakaoPhone(p);
+        try { sessionStorage.setItem('kakaoPhone', p); } catch { /* 저장 못 해도 괜찮다 */ }
+        saveMyPhone(p).catch(() => {});
+      });
+    };
+    supabase.auth.getSession().then(({ data }) => { capture(data.session); apply(data.session?.user.id ?? null); });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => { capture(session); apply(session?.user.id ?? null); });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -89,7 +106,7 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse, teacher: memberId ? teacher : null }}>
       {children}
-      {needsNickname && <NicknameSetup userId={memberId} onDone={setProfile} onTeacher={setTeacher} onCancel={logout} />}
+      {needsNickname && <NicknameSetup userId={memberId} kakaoPhone={kakaoPhone} onDone={setProfile} onTeacher={setTeacher} onCancel={logout} />}
     </Ctx.Provider>
   );
 }
@@ -97,12 +114,20 @@ export function MemberProvider({ children }: { children: ReactNode }) {
 export const useMember = () => useContext(Ctx);
 
 /** 처음 로그인한 보호자가 닉네임(아이 이름)을 한 번 정하는 창. 이후 변경은 관리자만 */
-function NicknameSetup({ userId, onDone, onTeacher, onCancel }: { userId: string; onDone: (p: Profile) => void; onTeacher: (t: MyTeacher) => void; onCancel: () => void }) {
+function NicknameSetup({ userId, kakaoPhone, onDone, onTeacher, onCancel }: { userId: string; kakaoPhone: string | null; onDone: (p: Profile) => void; onTeacher: (t: MyTeacher) => void; onCancel: () => void }) {
   // 구분 — 보호자(아이 이름·뒷번호) / 선생님(이름·휴대전화 번호 → 회원관리에 적어 둔 것과 같으면 인증)
   const [role, setRole] = useState<'guardian' | 'teacher'>('guardian');
-  const [tPhone, setTPhone] = useState('');
+  // 뒷번호 칸은 카카오계정 전화번호로 미리 채운다 — 다른 번호로 가입하고 싶으면 고칠 수 있다
+  const last4 = (kakaoPhone ?? '').replace(/\D/g, '').slice(-4);
+  const [tPhone, setTPhone] = useState(last4);
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(last4);
+  // 카카오 번호가 늦게 오면 — 아직 비어 있는 칸만 채운다
+  useEffect(() => {
+    if (!last4) return;
+    setPhone(p => p || last4);
+    setTPhone(p => p || last4);
+  }, [last4]);
   // 다니는 센터 — 수색(은평) / 의정부
   const [center, setCenter] = useState<'eunpyeong' | 'uijeongbu' | ''>('');
   const [error, setError] = useState('');
@@ -117,6 +142,7 @@ function NicknameSetup({ userId, onDone, onTeacher, onCancel }: { userId: string
     try {
       const r = await claimTeacher(name, tPhone);
       if (r === 'ok') {
+        if (kakaoPhone) await saveMyPhone(kakaoPhone).catch(() => {});
         const t = await getMyTeacher();
         if (t) { await showAlert(`${t.name} 선생님, 인증됐어요.\n위 메뉴의 시간표에서 수업을 볼 수 있어요.`); onTeacher(t); }
         return;
@@ -142,6 +168,7 @@ function NicknameSetup({ userId, onDone, onTeacher, onCancel }: { userId: string
     setSaving(true);
     try {
       await createMyProfile(userId, child, phone, center);
+      if (kakaoPhone) await saveMyPhone(kakaoPhone).catch(() => {});
       const p = await getMyProfile(userId);
       if (p) onDone(p);
     } catch {

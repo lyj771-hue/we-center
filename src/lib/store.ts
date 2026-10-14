@@ -293,6 +293,7 @@ interface ProfileRow {
   memo: string | null;
   approved_at: string | null;
   phone_last4?: string | null;
+  phone?: string | null;
   requested_code?: string | null;
   center?: string | null;
 }
@@ -303,6 +304,7 @@ function fromProfileRow(row: ProfileRow): Profile {
     nickname: row.nickname,
     centerNickname: row.center_nickname ?? undefined,
     phoneLast4: row.phone_last4 ?? undefined,
+    phone: row.phone ?? undefined,
     requestedCode: row.requested_code ?? undefined,
     center: row.center === 'uijeongbu' ? 'uijeongbu' : row.center === 'none' ? 'none' : 'eunpyeong',
     memo: row.memo ?? undefined,
@@ -314,7 +316,8 @@ export async function signInWithKakao(): Promise<void> {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'kakao',
     // 돌아올 곳은 지금 페이지 경로만 — 주소 뒤에 붙은 #토큰·?error 같은 꼬리까지 넘기면 주소가 계속 길어진다(414)
-    options: { redirectTo: window.location.origin + window.location.pathname },
+    // phone_number — 카카오계정 전화번호(동의항목 필수). 이미 가입한 분도 다음 로그인 때 동의를 한 번 더 받는다
+    options: { redirectTo: window.location.origin + window.location.pathname, scopes: 'phone_number' },
   });
   if (error) throw error;
 }
@@ -439,4 +442,17 @@ export async function clearMemberBranch(userId: string): Promise<void> {
 export async function setMemberCenterApproved(userId: string, center: string, approve: boolean): Promise<void> {
   const { error } = await supabase.from('member_centers').update({ approved_at: approve ? new Date().toISOString() : null }).match({ user_id: userId, center });
   if (error) throw error;
+}
+
+/** 카카오 로그인 직후 — 카카오 접근 토큰으로 카카오계정 전화번호(010-1234-5678) 읽기. 못 읽으면 null */
+export async function fetchKakaoPhone(token: string): Promise<string | null> {
+  const res = await fetch('/api/kakao/phone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }).catch(() => null);
+  if (!res?.ok) return null;
+  const data = await res.json().catch(() => ({}));
+  return (data.phone as string | null) ?? null;
+}
+
+/** 내 프로필에 카카오계정 전화번호 저장 (알림톡용) — SQL 전이면 조용히 넘어간다 */
+export async function saveMyPhone(phone: string): Promise<void> {
+  await supabase.rpc('set_my_phone', { p_phone: phone });
 }

@@ -42,6 +42,8 @@ export interface Profile {
   approvedAt?: string;
   /** 대표 보호자 전화번호 뒷 4자리 (가입할 때 필수) */
   phoneLast4?: string;
+  /** 카카오계정 전화번호 (010-1234-5678) — 카카오 로그인 동의로 받는다, 알림톡용 */
+  phone?: string;
   /** 가입할 때 적은 회원 코드 (맞지 않았어도 남겨 둔다) */
   requestedCode?: string;
   /** 가입할 때 고른 센터 — 'eunpyeong'(수색) / 'uijeongbu'(의정부). 없으면 수색 */

@@ -47,6 +47,7 @@ export default function TeachersTab() {
               <th className={th}>구분</th>
               <th className={th}>이름</th>
               <th className={th}>휴대전화 뒷번호</th>
+              <th className={th}>전화번호</th>
               <th className={th}>회원 코드</th>
               <th className={th}>카카오 연결</th>
               <th className={th}><span className="sr-only">관리</span></th>
@@ -62,6 +63,8 @@ export default function TeachersTab() {
                     onBlur={e => savePhone(t, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                     className="w-16 text-center tracking-[0.2em] border-b border-[#e5e5e5] py-1 text-[13px] tabular-nums outline-none bg-transparent focus:border-[var(--brand)]" />
                 </td>
+                {/* 카카오계정 전화번호 — 선생님이 로그인하면 채워진다(고칠 수 없음) */}
+                <td className={`${td} text-[13px] tabular-nums whitespace-nowrap`} title="카카오계정 전화번호">{t.kakaoPhone ?? <span className="text-[#ccc]">-</span>}</td>
                 <td className={`${td} text-[12px] text-[#888] tabular-nums whitespace-nowrap`}>{t.memberCode ?? '-'}</td>
                 <td className={`${td} text-[12px] whitespace-nowrap`}>
                   {t.userId ? <span className="text-[var(--brand)]">인증됨 <span className="text-[#aaa]">{fmtDate(t.linkedAt)}</span></span> : <span className="text-[#ccc]">아직 안 함</span>}
@@ -71,7 +74,7 @@ export default function TeachersTab() {
                 </td>
               </tr>
             ))}
-            {!list.length && !failed && <tr><td colSpan={6} className="py-10 text-center text-[13px] text-[#bbb]">선생님이 없어요.</td></tr>}
+            {!list.length && !failed && <tr><td colSpan={7} className="py-10 text-center text-[13px] text-[#bbb]">선생님이 없어요.</td></tr>}
           </tbody>
         </table>
       </div>
