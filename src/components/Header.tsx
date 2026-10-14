@@ -77,6 +77,10 @@ export default function Header() {
             &nbsp;&nbsp;
             <Link href="/admin/timetable/uijeongbu" className="underline underline-offset-2 opacity-60 hover:opacity-100">시간표(의정부)</Link>
             &nbsp;&nbsp;
+            <Link href="/teacher/timetable" className="underline underline-offset-2 opacity-60 hover:opacity-100" title="선생님이 보는 화면(보기만)">선생님 시간표(수색)</Link>
+            &nbsp;&nbsp;
+            <Link href="/teacher/timetable/uijeongbu" className="underline underline-offset-2 opacity-60 hover:opacity-100" title="선생님이 보는 화면(보기만)">선생님 시간표(의정부)</Link>
+            &nbsp;&nbsp;
             {/* 수업 현황 — 전체 관리자만 (직원 계정엔 안 보인다) */}
             {canSeeStats && <><Link href="/admin/dashboard" className="underline underline-offset-2 opacity-60 hover:opacity-100">수업 현황</Link>&nbsp;&nbsp;</>}
             <Link href="/admin/messages" className="underline underline-offset-2 opacity-60 hover:opacity-100">알림 메시지</Link>
