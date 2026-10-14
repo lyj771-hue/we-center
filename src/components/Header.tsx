@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAdmin } from './AdminContext';
 import { useMember } from './MemberContext';
 import type { Profile } from '@/lib/types';
@@ -33,6 +33,24 @@ const TEACHER_NAV = [
 export default function Header() {
   const pathname = usePathname();
   const { isAdmin, canSeeStats, requestAdmin, logout } = useAdmin();
+  // 관리자 메뉴 — 같은 메뉴의 지점은 한 묶음(PC 드롭다운 · 휴대폰 메뉴 안 버튼 줄)
+  const adminGroups: { label: string; items: { href: string; label: string }[] }[] = [
+    { label: '회원관리', items: [{ href: '/members', label: '수색' }, { href: '/members/uijeongbu', label: '의정부' }, { href: '/members/teachers', label: '선생님' }] },
+    { label: '시간표', items: [{ href: '/admin/timetable', label: '수색' }, { href: '/admin/timetable/uijeongbu', label: '의정부' }] },
+    { label: '선생님 시간표', items: [{ href: '/teacher/timetable', label: '수색' }, { href: '/teacher/timetable/uijeongbu', label: '의정부' }] },
+    // 수업 현황 — 전체 관리자만 (직원 계정엔 안 보인다)
+    ...(canSeeStats ? [{ label: '수업 현황', items: [{ href: '/admin/dashboard', label: '수업 현황' }] }] : []),
+    { label: '알림 메시지', items: [{ href: '/admin/messages', label: '알림 메시지' }] },
+  ];
+  const [adminOpen, setAdminOpen] = useState<string | null>(null);
+  // 바깥을 누르거나 페이지가 바뀌면 드롭다운 닫기
+  useEffect(() => {
+    if (!adminOpen) return;
+    const close = () => setAdminOpen(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [adminOpen]);
+  useEffect(() => { setAdminOpen(null); }, [pathname]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { userId, profile, login, logout: memberLogout, teacher } = useMember();
 
@@ -64,30 +82,40 @@ export default function Header() {
     <>
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[#ebebeb]">
         {isAdmin && (
-          <div className="bg-[#0a0a0a] text-white text-center text-[10px] tracking-[0.25em] py-1.5">
-            관리자 모드&nbsp;&nbsp;
-            {/* 관리자 메뉴 — 센터(수색/의정부)마다 회원 관리·시간표 */}
-            <Link href="/members" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원관리(수색)</Link>
-            &nbsp;&nbsp;
-            <Link href="/members/uijeongbu" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원관리(의정부)</Link>
-            &nbsp;&nbsp;
-            <Link href="/members/teachers" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원관리(선생님)</Link>
-            &nbsp;&nbsp;
-            <Link href="/admin/timetable" className="underline underline-offset-2 opacity-60 hover:opacity-100">시간표(수색)</Link>
-            &nbsp;&nbsp;
-            <Link href="/admin/timetable/uijeongbu" className="underline underline-offset-2 opacity-60 hover:opacity-100">시간표(의정부)</Link>
-            &nbsp;&nbsp;
-            <Link href="/teacher/timetable" className="underline underline-offset-2 opacity-60 hover:opacity-100" title="선생님이 보는 화면(보기만)">선생님 시간표(수색)</Link>
-            &nbsp;&nbsp;
-            <Link href="/teacher/timetable/uijeongbu" className="underline underline-offset-2 opacity-60 hover:opacity-100" title="선생님이 보는 화면(보기만)">선생님 시간표(의정부)</Link>
-            &nbsp;&nbsp;
-            {/* 수업 현황 — 전체 관리자만 (직원 계정엔 안 보인다) */}
-            {canSeeStats && <><Link href="/admin/dashboard" className="underline underline-offset-2 opacity-60 hover:opacity-100">수업 현황</Link>&nbsp;&nbsp;</>}
-            <Link href="/admin/messages" className="underline underline-offset-2 opacity-60 hover:opacity-100">알림 메시지</Link>
-            &nbsp;&nbsp;
-            <button onClick={logout} className="underline underline-offset-2 opacity-60 hover:opacity-100">
-              종료
-            </button>
+          <div className="bg-[#0a0a0a] text-white text-[10px] tracking-[0.25em] py-1.5">
+            {/* PC — 같은 메뉴의 지점들은 눌러서 펼치는 드롭다운 */}
+            <div className="hidden md:flex items-center justify-center gap-4">
+              <span>관리자 모드</span>
+              {adminGroups.map(g => {
+                const cur = g.items.find(i => pathname === i.href);
+                if (g.items.length === 1) {
+                  return <Link key={g.label} href={g.items[0].href} className={`underline underline-offset-2 hover:opacity-100 ${cur ? 'opacity-100' : 'opacity-60'}`}>{g.label}</Link>;
+                }
+                return (
+                  <span key={g.label} className="relative">
+                    <button type="button" onClick={e => { e.stopPropagation(); setAdminOpen(o => (o === g.label ? null : g.label)); }}
+                      className={`underline underline-offset-2 hover:opacity-100 ${cur || adminOpen === g.label ? 'opacity-100' : 'opacity-60'}`}>
+                      {g.label}{cur ? `(${cur.label})` : ''} ▾
+                    </button>
+                    {adminOpen === g.label && (
+                      <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-[60] min-w-[110px] bg-white text-[#0a0a0a] tracking-normal text-[13px] shadow-xl border border-[#e5e5e5] py-1 flex flex-col">
+                        {g.items.map(i => (
+                          <Link key={i.href} href={i.href} onClick={() => setAdminOpen(null)}
+                            className={`px-4 py-2 text-left whitespace-nowrap hover:bg-[#f4f4f5] ${pathname === i.href ? 'text-[var(--brand)] font-medium' : ''}`}>{i.label}</Link>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                );
+              })}
+              <button onClick={logout} className="underline underline-offset-2 opacity-60 hover:opacity-100">종료</button>
+            </div>
+            {/* 휴대폰 — 관리자 메뉴는 오른쪽 메뉴(☰) 안에 크게 */}
+            <div className="md:hidden flex items-center justify-center gap-4">
+              <span>관리자 모드</span>
+              <button type="button" onClick={() => setMobileOpen(true)} className="underline underline-offset-2">관리자 메뉴 ☰</button>
+              <button onClick={logout} className="underline underline-offset-2 opacity-60">종료</button>
+            </div>
           </div>
         )}
 
@@ -169,7 +197,7 @@ export default function Header() {
         />
         <div
           className={[
-            'absolute right-0 top-0 h-full w-2/3 max-w-xs bg-white shadow-2xl flex flex-col p-6 pt-8',
+            'absolute right-0 top-0 h-full w-2/3 max-w-xs bg-white shadow-2xl flex flex-col p-6 pt-8 overflow-y-auto',
             'transition-transform duration-300 ease-out',
             mobileOpen ? 'translate-x-0 pointer-events-auto' : 'translate-x-full',
           ].join(' ')}
@@ -181,6 +209,23 @@ export default function Header() {
           >
             ✕
           </button>
+          {/* 관리자 메뉴 — 묶음마다 지점 버튼을 나란히 */}
+          {isAdmin && (
+            <div className="mb-5 pb-5 border-b border-[#f0f0f0] space-y-3">
+              <p className="text-[11px] tracking-[0.2em] text-[#999]">관리자</p>
+              {adminGroups.map(g => (
+                <div key={g.label}>
+                  {g.items.length > 1 && <p className="text-[12px] text-[#555] mb-1">{g.label}</p>}
+                  <div className="flex gap-1.5">
+                    {g.items.map(i => (
+                      <Link key={i.href} href={i.href} onClick={() => setMobileOpen(false)}
+                        className={`flex-1 text-center py-2 text-[13px] rounded-md border ${pathname === i.href ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#333]'}`}>{i.label}</Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <nav aria-label="모바일 메뉴">
             <ul className="space-y-1">
               {nav.map(({ href, label }) => (
