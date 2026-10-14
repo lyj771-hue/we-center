@@ -72,7 +72,7 @@ export default function Header() {
   // 수업스케쥴 메뉴는 두 지점 모두 늘 보인다 (신청은 그 지점 승인된 보호자만)
   const nav = isAdmin
     ? NAV
-    : teacher ? [...NAV, ...TEACHER_NAV]
+    : teacher ? [...TEACHER_NAV, ...NAV]   // 선생님은 시간표를 맨 앞에
     : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : NAV;
 
   // /schedule/uijeongbu 는 수업스케쥴(의정부)에만 불이 들어오게
