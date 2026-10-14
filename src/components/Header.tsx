@@ -168,7 +168,7 @@ export default function Header() {
                 <Link
                   href={href}
                   className={[
-                    'relative block px-4 py-3 text-[15px] tracking-wide transition-colors duration-150',
+                    'relative block px-3 py-3 text-[14px] tracking-wide transition-colors duration-150',
                     isActive(href) ? 'text-[var(--brand)] font-medium' : 'text-[var(--brand)] hover:opacity-70',
                   ].join(' ')}
                 >
