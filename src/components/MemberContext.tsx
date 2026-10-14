@@ -1,6 +1,7 @@
 'use client';
 
 import { getMyBranches, type BranchKey, type MyBranch } from '@/lib/mypage';
+import { claimTeacher, getMyTeacher, type MyTeacher } from '@/lib/teacher';
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { createMyProfile, getMyProfile, signInWithKakao } from '@/lib/store';
@@ -26,11 +27,13 @@ interface MemberCtx {
   refreshProfile: () => void;
   /** 이 지점 수업스케쥴·마이페이지를 볼 수 있는지 (처음 지점은 승인, 다른 지점은 그 지점 승인) */
   canUse: (b: BranchKey) => boolean;
+  /** 이 카카오 계정이 선생님이면 — 선생님은 시간표 보기만 (가입 창·마이페이지 없음) */
+  teacher: MyTeacher | null;
 }
 
 const Ctx = createContext<MemberCtx>({
   userId: null, profile: null, loading: true, login: () => {}, logout: () => {},
-  branches: [], refreshBranches: () => {}, refreshProfile: () => {}, canUse: () => false,
+  branches: [], refreshBranches: () => {}, refreshProfile: () => {}, canUse: () => false, teacher: null,
 });
 
 export function MemberProvider({ children }: { children: ReactNode }) {
@@ -39,6 +42,7 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<MyBranch[]>([]);
+  const [teacher, setTeacher] = useState<MyTeacher | null>(null);
   const refreshBranches = useCallback(() => {
     if (!userId || !profile) { setBranches([]); return; }
     getMyBranches(userId, profile.center ?? 'eunpyeong').then(setBranches).catch(() => setBranches([]));
@@ -48,11 +52,10 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const apply = (id: string | null) => {
       setUserId(id);
-      if (!id) { setProfile(null); setLoading(false); return; }
+      if (!id) { setProfile(null); setTeacher(null); setLoading(false); return; }
       setLoading(true);
-      getMyProfile(id)
-        .then(setProfile)
-        .catch(() => setProfile(null))
+      Promise.all([getMyProfile(id).catch(() => null), getMyTeacher()])
+        .then(([p, t]) => { setProfile(p); setTeacher(t); })
         .finally(() => setLoading(false));
     };
     // 카카오 로그인이 실패해서 돌아오면 주소에 error_description 이 붙는다 — 알려 주고 주소를 깨끗이
@@ -81,12 +84,12 @@ export function MemberProvider({ children }: { children: ReactNode }) {
     const st = branches.find(x => x.key === b)?.status ?? (b === (profile?.center ?? 'eunpyeong') ? 'primary' : 'none');
     return st === 'primary' ? !!profile?.approvedAt : st === 'approved';
   }, [branches, profile]);
-  const needsNickname = !!memberId && !loading && !profile;
+  const needsNickname = !!memberId && !loading && !profile && !teacher;
 
   return (
-    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse }}>
+    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse, teacher: memberId ? teacher : null }}>
       {children}
-      {needsNickname && <NicknameSetup userId={memberId} onDone={setProfile} onCancel={logout} />}
+      {needsNickname && <NicknameSetup userId={memberId} onDone={setProfile} onTeacher={setTeacher} onCancel={logout} />}
     </Ctx.Provider>
   );
 }
@@ -94,17 +97,43 @@ export function MemberProvider({ children }: { children: ReactNode }) {
 export const useMember = () => useContext(Ctx);
 
 /** 처음 로그인한 보호자가 닉네임(아이 이름)을 한 번 정하는 창. 이후 변경은 관리자만 */
-function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (p: Profile) => void; onCancel: () => void }) {
+function NicknameSetup({ userId, onDone, onTeacher, onCancel }: { userId: string; onDone: (p: Profile) => void; onTeacher: (t: MyTeacher) => void; onCancel: () => void }) {
+  // 구분 — 보호자(아이 이름·뒷번호) / 선생님(이름·휴대전화 번호 → 회원관리에 적어 둔 것과 같으면 인증)
+  const [role, setRole] = useState<'guardian' | 'teacher'>('guardian');
+  const [tPhone, setTPhone] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   // 다니는 센터 — 수색(은평) / 의정부
   const [center, setCenter] = useState<'eunpyeong' | 'uijeongbu' | ''>('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const ready = !!name.trim() && /^\d{4}$/.test(phone) && !!center;
+  const ready = role === 'teacher'
+    ? !!name.trim() && /^\d{4}$/.test(tPhone)
+    : !!name.trim() && /^\d{4}$/.test(phone) && !!center;
+
+  // 선생님 인증
+  const submitTeacher = async () => {
+    setSaving(true);
+    try {
+      const r = await claimTeacher(name, tPhone);
+      if (r === 'ok') {
+        const t = await getMyTeacher();
+        if (t) { await showAlert(`${t.name} 선생님, 인증됐어요.\n위 메뉴의 시간표에서 수업을 볼 수 있어요.`); onTeacher(t); }
+        return;
+      }
+      setError(r === 'taken' ? '이미 다른 카카오 계정으로 인증된 선생님이에요. 센터에 말씀해 주세요.'
+        : r === 'bad_phone' ? '휴대전화 뒷번호 4자리를 숫자로 적어 주세요.'
+        : '센터에 등록된 선생님 정보와 달라요. 이름과 휴대전화 뒷번호를 확인해 주세요.');
+    } catch {
+      setError('인증하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (role === 'teacher') { await submitTeacher(); return; }
     const child = name.trim();
     if (!child) { setError('아이 이름을 적어 주세요.'); return; }
     if (!/^\d{4}$/.test(phone)) { setError('대표 보호자 전화번호 뒷 4자리를 숫자로 적어 주세요.'); return; }
@@ -133,9 +162,28 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
           className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center text-[18px] text-[#999] hover:text-[#333]">✕</button>
         <p className="text-[var(--brand)] text-[22px] mb-2">처음 오셨네요</p>
         <p className="text-[13px] leading-[2] text-[#666] mb-6">
-          아이 이름과 대표 보호자 전화번호 뒷자리를 적어 주세요.
+          {role === 'teacher' ? '센터에 등록된 이름과 휴대전화 뒷번호 4자리를 적어 주세요.' : '아이 이름과 대표 보호자 전화번호 뒷자리를 적어 주세요.'}
         </p>
         <form onSubmit={submit} className="space-y-4">
+          {/* 구분 */}
+          <div className="flex gap-2">
+            {([['guardian', '보호자'], ['teacher', '선생님']] as const).map(([k, l]) => (
+              <button key={k} type="button" onClick={() => { setRole(k); setError(''); }}
+                className={`flex-1 py-1.5 text-[13px] border-b-2 ${role === k ? 'border-[var(--brand)] text-[var(--brand)]' : 'border-transparent text-[#999]'}`}>{l}</button>
+            ))}
+          </div>
+          {role === 'teacher' ? (<>
+            <label className="block">
+              <span className={label}>선생님 이름 <span className="text-[#e11d48]">*</span></span>
+              <input type="text" value={name} maxLength={20} placeholder="예: 이정길"
+                onChange={e => { setName(e.target.value); setError(''); }} className={field} />
+            </label>
+            <label className="block">
+              <span className={label}>휴대전화 뒷번호 4자리 <span className="text-[#e11d48]">*</span></span>
+              <input type="text" inputMode="numeric" value={tPhone} maxLength={4} placeholder="예: 1234"
+                onChange={e => { setTPhone(e.target.value.replace(/\D/g, '').slice(0, 4)); setError(''); }} className={`${field} tracking-[0.3em]`} />
+            </label>
+          </>) : (<>
           <div>
             <span className={label}>다니는 센터 <span className="text-[#e11d48]">*</span></span>
             <div className="flex gap-2 mt-1.5">
@@ -155,11 +203,12 @@ function NicknameSetup({ userId, onDone, onCancel }: { userId: string; onDone: (
             <input type="text" inputMode="numeric" value={phone} maxLength={4} placeholder="예: 1234"
               onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 4)); setError(''); }} className={`${field} tracking-[0.3em]`} />
           </label>
+          </>)}
           {error && <p className="text-[12px] text-red-400">{error}</p>}
           <div className="flex gap-2 pt-2">
             <button type="submit" disabled={saving || !ready}
               className="flex-1 bg-[var(--brand)] text-white text-[13px] py-3 tracking-widest hover:opacity-90 transition-opacity disabled:opacity-40">
-              {saving ? '저장 중...' : '가입하기'}
+              {saving ? '저장 중...' : role === 'teacher' ? '선생님 인증' : '가입하기'}
             </button>
             <button type="button" onClick={onCancel}
               className="flex-1 border border-[#e5e5e5] text-[13px] py-3 tracking-widest hover:bg-[#f8f8f8] transition-colors">

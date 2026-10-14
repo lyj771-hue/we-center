@@ -18,7 +18,7 @@ import { addDays, thisMonday, toYmd } from '@/lib/schedule';
 
 export default function MyPage() {
   const { isAdmin } = useAdmin();
-  const { userId, profile, loading, login, logout, branches, canUse, refreshBranches, refreshProfile } = useMember();
+  const { userId, profile, loading, login, logout, branches, canUse, refreshBranches, refreshProfile, teacher } = useMember();
   // 보는 지점 — 처음 가입한 지점이 기본, 승인된 다른 지점으로 바꿀 수 있다
   // 기본 지점 — 'none'(모든 지점 취소)이면 가입한 지점이 없다
   const noBranch = profile?.center === 'none';
@@ -62,6 +62,7 @@ export default function MyPage() {
   );
 
   if (isAdmin) return wrap(<p className="text-[14px] text-[#888]">마이페이지는 보호자 계정으로 로그인하면 보여요.</p>);
+  if (teacher) return wrap(<p className="text-[14px] text-[#888]">{teacher.name} 선생님 계정이에요. 마이페이지는 보호자 계정에만 있어요 — 위 메뉴의 시간표를 봐 주세요.</p>);
   if (loading) return wrap(<p className="text-[14px] text-[#aaa]">불러오는 중…</p>);
   if (!userId) return wrap(
     <div className={`${MYPAGE_CARD} text-center space-y-4`}>

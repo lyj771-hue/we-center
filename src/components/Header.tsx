@@ -24,11 +24,17 @@ const NAV = [
   { href: '/schedule/uijeongbu', label: '수업스케쥴(의정부)' },
 ];
 
+// 선생님(카카오 로그인 후 선생님 인증) — 시간표 보기
+const TEACHER_NAV = [
+  { href: '/teacher/timetable', label: '시간표(수색)' },
+  { href: '/teacher/timetable/uijeongbu', label: '시간표(의정부)' },
+];
+
 export default function Header() {
   const pathname = usePathname();
   const { isAdmin, canSeeStats, requestAdmin, logout } = useAdmin();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { userId, profile, login, logout: memberLogout } = useMember();
+  const { userId, profile, login, logout: memberLogout, teacher } = useMember();
 
   // Triple-click the WE logo → admin prompt
   const clicks = useRef(0);
@@ -48,10 +54,11 @@ export default function Header() {
   // 수업스케쥴 메뉴는 두 지점 모두 늘 보인다 (신청은 그 지점 승인된 보호자만)
   const nav = isAdmin
     ? NAV
+    : teacher ? [...NAV, ...TEACHER_NAV]
     : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : NAV;
 
   // /schedule/uijeongbu 는 수업스케쥴(의정부)에만 불이 들어오게
-  const isActive = (href: string) => pathname === href || (pathname.startsWith(href + '/') && !NAV.some(n => n.href !== href && n.href.startsWith(href + '/') && pathname.startsWith(n.href)));
+  const isActive = (href: string) => pathname === href || (pathname.startsWith(href + '/') && ![...NAV, ...TEACHER_NAV].some(n => n.href !== href && n.href.startsWith(href + '/') && pathname.startsWith(n.href)));
 
   return (
     <>
@@ -63,6 +70,8 @@ export default function Header() {
             <Link href="/members" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원관리(수색)</Link>
             &nbsp;&nbsp;
             <Link href="/members/uijeongbu" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원관리(의정부)</Link>
+            &nbsp;&nbsp;
+            <Link href="/members/teachers" className="underline underline-offset-2 opacity-60 hover:opacity-100">회원관리(선생님)</Link>
             &nbsp;&nbsp;
             <Link href="/admin/timetable" className="underline underline-offset-2 opacity-60 hover:opacity-100">시간표(수색)</Link>
             &nbsp;&nbsp;
@@ -93,7 +102,7 @@ export default function Header() {
               휴대폰은 로그인 버튼을 왼쪽, 채널 아이콘은 펼친 메뉴 맨 아래에 두고, 로그인 뒤 인사는 로고 아래 한 줄로(로고와 겹치지 않게) */}
           <div className="absolute left-4 md:left-auto md:right-14 top-1/2 -translate-y-1/2 flex items-center gap-2">
             {!isAdmin && (userId ? (
-              <span className="hidden md:flex"><Greeting profile={profile} onLogout={memberLogout} /></span>
+              <span className="hidden md:flex"><Greeting profile={profile} teacherName={teacher?.name} onLogout={memberLogout} /></span>
             ) : (
               <button onClick={login}
                 className="rounded-full border border-[#e11d48] bg-[#e11d48] px-3 py-1.5 text-[12px] tracking-[0.1em] text-white transition hover:opacity-90">
@@ -115,7 +124,7 @@ export default function Header() {
 
         {!isAdmin && userId && (
           <div className="md:hidden flex justify-center pb-2 -mt-1">
-            <Greeting profile={profile} onLogout={memberLogout} showLogout={false} />
+            <Greeting profile={profile} teacherName={teacher?.name} onLogout={memberLogout} showLogout={false} />
           </div>
         )}
 
@@ -220,10 +229,11 @@ function KakaoChannelIcon() {
 }
 
 /** 로그인한 보호자 인사 + 밑줄 로그아웃 (누르면 한 번 묻는다). 휴대폰 인사엔 로그아웃을 빼고 펼친 메뉴 맨 아래에 둔다 */
-function Greeting({ profile, onLogout, showLogout = true }: { profile: Profile | null; onLogout: () => void; showLogout?: boolean }) {
+function Greeting({ profile, teacherName, onLogout, showLogout = true }: { profile: Profile | null; teacherName?: string; onLogout: () => void; showLogout?: boolean }) {
   return (
     <span className="flex items-center gap-2 text-[12px] md:text-[13px] leading-[1.6] text-[#555] whitespace-nowrap">
-      {profile && (
+      {teacherName && <span><span className="text-[var(--brand)]">{teacherName}</span> 선생님</span>}
+      {!teacherName && profile && (
         <Link href="/mypage" className="py-0.5 hover:opacity-70" title="마이페이지">
           <span className="text-[var(--brand)]">{profile.nickname}</span>님 오셨군요<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span>
           {!profile.approvedAt && <span className="text-[#aaa]">(미승인)</span>}
