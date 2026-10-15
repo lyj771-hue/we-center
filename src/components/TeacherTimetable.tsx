@@ -24,10 +24,9 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const [holidays, setHolidays] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState('');
   const can = isAdmin || !!teacher;
-  // 한눈에 보기(기본) — 표 전체가 화면 폭에 들어오게 줄인다 (끄면 원래 크기, 옆으로 밀어 보기). 끈 걸 기억한다
+  // 한눈에 보기 — 열 때마다 늘 이걸로 시작: 표 전체가 화면 폭에 들어오게 줄인다 ([크게 보기] = 원래 크기, 옆으로 밀어 보기)
   const [fit, setFit] = useState(true);
-  useEffect(() => { try { setFit(localStorage.getItem('tt-fit') !== '0'); } catch {} }, []);
-  const toggleFit = () => setFit(v => { try { localStorage.setItem('tt-fit', v ? '0' : '1'); } catch {} return !v; });
+  const toggleFit = () => setFit(v => !v);
   const wrapRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const [zoom, setZoom] = useState(1);
