@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { useMember } from '@/components/MemberContext';
 import type { Teacher } from '@/lib/schedule';
@@ -25,6 +25,27 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const [onlyMine, setOnlyMine] = useState(true);
   const [failed, setFailed] = useState('');
   const can = isAdmin || !!teacher;
+  // 한눈에 보기 — 휴대폰에서 표 전체가 화면 폭에 들어오게 줄인다 (끄면 원래 크기, 옆으로 밀어 보기). 고른 걸 기억한다
+  const [fit, setFit] = useState(false);
+  useEffect(() => { try { setFit(localStorage.getItem('tt-fit') === '1'); } catch {} }, []);
+  const toggleFit = () => setFit(v => { try { localStorage.setItem('tt-fit', v ? '0' : '1'); } catch {} return !v; });
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [zoom, setZoom] = useState(1);
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current, table = tableRef.current;
+    if (!fit || !wrap || !table) { setZoom(1); return; }
+    const measure = () => {
+      table.style.zoom = '1';
+      const z = Math.min(1, wrap.clientWidth / table.scrollWidth);
+      table.style.zoom = String(z);
+      setZoom(z);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [fit, lessons, teachers, day, onlyMine]);
 
   const load = useCallback(async () => {
     try {
@@ -91,6 +112,10 @@ export default function TeacherTimetable({ center }: { center: Center }) {
         <input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} className="text-[13px] border border-[#ddd] px-2 h-8" />
         <button onClick={() => setDay(x => addDays(x, 1))} className={nav} aria-label="다음 날">›</button>
         {day !== toYmd(new Date()) && <button onClick={() => setDay(toYmd(new Date()))} className="text-[12px] text-[#888] underline underline-offset-2">오늘</button>}
+        <button onClick={toggleFit} aria-pressed={fit}
+          className={`text-[12px] px-2.5 h-8 border ${fit ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`}>
+          {fit ? '크게 보기' : '한눈에 보기'}
+        </button>
         {mineHere && (
           <label className="ml-auto flex items-center gap-1 text-[12px] text-[#555]">
             <input type="checkbox" checked={onlyMine} onChange={e => setOnlyMine(e.target.checked)} />내 수업만
@@ -98,8 +123,8 @@ export default function TeacherTimetable({ center }: { center: Center }) {
         )}
       </div>
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요. ({failed})</p>}
-      <div className="overflow-x-auto bg-white">
-        <table className="border-collapse text-[11px] min-w-full">
+      <div ref={wrapRef} className={`${fit ? 'overflow-hidden' : 'overflow-x-auto'} bg-white`}>
+        <table ref={tableRef} className="border-collapse text-[11px] min-w-full" style={fit ? { zoom } : undefined}>
           <thead>
             <tr>
               <th className={`${th} sticky left-0 z-10 bg-white w-12`}>시간</th>
@@ -144,7 +169,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-[#999] mt-3 leading-[2]">보기만 할 수 있어요. 바꿀 일이 있으면 센터에 말씀해 주세요. · 줄 = 다른 선생님에게 옮김 · ? = 미정 · &quot;신청&quot; = 보호자가 수업스케쥴에서 신청</p>
+      <p className="text-[11px] text-[#999] mt-3 leading-[2]">보기만 할 수 있어요. 바꿀 일이 있으면 센터에 말씀해 주세요. · [한눈에 보기] = 표 전체를 화면에 맞춰 줄여요(두 손가락으로 벌려 확대할 수 있어요) · 줄 = 다른 선생님에게 옮김 · ? = 미정 · &quot;신청&quot; = 보호자가 수업스케쥴에서 신청</p>
     </div>
   );
 }
