@@ -281,7 +281,9 @@ function KakaoChannelIcon() {
 function Greeting({ profile, teacherName, onLogout, showLogout = true }: { profile: Profile | null; teacherName?: string; onLogout: () => void; showLogout?: boolean }) {
   return (
     <span className="flex items-center gap-2 text-[12px] md:text-[13px] leading-[1.6] text-[#555] whitespace-nowrap">
-      {teacherName && <span><span className="text-[var(--brand)]">{teacherName}</span> 선생님</span>}
+      {teacherName && (
+        <span><span className="text-[var(--brand)]">{teacherName}</span> 선생님 오셨군요<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span></span>
+      )}
       {!teacherName && profile && (
         <Link href="/mypage" className="py-0.5 hover:opacity-70" title="마이페이지">
           <span className="text-[var(--brand)]">{profile.nickname}</span>님 오셨군요<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span>
