@@ -22,12 +22,11 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [lessons, setLessons] = useState<TeacherLesson[]>([]);
   const [holidays, setHolidays] = useState<Record<string, string>>({});
-  const [onlyMine, setOnlyMine] = useState(true);
   const [failed, setFailed] = useState('');
   const can = isAdmin || !!teacher;
-  // 한눈에 보기 — 휴대폰에서 표 전체가 화면 폭에 들어오게 줄인다 (끄면 원래 크기, 옆으로 밀어 보기). 고른 걸 기억한다
-  const [fit, setFit] = useState(false);
-  useEffect(() => { try { setFit(localStorage.getItem('tt-fit') === '1'); } catch {} }, []);
+  // 한눈에 보기(기본) — 표 전체가 화면 폭에 들어오게 줄인다 (끄면 원래 크기, 옆으로 밀어 보기). 끈 걸 기억한다
+  const [fit, setFit] = useState(true);
+  useEffect(() => { try { setFit(localStorage.getItem('tt-fit') !== '0'); } catch {} }, []);
   const toggleFit = () => setFit(v => { try { localStorage.setItem('tt-fit', v ? '0' : '1'); } catch {} return !v; });
   const wrapRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -45,7 +44,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
     const ro = new ResizeObserver(measure);
     ro.observe(wrap);
     return () => ro.disconnect();
-  }, [fit, lessons, teachers, day, onlyMine]);
+  }, [fit, lessons, teachers, day]);
 
   const load = useCallback(async () => {
     try {
@@ -80,9 +79,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const cellOf = (teacherId: string, time: string, side: 'fixed' | 'open') => here.find(l => l.teacherId === teacherId && l.time === time && l.side === side);
   const hasLessons = (id: string) => here.some(l => l.teacherId === id && l.status === 'child');
   // 그날 이 센터에 나오는 선생님 — 출근 요일(일요일은 일요일 선생님) 또는 그날 수업이 있는 선생님
-  let shown = teachers.filter(t => hasLessons(t.id) || (wd === 0 ? SUNDAY_TEACHERS[center].includes(t.name) && t.centers.includes(center) : worksAt(t, center, wd)));
-  const mineHere = !!teacher && shown.some(t => t.id === teacher.teacherId);
-  if (onlyMine && mineHere) shown = shown.filter(t => t.id === teacher!.teacherId);
+  const shown = teachers.filter(t => hasLessons(t.id) || (wd === 0 ? SUNDAY_TEACHERS[center].includes(t.name) && t.centers.includes(center) : worksAt(t, center, wd)));
   const rows = rowsForDay(day, here.map(l => `${l.teacherId}|${l.time}`), center);
 
   const text = (l?: TeacherLesson) => {
@@ -116,11 +113,6 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           className={`text-[12px] px-2.5 h-8 border ${fit ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`}>
           {fit ? '크게 보기' : '한눈에 보기'}
         </button>
-        {mineHere && (
-          <label className="ml-auto flex items-center gap-1 text-[12px] text-[#555]">
-            <input type="checkbox" checked={onlyMine} onChange={e => setOnlyMine(e.target.checked)} />내 수업만
-          </label>
-        )}
       </div>
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요. ({failed})</p>}
       <div ref={wrapRef} className={`${fit ? 'overflow-hidden' : 'overflow-x-auto'} bg-white`}>
