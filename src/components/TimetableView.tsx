@@ -8,6 +8,8 @@ import { askChoice, askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
+import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
+import { getDayLeaves, type TeacherLeave } from '@/lib/leave';
 import {
   CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
@@ -79,6 +81,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   // 저장 안 한 시간표 변경 · 선생님 빼기/더하기
   const [ops, setOps] = useState<Map<string, Op>>(new Map());
   const [assignDraft, setAssignDraft] = useState<Map<string, AssignState>>(new Map());
+  // 선생님 휴무 — 그날 휴무 기록, [휴무] 창을 연 선생님
+  const [leaves, setLeaves] = useState<TeacherLeave[]>([]);
+  const [leaveFor, setLeaveFor] = useState<Teacher | null>(null);
   const [savingSched, setSavingSched] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
   // 그날이 공휴일인지 — 공휴일엔 요일 고정 수업을 비운다(그날 따로 넣은 칸·보호자 신청은 그대로)
@@ -103,6 +108,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         setCounts(await getPaymentCounts(`${ym}-01`, `${ym}-31`).catch(() => new Map()));
         setRoundPays(await getMonthRoundLessons(day, c).catch(() => []));
         setAssigns(await getDayAssigns(day, center).catch(() => ({ added: [], removed: [] })));
+        setLeaves(await getDayLeaves(day, center).catch(() => []));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
       setFailed('');
@@ -368,6 +374,19 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     putOps(clearDayOps(t.id, true));
     setDraft(dr => new Map([...dr].filter(([, v]) => v.teacherId !== t.id)));
   };
+  // 휴무 — 저장 안 한 변경이 있으면 먼저 저장하게 한다(휴무는 바로 저장된다)
+  const openLeave = (t: Teacher) => {
+    if (unsaved) { showAlert('저장 안 한 변경이 있어요.\n먼저 [스케줄 변경 완료]를 누른 뒤 휴무를 넣어 주세요.'); return; }
+    setLeaveFor(t);
+  };
+  // 그 선생님 그날 수업 — 빈타임에 아이가 있으면 그 아이, 없으면 고정 아이 (결석·옮김 빼고)
+  const leaveLessons = (tid: string): LeaveLesson[] => rows.flatMap(time => {
+    const l = cellOf(view.fixed, tid, time), r = cellOf(view.open, tid, time);
+    const [side, c] = r.status === 'child' ? ['open' as const, r] : ['fixed' as const, l];
+    return c.status === 'child' && !c.moved && !c.absent ? [{ time, side, cell: c }] : [];
+  });
+  const leaveOf = (tid: string) => leaves.filter(x => x.teacherId === tid);
+
   // 다시 넣기 — 저장 전에 뺐던 거면 빼기를 취소, 이미 빠진 선생님이면 그날 비운 칸을 고정 시간표대로 되돌린다
   const showTeacher = (t: Teacher) => {
     setAssign(t.id, worksAt(t, center, wd) ? null : 'add');
@@ -647,6 +666,16 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                         className={`ml-1 text-[10px] rounded px-1 border ${assignOf(t.id) === 'add' ? 'text-[#f59e0b] border-[#fcd34d]' : 'text-[#a1a1aa] border-[#e4e4e7] hover:text-red-400'}`}
                         title="이 날만 시간표에서 빼기 (칸도 비워져요)">✕ 빼기</button>
                     )}
+                    {!isTest && mode === 'day' && !folded.has(t.name) && (
+                      <button type="button" onClick={() => openLeave(t)}
+                        className="ml-1 text-[10px] rounded px-1 border text-[#e11d48] border-[#fecdd3] hover:bg-[#fff1f2]"
+                        title="휴무 — 종일 또는 시간을 골라 그 수업을 취소하고, 수업 있던 아이들에게 보낼 알림을 남겨요">휴무</button>
+                    )}
+                    {mode === 'day' && leaveOf(t.id).length > 0 && (
+                      <span className="block text-[10px] font-normal text-[#e11d48]" title={leaveOf(t.id).map(x => x.reason).filter(Boolean).join(' / ')}>
+                        휴무 {leaveOf(t.id).some(x => !x.times) ? '종일' : leaveOf(t.id).flatMap(x => x.times ?? []).sort().map(x => x.replace(/^0/, '')).join(', ')}
+                      </span>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -786,6 +815,10 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         </p>
       </div>
 
+      {leaveFor && (
+        <Portal><TeacherLeaveDialog teacher={leaveFor} day={day} center={center} rows={rows} lessons={leaveLessons(leaveFor.id)}
+          children={children} payments={payments} onClose={() => setLeaveFor(null)} onDone={() => { setLeaveFor(null); load(); }} /></Portal>
+      )}
       {editing && (
         <Portal><CellEditor
           editing={editing}
@@ -832,7 +865,10 @@ function CellText({ cell, label, muted, nonMember }: { cell: CellView; label?: s
       {cell.absent && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">결석</span>}
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
-      {cell.note && <span className="ml-0.5 text-[9px] text-[#f59e0b]">●</span>}
+      {/* 선생님 휴무로 취소된 수업 — 줄 + 휴무 */}
+      {cell.moved && cell.note?.startsWith('휴무')
+        ? <span className="ml-0.5 text-[9px] text-[#e11d48] no-underline inline-block">휴무</span>
+        : cell.note && <span className="ml-0.5 text-[9px] text-[#f59e0b]">●</span>}
     </span>
   );
 }
