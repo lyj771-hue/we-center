@@ -91,7 +91,7 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
     id: 'booking_result', grp: 'timetable', label: '시간표 신청 확정/취소 알림', sort: 10,
     spec: { image: 'logo', title: '#{이름} 님 수업 #{신청결과}', sub: 'We 센터',
       items: [{ name: '일자', value: '#{날짜}(#{요일})' }, { name: '시간', value: '#{시간}' }, { name: '선생님', value: '#{선생님} 선생님' }, { name: '결과', value: '#{신청결과}' }],
-      body: '#{이름} 님, 신청하신 수업이 #{신청결과}되었습니다.\n변경이나 취소는 센터로 연락해 주세요.', button: { name: '이번 주 수업 보기', url: `${SITE}/mypage#week` } },
+      body: '#{이름} 님, 신청하신 수업이 #{신청결과}되었습니다.\n변경이나 취소는 센터로 연락해 주세요.', button: { name: '주간 수업 보기', url: `${SITE}/mypage?d=#{날짜}` } },
     samples: { 날짜: '2026/10/20', 요일: '월' },
     condition: '보호자가 신청한 수업을 관리자가 확정하거나 취소할 때, 그 보호자에게 한 번.\n#{신청결과} = 확정 / 취소',
   },

@@ -107,6 +107,17 @@ export function tomorrowsMonday(): string {
   return toYmd(d);
 }
 
+/** 그 날짜가 들어 있는 주의 월요일 ("2026/10/20"·"2026-10-20" 둘 다). 날짜가 아니면 null */
+export function mondayOf(s: string): string | null {
+  const m = s.trim().match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (!m) return null;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  if (isNaN(d.getTime())) return null;
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return toYmd(d);
+}
+
 /** 월~토 날짜 6개 */
 export function weekDays(weekStart: string): string[] {
   return [0, 1, 2, 3, 4, 5].map(i => addDays(weekStart, i));

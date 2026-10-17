@@ -312,12 +312,18 @@ function fromProfileRow(row: ProfileRow): Profile {
   };
 }
 
+function keepDateParam(): string {
+  const d = new URLSearchParams(window.location.search).get('d');
+  return d ? `?d=${encodeURIComponent(d)}` : '';
+}
+
 export async function signInWithKakao(): Promise<void> {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'kakao',
-    // 돌아올 곳은 지금 페이지 경로만 — 주소 뒤에 붙은 #토큰·?error 같은 꼬리까지 넘기면 주소가 계속 길어진다(414)
+    // 돌아올 곳은 지금 페이지 경로만 — 주소 뒤에 붙은 #토큰·?error 같은 꼬리까지 넘기면 주소가 계속 길어진다(414).
+    // 알림톡 버튼의 ?d=날짜(마이페이지 주별 시간표)만 살려 둔다
     // phone_number — 카카오계정 전화번호(동의항목 필수). 이미 가입한 분도 다음 로그인 때 동의를 한 번 더 받는다
-    options: { redirectTo: window.location.origin + window.location.pathname, scopes: 'phone_number' },
+    options: { redirectTo: window.location.origin + window.location.pathname + keepDateParam(), scopes: 'phone_number' },
   });
   if (error) throw error;
 }
