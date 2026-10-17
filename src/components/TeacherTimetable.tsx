@@ -24,7 +24,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const [holidays, setHolidays] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState('');
   const can = isAdmin || !!teacher;
-  // 한눈에 보기 — 열 때마다 늘 이걸로 시작: 표 전체가 화면 폭에 들어오게 줄인다 ([크게 보기] = 원래 크기, 옆으로 밀어 보기)
+  // 한눈에 보기 — 열 때마다 늘 이걸로 시작: 표 전체(폭·높이)가 화면에 들어오게 줄인다 ([크게 보기] = 원래 크기, 옆으로 밀어 보기)
   const [fit, setFit] = useState(true);
   const toggleFit = () => setFit(v => !v);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -33,16 +33,18 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   useLayoutEffect(() => {
     const wrap = wrapRef.current, table = tableRef.current;
     if (!fit || !wrap || !table) { setZoom(1); return; }
+    // 폭과 높이 둘 다 — 표 전체(맨 아래 시간 줄까지)가 지금 화면에 들어오게
     const measure = () => {
       table.style.zoom = '1';
-      const z = Math.min(1, wrap.clientWidth / table.scrollWidth);
+      const top = wrap.getBoundingClientRect().top + window.scrollY;
+      const availH = window.innerHeight - Math.min(top, window.innerHeight * 0.4) - 12;
+      const z = Math.min(1, wrap.clientWidth / table.scrollWidth, availH / table.scrollHeight);
       table.style.zoom = String(z);
       setZoom(z);
     };
     measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(wrap);
-    return () => ro.disconnect();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
   }, [fit, lessons, teachers, day]);
 
   const load = useCallback(async () => {

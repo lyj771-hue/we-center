@@ -7,7 +7,7 @@ import type { LedgerRow } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import { useEffect, useState } from 'react';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday, toYmd } from '@/lib/schedule';
+import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday, toYmd, tomorrowsMonday } from '@/lib/schedule';
 import { worksAt } from '@/lib/timetable';
 
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
@@ -98,6 +98,14 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
     return () => { alive = false; };
   }, [years]);
 
+  // 알림톡 버튼으로 /mypage#week 로 왔을 때만 — 내일이 들어 있는 주(일요일이면 다음 주)를 보여 주고 주별 시간표로 내려가기.
+  // 그냥 마이페이지를 열면 늘 이번 주. 승인 확인 뒤에 칸이 생기므로 그때
+  useEffect(() => {
+    if (!approved || window.location.hash !== '#week') return;
+    setWeek(() => tomorrowsMonday());
+    document.getElementById('week')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [approved, setWeek]);
+
   // 선생님 출근 요일 — 원래 출근하는 요일이 아닌 날(예: 설영수 선생님 은평 월·토)은 왼쪽 칸이어도 '고정'이 아니다
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   useEffect(() => { getTeachers().then(setTeachers).catch(() => {}); }, []);
@@ -133,8 +141,8 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         </div>
       )}
 
-      {/* 주별 시간표 */}
-      <section className={card}>
+      {/* 주별 시간표 — 알림톡 [이번 주 수업 보기] 버튼은 /mypage#week 로 와서 여기로 내려온다 */}
+      <section id="week" className={`${card} scroll-mt-24`}>
         {/* 제목 줄 — 오른쪽 [이번 주](이번 주를 볼 땐 자리만 두고 숨김). 아래 날짜 넘기기는 가운데, 주를 바꿔도 위치가 안 움직이게 */}
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[17px] text-[#27272a]">주별 시간표</h2>

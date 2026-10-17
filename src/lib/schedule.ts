@@ -98,6 +98,15 @@ export function thisMonday(): string {
   return toYmd(d);
 }
 
+/** 내일이 들어 있는 주의 월요일 — 마이페이지 주별 시간표 기본 주. 평일·토요일엔 이번 주, 일요일엔(내일이 월요일) 다음 주 */
+export function tomorrowsMonday(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return toYmd(d);
+}
+
 /** 월~토 날짜 6개 */
 export function weekDays(weekStart: string): string[] {
   return [0, 1, 2, 3, 4, 5].map(i => addDays(weekStart, i));
