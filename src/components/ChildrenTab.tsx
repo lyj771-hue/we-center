@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import type { Center, Child } from '@/lib/timetable';
-import { deleteChild, getChildren, getFixedByChild, linkChild, saveChild, setChildUses, setChildBalance, type UsesKey, type LessonKind, kindLabel } from '@/lib/timetable';
+import { deleteChild, getChildren, getFixedByChild, linkChild, methodInCenter, saveChild, setChildUses, setChildBalance, type UsesKey, type LessonKind, kindLabel } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 import { saveMemberProfile } from '@/lib/store';
 import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
@@ -13,21 +13,23 @@ import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 // 고정 자리 결제 글자 → 이름 (표에는 영어 글자 대신 이름으로)
-const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈이든', 선: '선결제', 카: '신용카드', 현: '현금' };
+const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', 장: '장맞춤', c: '꿈이든', 선: '선결제', 카: '신용카드', 현: '현금' };
 
 type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean; kind: LessonKind };
 const emptyForm = { center: 'eunpyeong' as Center, name: '', number: '', memo: '', guardian: '', phone: '', vl: '0', gl: '0', kl: '0', pt: '0' };
 
-// 결제 칸 — 쓰는 결제 체크(바우처·굳센·꿈이든·선결제), 우진학교·지원금 남은 금액. 선결제 잔여/충전은 결제내역 탭에서
-const USES: { key: UsesKey; label: string }[] = [
-  { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'kkumideun', label: '꿈이든' },
+// 결제 칸 — 쓰는 결제 체크(바우처·굳센/장맞춤·꿈이든·선결제), 우진학교·지원금 남은 금액. 선결제 잔여/충전은 결제내역 탭에서
+// 굳센은 수색, 장맞춤은 의정부에서만 보인다
+const ALL_USES: { key: UsesKey; label: string }[] = [
+  { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'jangmatchum', label: '장맞춤' }, { key: 'kkumideun', label: '꿈이든' },
   { key: 'woojin', label: '우진학교' }, { key: 'subsidy', label: '지원금' }, { key: 'prepaid', label: '선결제' },
 ];
-type MonthKey = Exclude<UsesKey, 'prepaid'>;
+type ProfileKey = 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy';
 // 우진학교·지원금 — 횟수가 아니라 남은 금액(원)을 적는다
 const BALANCES: { key: 'woojin' | 'subsidy'; label: string }[] = [{ key: 'woojin', label: '우진학교' }, { key: 'subsidy', label: '지원금' }];
 // 회원 관리(승인 탭)의 지원 항목과 같은 것 — 둘 중 어디서 체크해도 양쪽이 같이 바뀐다
-const PROFILE_KEYS: MonthKey[] = ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy'];
+// 장맞춤은 보호자 계정 칸이 없어 아이 명단에만 둔다
+const PROFILE_KEYS: ProfileKey[] = ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy'];
 
 export default function ChildrenTab({ members, center, onLinked, onMembersChanged }: { members: Member[]; center: Center; onLinked: () => void; onMembersChanged: () => void }) {
   const [kids, setKids] = useState<Child[]>([]);
@@ -37,6 +39,7 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
   const [form, setForm] = useState(emptyForm);
   const [failed, setFailed] = useState('');
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
+  const USES = ALL_USES.filter(u => methodInCenter(u.key, center));
 
   const load = useCallback(async () => {
     try {
@@ -61,12 +64,12 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
     catch (e) { showAlert(`저장하지 못했어요 — SQL(supabase/payment-balance.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); load(); }
   };
   const toggleUses = async (k: Child, key: UsesKey, on: boolean) => {
-    setKids(list => list.map(x => (x.id === k.id ? { ...x, uses: { ...(x.uses ?? { voucher: false, gusen: false, kkumideun: false, woojin: false, subsidy: false, prepaid: false }), [key]: on } } : x)));
+    setKids(list => list.map(x => (x.id === k.id ? { ...x, uses: { ...(x.uses ?? { voucher: false, gusen: false, jangmatchum: false, kkumideun: false, woojin: false, subsidy: false, prepaid: false }), [key]: on } } : x)));
     try {
       await setChildUses(k.id, key, on);
       // 연결된 보호자 계정의 지원 항목도 같이
       const g = k.guardianUserId ? memberOf.get(k.guardianUserId) : undefined;
-      if (g && (PROFILE_KEYS as UsesKey[]).includes(key) && g[key as MonthKey] !== on) {
+      if (g && (PROFILE_KEYS as UsesKey[]).includes(key) && g[key as ProfileKey] !== on) {
         await saveMemberProfile({ userId: g.userId, nickname: g.nickname, memo: g.memo, approvedAt: g.approvedAt, [key]: on });
         onMembersChanged();
       }
@@ -178,11 +181,11 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
           </thead>
           <tbody>
             {editing === 'new' && (
-              <EditRow form={form} setForm={setForm} input={input} td={td} btn={btn} approved={approved} code="새 코드" fixed={[]}
+              <EditRow form={form} setForm={setForm} input={input} td={td} btn={btn} approved={approved} usesCount={USES.length} code="새 코드" fixed={[]}
                 onSave={() => save()} onCancel={() => setEditing(null)} />
             )}
             {list.map(k => editing === k.id ? (
-              <EditRow key={k.id} form={form} setForm={setForm} input={input} td={td} btn={btn} approved={approved} code={k.memberCode ?? ''} fixed={fixed.get(k.id) ?? []}
+              <EditRow key={k.id} form={form} setForm={setForm} input={input} td={td} btn={btn} approved={approved} usesCount={USES.length} code={k.memberCode ?? ''} fixed={fixed.get(k.id) ?? []}
                 onSave={() => save(k)} onCancel={() => setEditing(null)} />
             ) : (
               <tr key={k.id} className="border-b border-[#f0f0f0]">
@@ -235,8 +238,9 @@ function FixedList({ items }: { items: Fixed[] }) {
   );
 }
 
-function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave, onCancel }: {
+function EditRow({ form, setForm, input, td, btn, approved, usesCount, code, fixed, onSave, onCancel }: {
   form: typeof emptyForm;
+  usesCount: number;
   setForm: React.Dispatch<React.SetStateAction<typeof emptyForm>>;
   input: string; td: string; btn: string;
   approved: Member[];
@@ -265,7 +269,7 @@ function EditRow({ form, setForm, input, td, btn, approved, code, fixed, onSave,
           onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 4) }))} className={`${input} w-14 text-center`} />
       </td>
       {/* 쓰는 결제·이번 달 사용·선결제는 표에서 바로 고친다 */}
-      {[...USES, ...BALANCES].map((_, i) => <td key={i} className={`${td} text-center text-[11px] text-[#ccc]`}>-</td>)}
+      {Array.from({ length: usesCount + BALANCES.length }, (_, i) => <td key={i} className={`${td} text-center text-[11px] text-[#ccc]`}>-</td>)}
       <td className={`${td} text-[12px]`}><FixedList items={fixed} /><p className="text-[10px] text-[#aaa] mt-1">고정 수업은 시간표 관리에서 고쳐요</p></td>
       <td className={`${td} text-[11px] text-[#aaa]`}>-</td>
       <td className={td}><input value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} placeholder="메모" className={`${input} w-full min-w-[120px]`} /></td>

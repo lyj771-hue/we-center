@@ -9,7 +9,7 @@ import type { Teacher } from '@/lib/schedule';
 import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import {
-  CENTERS, LESSON_KINDS, PAY_METHODS, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
+  CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
 } from '@/lib/timetable';
 
@@ -727,7 +727,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
                             {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved && !locked(c)).map((c, i) => (
-                              <PayCell key={i} cell={c} noBase={c === right} paid={c.childId ? paidOf(c.childId, time) : undefined}
+                              <PayCell key={i} cell={c} methods={payMethodsFor(center)} noBase={c === right} paid={c.childId ? paidOf(c.childId, time) : undefined}
                                 pending={!!c.childId && draft.has(keyOf(c.childId, time))}
                                 missing={!!c.childId && missingPay.has(keyOf(c.childId, time))}
                                 round={c.childId ? rounds.get(keyOf(c.childId, time)) : undefined}
@@ -782,13 +782,14 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
         <p className="text-[11px] text-[#999] mt-3 leading-[2]">
           칸을 누르면 고칠 수 있어요. 앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정
-          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span> · <span className="text-[#0d9488]">청록 이름</span> = 빈타임에 직접 작성(회원 아님) · <span className="text-[#dc2626] font-bold ring-2 ring-[#dc2626] px-1 rounded">바우처6!</span> = 월 횟수 넘침(바우처 6회째·굳센 4회째부터)</>}
+          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span> · <span className="text-[#0d9488]">청록 이름</span> = 빈타임에 직접 작성(회원 아님) · <span className="text-[#dc2626] font-bold ring-2 ring-[#dc2626] px-1 rounded">바우처6!</span> = 월 횟수 넘침(바우처 6회째·굳센 4회째·장맞춤 9회째부터) · 장) = 장맞춤</>}
         </p>
       </div>
 
       {editing && (
         <Portal><CellEditor
           editing={editing}
+          methods={payMethodsFor(center)}
           mode={mode}
           dayLabel={mode === 'day' ? `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})` : `${DOW[weekday]}요일 고정`}
           kids={pickKids}
@@ -837,8 +838,10 @@ function CellText({ cell, label, muted, nonMember }: { cell: CellView; label?: s
 }
 
 /** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
-function PayCell({ cell, noBase, paid, pending, missing, round, left, askAlways, onPay }: {
+function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, askAlways, onPay }: {
   cell: CellView;
+  /** 이 센터에서 쓰는 결제 (수색 굳센 / 의정부 장맞춤) */
+  methods: typeof PAY_METHODS;
   /** 빈타임 아이 — 기본 결제를 보여 주지 않고 비워 둔다 */
   noBase?: boolean;
   paid?: PayEntry;
@@ -856,6 +859,10 @@ function PayCell({ cell, noBase, paid, pending, missing, round, left, askAlways,
   if (cell.absent) return <span className="block text-[10px] text-[#c4c4cc]">결석</span>;
   const base = noBase ? undefined : defaultMethod(cell.payment);
   const label = (k?: PayMethod) => PAY_METHODS.find(m => m.key === k)?.label;
+  // 칸에 보이는 짧은 이름 (장맞춤 = 장))
+  const cellLabel = (k?: PayMethod) => { const m = PAY_METHODS.find(x => x.key === k); return m?.cell ?? m?.label; };
+  // 고르는 목록 — 이 센터 결제 + (다른 센터 결제로 이미 골라 둔 것)
+  const options = paid && !paid.note && !methods.some(m => m.key === paid.method) ? [...methods, ...PAY_METHODS.filter(m => m.key === paid.method)] : methods;
   // 회차를 붙이는 결제는 남은 횟수 대신 회차만 (고르는 목록은 그대로)
   const rest = paid?.confirmed && !pending && !round ? left?.(paid.method) : undefined;
   const rn = round ? <>{round.n}{round.over && <span className="ml-0.5">!</span>}</> : null;
@@ -865,9 +872,9 @@ function PayCell({ cell, noBase, paid, pending, missing, round, left, askAlways,
   // 회차 넘침은 확정(빨강 바탕)과 헷갈리지 않게 — 흰 바탕 + 빨간 테두리 + ! 
   const tone = round?.over ? 'bg-white text-[#dc2626] font-bold ring-2 ring-[#dc2626]' : confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
   const text = paid
-    ? <span>{confirmed ? '✓' : ''}{paid.note || label(paid.method)}{rn}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
-    : <span>{pending ? '체크 풀기' : (label(base) ?? '')}{!pending && rn}</span>;
-  if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{label(base) ?? ''}</span>;
+    ? <span>{confirmed ? '✓' : ''}{paid.note || cellLabel(paid.method)}{rn}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
+    : <span>{pending ? '체크 풀기' : (cellLabel(base) ?? '')}{!pending && rn}</span>;
+  if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{cellLabel(base) ?? ''}</span>;
   return (
     <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone} ${missing && !round?.over ? 'ring-1 ring-red-300' : ''}`}
       title={round?.over ? `이번 달 ${round.n}회째 — 월 횟수를 넘었어요. 결제방식을 바꿔야 [결제 완료]를 누를 수 있어요` : pending ? '저장 전 — [스케줄 변경 완료]로 저장, [결제 완료]로 확정' : paid?.confirmed ? '결제 완료로 확정됨' : paid ? '고른 결제 — [결제 완료]를 눌러야 확정돼요' : '기본 결제 — 눌러서 고르기'}>
@@ -886,7 +893,7 @@ function PayCell({ cell, noBase, paid, pending, missing, round, left, askAlways,
         }}
         className="absolute inset-0 w-full opacity-0 cursor-pointer" aria-label={`${cell.name} 결제 체크`}>
         <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
-        {PAY_METHODS.map(m => <option key={m.key} value={m.key}>{m.label}{m.key === base ? ' (기본)' : ''}</option>)}
+        {options.map(m => <option key={m.key} value={m.key}>{m.label}{m.key === base ? ' (기본)' : ''}</option>)}
         <option value="custom">{paid?.note ? `${paid.note} (고치기)` : '직접 작성…'}</option>
       </select>
     </label>
@@ -946,8 +953,10 @@ function ChildPicker({ picking, kids, onPick, onSave, onMore, onClose }: {
   );
 }
 
-function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
+function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave }: {
   editing: Editing;
+  /** 이 센터에서 쓰는 결제 (수색 굳센 / 의정부 장맞춤) */
+  methods: typeof PAY_METHODS;
   mode: Mode;
   dayLabel: string;
   kids: Child[];
@@ -1024,7 +1033,7 @@ function CellEditor({ editing, mode, dayLabel, kids, onClose, onSave }: {
               <select value={base ?? ''} onChange={e => setPayment(PAY_METHODS.find(m => m.key === e.target.value)?.short ?? '')}
                 className="border border-[#ddd] px-2 py-1 text-[13px] bg-white">
                 <option value="">없음</option>
-                {PAY_METHODS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+                {(base && !methods.some(m => m.key === base) ? [...methods, ...PAY_METHODS.filter(m => m.key === base)] : methods).map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
               </select>
             </label>
           </div>

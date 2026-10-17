@@ -5,16 +5,17 @@ import { useAdmin } from '@/components/AdminContext';
 import type { Teacher } from '@/lib/schedule';
 import { getTeachers } from '@/lib/schedule';
 import type { Center, PayMethod } from '@/lib/timetable';
-import { CENTERS, getMonthLessonPayments } from '@/lib/timetable';
+import { CENTERS, getMonthLessonPayments, methodInCenter } from '@/lib/timetable';
 import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
 import { showAlert } from '@/lib/dialog';
 
 // 수업 진행 현황 (관리자) — 달·센터를 골라 선생님별 × 결제방식별 진행 횟수.
 // 진행 횟수 = 시간표에서 [결제 완료]로 확정된 수업. [스케줄 변경 완료]로 고르기만 한 것은 따로 작게 센다.
 
-// 지원(바우처·굳센·꿈이든·지원금·학교) — 하나씩 보고 합계, 사설(그 밖: 선결제·카드·현금·직접 작성) — 묶어서 한 칸
-const SUPPORT: { key: PayMethod; label: string }[] = [
-  { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'kkumideun', label: '꿈이든' },
+// 지원(바우처·굳센·장맞춤·꿈이든·지원금·학교) — 하나씩 보고 합계, 사설(그 밖: 선결제·카드·현금·직접 작성) — 묶어서 한 칸
+// 굳센은 수색, 장맞춤은 의정부 — 한 센터만 볼 땐 그 센터 것만, 전체는 둘 다
+const ALL_SUPPORT: { key: PayMethod; label: string }[] = [
+  { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'jangmatchum', label: '장맞춤' }, { key: 'kkumideun', label: '꿈이든' },
   { key: 'subsidy', label: '지원금' }, { key: 'woojin', label: '학교' },
 ];
 const PRIVATE: { key: PayMethod; label: string }[] = [
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [failed, setFailed] = useState('');
   const [loading, setLoading] = useState(false);
+  const SUPPORT = ALL_SUPPORT.filter(x => center === 'all' || methodInCenter(x.key, center));
 
   const load = useCallback(async () => {
     setLoading(true);

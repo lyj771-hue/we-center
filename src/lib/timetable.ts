@@ -41,7 +41,7 @@ export const kindLabel = (k?: LessonKind) => (k === 'exercise' ? '운동' : k ==
 /** 칸·고정 수업 줄 → 수업 종류 (kind 가 없던 예전 줄은 구강 체크로) */
 const kindOf = (r: Record<string, unknown>): LessonKind => (r.kind === 'exercise' || r.kind === 'oral' ? r.kind : r.oral ? 'oral' : null);
 
-export type UsesKey = 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid';
+export type UsesKey = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid';
 export type UsesFlags = Record<UsesKey, boolean>;
 
 /** 아이 이름 + 동명이인 숫자 (예: 김채현3) — 시간표·검색에서 이렇게 보인다 */
@@ -106,7 +106,7 @@ export const rowsForDay = (day: string, cellKeys: Iterable<string> = [], center:
   return rowsForWeekday(wd, cellKeys, center);
 };
 
-/** 결제 글자 → 글자 색. b(바우처)=하늘색, 결제 글자 없음=빨강, 그 밖(e 굳센·c 꿈이든·v …)=검정 */
+/** 결제 글자 → 글자 색. b(바우처)=하늘색, 결제 글자 없음=빨강, 그 밖(e 굳센·장 장맞춤·c 꿈이든·v …)=검정 */
 export function paymentColor(payment: string): string {
   const p = payment.toLowerCase().replace(/x/g, '');
   if (p.includes('b')) return '#0ea5e9';
@@ -128,7 +128,7 @@ export async function getChildren(): Promise<Child[]> {
     guardianUserId: r.guardian_user_id ?? undefined,
     woojinBalance: r.woojin_balance ?? 0, subsidyBalance: r.subsidy_balance ?? 0,
     center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
-    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
+    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, jangmatchum: !!r.uses_jangmatchum, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
   }));
 }
 
@@ -363,10 +363,12 @@ export async function saveFixedFrom(body: FixedFromBody): Promise<void> {
 
 // ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
 
-export type PayMethod = 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid' | 'card' | 'cash' | 'other';
-export const PAY_METHODS: { key: PayMethod; label: string; short: string }[] = [
+export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid' | 'card' | 'cash' | 'other';
+/** cell = 시간표 결제 칸에 보이는 짧은 이름 (없으면 label) */
+export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?: string }[] = [
   { key: 'voucher', label: '바우처', short: 'b' },
   { key: 'gusen', label: '굳센', short: 'e' },
+  { key: 'jangmatchum', label: '장맞춤', short: '장', cell: '장)' },
   { key: 'kkumideun', label: '꿈이든', short: 'c' },
   { key: 'woojin', label: '우진학교', short: '우' },
   { key: 'subsidy', label: '지원금', short: '지' },
@@ -404,7 +406,7 @@ export async function setLessonPayment(childId: string, day: string, time: strin
   if (error) throw error;
 }
 
-export interface PayCount { voucher: number; gusen: number; kkumideun: number; woojin: number; subsidy: number; prepaid: number }
+export interface PayCount { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; subsidy: number; prepaid: number }
 
 /** 1000줄 넘게 — 디비가 한 번에 1000줄까지만 주니 나눠서 다 받는다 (range 로 쪼갤 수 있는 select 를 넘긴다) */
 async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
@@ -420,19 +422,26 @@ async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ dat
 /** 아이마다 사용 횟수(확정된 결제만) — 바우처·굳센·꿈이든은 이번 달, 선결제는 지금까지 */
 export async function getPaymentCounts(monthStart: string, monthEnd: string): Promise<Map<string, PayCount>> {
   const [monthRows, prepaidRows] = await Promise.all([
-    fetchAll<{ child_id: string; method: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy']).order('id').range(a, b)),
+    fetchAll<{ child_id: string; method: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'subsidy']).order('id').range(a, b)),
     fetchAll<{ child_id: string }>((a, b) => supabase.from('lesson_payments').select('child_id').eq('confirmed', true).eq('method', 'prepaid').order('id').range(a, b)),
   ]);
   const month = { data: monthRows }, prepaid = { data: prepaidRows };
   const m = new Map<string, PayCount>();
-  const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; m.set(id, c); return c; };
-  for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy']++;
+  const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; m.set(id, c); return c; };
+  for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'subsidy']++;
   for (const r of prepaid.data ?? []) get(r.child_id).prepaid++;
   return m;
 }
 
-/** 월 회차를 세는 결제(바우처·굳센·꿈이든)와 빨간 글씨가 되는 회차 — 바우처 6회째부터, 굳센 4회째부터. 꿈이든은 회차만(0 = 제한 없음) */
-export const ROUND_LIMIT: Partial<Record<PayMethod, number>> = { voucher: 6, gusen: 4, kkumideun: 0 };
+/** 월 회차를 세는 결제(바우처·굳센·장맞춤·꿈이든)와 빨간 글씨가 되는 회차 — 바우처 6회째부터, 굳센 4회째부터, 장맞춤 9회째부터(월 최대 8회). 꿈이든은 회차만(0 = 제한 없음) */
+export const ROUND_LIMIT: Partial<Record<PayMethod, number>> = { voucher: 6, gusen: 4, jangmatchum: 9, kkumideun: 0 };
+/** 장맞춤 한 달 최대 횟수 */
+export const JANGMATCHUM_MAX = 8;
+
+/** 지점마다 쓰는 결제 — 수색은 굳센, 의정부는 굳센 대신 장맞춤 */
+export const methodInCenter = (key: string, center: Center) =>
+  !(key === 'gusen' && center === 'uijeongbu') && !(key === 'jangmatchum' && center !== 'uijeongbu');
+export const payMethodsFor = (center: Center) => PAY_METHODS.filter(m => methodInCenter(m.key, center));
 
 /** 결제 글자(b·e·c …) → 기본 결제. 모르는 글자면 없음 */
 export function defaultPayMethod(payment: string | undefined): PayMethod | undefined {
@@ -566,7 +575,7 @@ export async function clearChildTestData(childId: string): Promise<{ deleted: nu
 
 // ── 결제내역(월별) ──────────────────────────────────────────────────
 
-export interface MonthUse { voucher: number; gusen: number; kkumideun: number; woojin: number; subsidy: number; prepaid: number }
+export interface MonthUse { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; subsidy: number; prepaid: number }
 
 /** 그 달 아이마다 결제별 사용 횟수(확정된 것) — 선결제는 결제 완료 + 선결제 카드의 직접 차감 */
 export async function getMonthUses(month: string): Promise<Map<string, MonthUse>> {
@@ -579,7 +588,7 @@ export async function getMonthUses(month: string): Promise<Map<string, MonthUse>
   ]);
   const lp = { data: lpRows };
   const map = new Map<string, MonthUse>();
-  const get = (id: string) => { const c = map.get(id) ?? { voucher: 0, gusen: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; map.set(id, c); return c; };
+  const get = (id: string) => { const c = map.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; map.set(id, c); return c; };
   for (const r of lp.data ?? []) if (r.method in get(r.child_id)) (get(r.child_id) as unknown as Record<string, number>)[r.method]++;
   for (const r of pc.data ?? []) if (!r.adjust) get(r.child_id as string).prepaid += -(r.count as number);
   return map;

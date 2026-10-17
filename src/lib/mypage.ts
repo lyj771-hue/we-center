@@ -10,7 +10,7 @@ export interface MyChild {
   oral: boolean;
   supports: { voucher: boolean; gusen: boolean; kkumideun: boolean; woojin: boolean; subsidy: boolean };
   /** 아이 명단에서 체크한 쓰는 결제 */
-  uses: { voucher: boolean; gusen: boolean; kkumideun: boolean; woojin: boolean; subsidy: boolean; prepaid: boolean };
+  uses: { voucher: boolean; gusen: boolean; jangmatchum: boolean; kkumideun: boolean; woojin: boolean; subsidy: boolean; prepaid: boolean };
 }
 
 export interface MyLesson {
@@ -42,7 +42,7 @@ export async function getMyChild(center?: BranchKey): Promise<MyChild | null> {
     payment: r.payment ?? '',
     oral: !!r.oral,
     supports: { voucher: !!r.voucher, gusen: !!r.gusen, kkumideun: !!r.kkumideun, woojin: !!r.woojin, subsidy: !!r.subsidy },
-    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
+    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, jangmatchum: !!r.uses_jangmatchum, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
   };
 }
 
@@ -69,8 +69,8 @@ export async function getMyLessons(from: string, to: string): Promise<MyLesson[]
 /** 실제로 하는 수업인지 — 비움·미정·안 함·옮김·취소 승인은 뺀다 */
 export const isRealLesson = (l: MyLesson) => (l.status === 'child' || l.status === 'cancel_requested') && !l.moved;
 
-/** 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용/제공(매월 1일 새로), 선결제는 지금까지 사용/충전(남은 = 충전 − 사용). 확정된 결제만 */
-export interface MyPayment { method: 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid'; used: number; total: number }
+/** 결제 현황 — 바우처·굳센·장맞춤·꿈이든은 이번 달 사용/제공(매월 1일 새로), 선결제는 지금까지 사용/충전(남은 = 충전 − 사용). 확정된 결제만 */
+export interface MyPayment { method: 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid'; used: number; total: number }
 
 export async function getMyPayments(center?: BranchKey): Promise<MyPayment[]> {
   const { data, error } = await supabase.rpc('my_payments', center ? { p_center: center } : {});

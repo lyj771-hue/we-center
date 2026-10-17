@@ -8,16 +8,16 @@ import PrepaidCard from '@/components/PrepaidCard';
 import { useEffect, useState } from 'react';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday, toYmd, tomorrowsMonday, mondayOf } from '@/lib/schedule';
-import { worksAt } from '@/lib/timetable';
+import { methodInCenter, worksAt } from '@/lib/timetable';
 
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', kkumideun: '꿈이든', woojin: '우진학교', subsidy: '지원금', prepaid: '선결제' };
-const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', c: '꿈이든' };
+const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', jangmatchum: '장맞춤', kkumideun: '꿈이든', woojin: '우진학교', subsidy: '지원금', prepaid: '선결제' };
+const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', 장: '장맞춤', c: '꿈이든' };
 const payKind = (p: string) => {
   const code = p.toLowerCase().replace(/[x~]/g, '');
-  return code.includes('b') ? 'b' : code.includes('e') ? 'e' : code.includes('c') ? 'c' : 'etc';
+  return code.includes('b') ? 'b' : code.includes('e') ? 'e' : code.includes('장') ? '장' : code.includes('c') ? 'c' : 'etc';
 };
 const payName = (k: string) => PAY_LABEL[k] ?? '기타 결제';
 export const MYPAGE_CARD = 'bg-white rounded-[18px] shadow-[0_2px_6px_rgba(0,0,0,0.05),0_10px_24px_rgba(0,0,0,0.05)] p-5 md:p-7';
@@ -45,15 +45,17 @@ export interface MyPageViewProps {
 
 // 결제별 사용 카드 — 선결제 카드 아래에 이 순서로 (쓰는 결제이거나 이번 달 기록이 있는 것만)
 const USAGE_CARDS: { method: MyPayment['method']; label: string }[] = [
-  { method: 'voucher', label: '바우처' }, { method: 'gusen', label: '굳센' }, { method: 'kkumideun', label: '꿈이든' }, { method: 'subsidy', label: '지원금' },
+  { method: 'voucher', label: '바우처' }, { method: 'gusen', label: '굳센' }, { method: 'jangmatchum', label: '장맞춤' }, { method: 'kkumideun', label: '꿈이든' }, { method: 'subsidy', label: '지원금' },
 ];
+// 굳센은 수색, 장맞춤은 의정부 지점에서만 보인다
+const inBranch = (method: string, center?: string) => methodInCenter(method, center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong');
 
 // 년/월/일 (주별 시간표 날짜 넘기기)
 const ymd = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 
 export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, center, failed, top, bottom }: MyPageViewProps) {
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
-  const payRows = [...payments].sort((a, b) => (a.method === 'prepaid' ? -1 : b.method === 'prepaid' ? 1 : 0));   // 선결제를 맨 위로
+  const payRows = payments.filter(p => inBranch(p.method, center)).sort((a, b) => (a.method === 'prepaid' ? -1 : b.method === 'prepaid' ? 1 : 0));   // 선결제를 맨 위로
 
   const card = MYPAGE_CARD;
 
@@ -67,7 +69,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   const usedIn = (p: MyPayment) => payMonth === thisMonth ? p.used : history.filter(h => h.method === p.method && h.day.startsWith(payMonth)).length;
   const payMonthLabel = `${payMonth.slice(0, 4)}년 ${Number(payMonth.slice(5, 7))}월`;
 
-  // 사설 — 그 달(오늘까지) 실제로 한 수업 중 바우처·굳센·꿈이든·우진학교·지원금으로 하지 않은 수업 수 (선결제·카드·현금·결제 글자 없음 포함).
+  // 사설 — 그 달(오늘까지) 실제로 한 수업 중 바우처·굳센·장맞춤·꿈이든·우진학교·지원금으로 하지 않은 수업 수 (선결제·카드·현금·결제 글자 없음 포함).
   // 결석·옮김·미정·수업 안 함, 공휴일의 고정 수업은 세지 않는다
   const [monthLessons, setMonthLessons] = useState<MyLesson[] | null>(null);
   const [monthHols, setMonthHols] = useState<Record<string, string>>({});
@@ -82,10 +84,10 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       .catch(() => { if (alive) setMonthLessons(null); });
     return () => { alive = false; };
   }, [payMonth, today]);
-  const SUPPORT = ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy'];
+  const SUPPORT = ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'subsidy'];
   // 지원 결제로 한 수업인지 — [결제 완료] 기록이 있으면 그것, 없으면 칸의 결제 글자(b·e·c·우·지)
   const bySupport = (l: MyLesson) => history.some(h => h.day === l.day && h.time === l.time && SUPPORT.includes(h.method))
-    || /[bec우지]/.test(l.payment.toLowerCase().replace(/x/g, ''));
+    || /[bec우지장]/.test(l.payment.toLowerCase().replace(/x/g, ''));
   const privateCount = monthLessons?.filter(l => (!center || l.center === center) && isRealLesson(l) && !l.absent
     && !(monthHols[l.day] && l.source === 'fixed') && !bySupport(l)).length;
   // 공휴일 — 그 주에 걸친 해(연말·연초는 두 해)의 공휴일 이름
@@ -119,7 +121,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   if (!approved) return (
     <div className="space-y-6">
       {top}
-      {['주별 시간표', '결제 현황', '선결제 카드', ...USAGE_CARDS.map(u => u.label)].map(t => (
+      {['주별 시간표', '결제 현황', '선결제 카드', ...USAGE_CARDS.filter(u => inBranch(u.method, center)).map(u => u.label)].map(t => (
         <section key={t} className={card}>
           <h2 className="text-[17px] text-[#27272a] mb-3">{t}</h2>
           <p className="text-[14px] text-[#f59e0b]">승인 대기 중</p>
@@ -244,7 +246,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       </section>
 
       {/* 결제별 사용 카드 — 바우처·굳센·꿈이든·지원금: 일자 · 그 달 회차 · 메모 (지난 달도 쌓인다) */}
-      {USAGE_CARDS.map(u => {
+      {USAGE_CARDS.filter(u => inBranch(u.method, center)).map(u => {
         const p = payments.find(x => x.method === u.method);
         // 회차는 달마다 1회부터 (11월 첫 사용 = 1회)
         const perMonth = new Map<string, number>();

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { showAlert } from '@/lib/dialog';
 import type { Center, Child, MonthUse, PayCount } from '@/lib/timetable';
-import { getChildren, getMonthNotes, getMonthUses, getPaymentCounts, setMonthNote } from '@/lib/timetable';
+import { getChildren, getMonthNotes, getMonthUses, getPaymentCounts, methodInCenter, setMonthNote } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
 import Portal from '@/components/Portal';
@@ -12,8 +12,9 @@ import PrepaidModal from '@/components/PrepaidModal';
 // 회원 관리 — "결제내역" 탭. 달을 골라 아이마다 그 달 결제별 사용 횟수(시간표 [결제 완료]로 확정된 것),
 // 선결제 잔여/충전([충전·차감·수정] 카드 창), 우진학교·지원금 남은 금액, 그 달 메모, 보호자 승인 날짜를 본다. 선결제는 센터(아이)마다 따로.
 
-const USE_COLS: { key: keyof MonthUse; label: string }[] = [
-  { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'kkumideun', label: '꿈이든' },
+// 굳센은 수색, 장맞춤은 의정부에서만
+const ALL_USE_COLS: { key: keyof MonthUse; label: string }[] = [
+  { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'jangmatchum', label: '장맞춤' }, { key: 'kkumideun', label: '꿈이든' },
   { key: 'woojin', label: '우진학교' }, { key: 'subsidy', label: '지원금' }, { key: 'prepaid', label: '선결제' },
 ];
 
@@ -32,6 +33,7 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
   const [showAll, setShowAll] = useState(false);
   const [failed, setFailed] = useState('');
   const [cardFor, setCardFor] = useState<Child | null>(null);    // 선결제 카드 창을 연 아이
+  const USE_COLS = ALL_USE_COLS.filter(c => methodInCenter(c.key, center));
 
   const load = useCallback(async () => {
     try {

@@ -8,7 +8,7 @@ import { askConfirm, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
 import PaymentsTab from '@/components/PaymentsTab';
 import type { Center, Child } from '@/lib/timetable';
-import { getChildren, getPaymentCounts, linkChild, setChildBalance, setChildUses } from '@/lib/timetable';
+import { getChildren, getPaymentCounts, linkChild, methodInCenter, setChildBalance, setChildUses } from '@/lib/timetable';
 import { addCharge } from '@/lib/prepaid';
 
 // 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자 표.
@@ -23,9 +23,12 @@ type Filter = 'waiting' | 'approved' | 'methods' | 'children' | 'payments';
 const SHOW_PREPAID = false;
 
 // 지원 항목 — 받는지 체크(O/X). 누르면 바로 저장된다
-const SUPPORTS: { key: keyof Pick<MemberExtras, 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy'>; label: string }[] = [
+// 굳센은 수색, 장맞춤은 의정부에서만. 장맞춤은 보호자 계정 칸이 없어 연결된 아이의 체크로만 (아이가 있어야 체크할 수 있다)
+type SupportKey = keyof Pick<MemberExtras, 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy'> | 'jangmatchum';
+const ALL_SUPPORTS: { key: SupportKey; label: string }[] = [
   { key: 'voucher', label: '바우처' },
   { key: 'gusen', label: '굳센' },
+  { key: 'jangmatchum', label: '장맞춤' },
   { key: 'kkumideun', label: '꿈이든' },
   { key: 'woojin', label: '우진학교' },
   { key: 'subsidy', label: '지원금' },
@@ -163,15 +166,18 @@ export default function MembersView({ center }: { center: Center }) {
   };
 
   // 지원 항목 체크 — 아이 명단과 연결된 계정은 아이의 "쓰는 결제" 체크와 같이 바뀐다(둘 중 어디서 바꿔도)
-  const supportOf = (m: Member, key: (typeof SUPPORTS)[number]['key']) => {
+  const SUPPORTS = ALL_SUPPORTS.filter(x => methodInCenter(x.key, center));
+  const supportOf = (m: Member, key: SupportKey) => {
     const k = kidOf(m.userId);
-    return k?.uses ? k.uses[key] : m[key];
+    return k?.uses ? k.uses[key] : key === 'jangmatchum' ? false : m[key];
   };
-  const toggleSupport = async (m: Member, key: (typeof SUPPORTS)[number]['key']) => {
+  const toggleSupport = async (m: Member, key: SupportKey) => {
     const on = !supportOf(m, key);
     try {
-      await saveMemberProfile({ userId: m.userId, nickname: m.nickname, memo: m.memo, approvedAt: m.approvedAt, [key]: on });
-      setMembers(ms => ms.map(x => (x.userId === m.userId ? { ...x, [key]: on } : x)));
+      if (key !== 'jangmatchum') {
+        await saveMemberProfile({ userId: m.userId, nickname: m.nickname, memo: m.memo, approvedAt: m.approvedAt, [key]: on });
+        setMembers(ms => ms.map(x => (x.userId === m.userId ? { ...x, [key]: on } : x)));
+      }
       const k = kidOf(m.userId);
       if (k) {
         await setChildUses(k.id, key, on);
@@ -500,7 +506,8 @@ export default function MembersView({ center }: { center: Center }) {
                   })}
                   {filter === 'methods' && SUPPORTS.map(x => (
                     <td key={x.key} className={`${td} text-center`}>
-                      <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname} aria-label={`${m.nickname} ${x.label}`}
+                      <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname || (x.key === 'jangmatchum' && !kidOf(m.userId))} aria-label={`${m.nickname} ${x.label}`}
+                        title={x.key === 'jangmatchum' && !kidOf(m.userId) ? '아이 명단과 연결된 뒤에 체크할 수 있어요' : undefined}
                         onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />
                     </td>
                   ))}
