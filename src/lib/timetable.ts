@@ -368,7 +368,7 @@ export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woo
 export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?: string }[] = [
   { key: 'voucher', label: '바우처', short: 'b' },
   { key: 'gusen', label: '굳센', short: 'e' },
-  { key: 'jangmatchum', label: '장맞춤', short: '장', cell: '장)' },
+  { key: 'jangmatchum', label: '장맞춤', short: '장' },
   { key: 'kkumideun', label: '꿈이든', short: 'c' },
   { key: 'woojin', label: '우진학교', short: '우' },
   { key: 'subsidy', label: '지원금', short: '지' },

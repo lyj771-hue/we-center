@@ -782,7 +782,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
         <p className="text-[11px] text-[#999] mt-3 leading-[2]">
           칸을 누르면 고칠 수 있어요. 앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정
-          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span> · <span className="text-[#0d9488]">청록 이름</span> = 빈타임에 직접 작성(회원 아님) · <span className="text-[#dc2626] font-bold ring-2 ring-[#dc2626] px-1 rounded">바우처6!</span> = 월 횟수 넘침(바우처 6회째·굳센 4회째·장맞춤 9회째부터) · 장) = 장맞춤</>}
+          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span> · <span className="text-[#0d9488]">청록 이름</span> = 빈타임에 직접 작성(회원 아님) · <span className="text-[#dc2626] font-bold ring-2 ring-[#dc2626] px-1 rounded">바우처6!</span> = 월 횟수 넘침(바우처 6회째·굳센 4회째·장맞춤 9회째부터)</>}
         </p>
       </div>
 
