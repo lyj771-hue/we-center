@@ -91,7 +91,7 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
     id: 'teacher_leave', grp: 'lesson', label: '선생님 휴무 수업 취소 알림', sort: 40,
     spec: { image: 'logo', title: '#{이름} 님 수업 취소 안내', sub: 'We 센터',
       items: [{ name: '일자', value: '#{날짜}(#{요일})' }, { name: '시간', value: '#{시간}' }, { name: '선생님', value: '#{선생님} 선생님' }, { name: '사유', value: '#{사유}' }],
-      body: '#{이름} 님, #{월일}(#{요일}) #{선생님} 선생님 휴무로 위 시간 수업이 취소되었습니다.\n불편을 드려 죄송합니다. 보강 일정은 센터로 문의해 주세요.', button: { name: '이번 주 수업 보기', url: `${SITE}/mypage#week` } },
+      body: '#{이름} 님, #{월일}(#{요일}) #{선생님} 선생님 휴무로 위 시간 수업이 취소되었습니다.', button: { name: '이번 주 수업 보기', url: `${SITE}/mypage#week` } },
     samples: { 시간: '15:40, 16:20' },
     condition: '시간표(날짜별)에서 선생님 [휴무]를 저장할 때, 휴무 시간에 수업이 있던 아이(고정·빈타임 신청)마다 한 번.\n휴무 창에서 받을 아이를 고르고, 사유를 적으면 #{사유}에 들어간다(안 적으면 "휴무").\n지금은 [보낼 알림]에 쌓아 두고, 솔라피 연결 뒤 보낸다.',
   },
