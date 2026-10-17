@@ -90,7 +90,7 @@ export default function TeacherLeaveDialog({ teacher, day, center, rows, lessons
         templateId: 'teacher_leave', refId: id, childId: k.childId, userId: k.userId, childName: k.name, phone: k.phone,
         vars: {
           이름: k.child?.name ?? k.name, 날짜: `${y}/${String(m).padStart(2, '0')}/${String(dd).padStart(2, '0')}`, 월일: `${m}/${dd}`,
-          요일: DOW[date.getDay()], 시간: k.times.map(hm).join(', '), 선생님: teacher.name, 사유: reason.trim() || '선생님 사정', 센터: CENTER_LABEL[center],
+          요일: DOW[date.getDay()], 시간: k.times.map(hm).join(', '), 선생님: teacher.name, 사유: reason.trim() || '휴무', 센터: CENTER_LABEL[center],
         },
       })));
     } catch (e) {
@@ -129,7 +129,7 @@ export default function TeacherLeaveDialog({ teacher, day, center, rows, lessons
 
         <label className="block">
           <span className="block text-[12px] text-[#888] mb-1">사유 (알림에 들어가요)</span>
-          <input value={reason} onChange={e => setReason(e.target.value)} maxLength={40} placeholder="예: 개인 사정, 교육 참석"
+          <input value={reason} onChange={e => setReason(e.target.value)} maxLength={40} placeholder="비우면 '휴무' (예: 교육 참석)"
             className="w-full border border-[#e5e5e5] rounded-md px-2.5 py-1.5 text-[14px] focus:outline-none focus:border-[var(--brand)]" />
         </label>
 
