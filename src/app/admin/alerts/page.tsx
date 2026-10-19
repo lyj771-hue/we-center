@@ -84,7 +84,7 @@ function AdminAlerts() {
 
   return (
     <div>
-      {/* 종류 탭 — 확인 안 한 알림이 있으면 NEW + 개수 */}
+      {/* 종류 탭 — 확인 안 한 알림이 있으면 빨간 숫자 */}
       <div role="tablist" className="flex flex-wrap gap-1 mb-3 border-b border-[#e5e5e5]">
         {([{ key: 'all', label: '전체' }, ...ALERT_KINDS] as { key: 'all' | AlertKind; label: string }[]).map(k => {
           const n = unreadOf(k.key);
@@ -92,7 +92,7 @@ function AdminAlerts() {
             <button key={k.key} role="tab" aria-selected={kind === k.key} onClick={() => setKind(k.key)}
               className={`-mb-px px-3 py-2 text-[13px] border-b-2 transition-colors ${kind === k.key ? 'border-[var(--brand)] text-[var(--brand)]' : 'border-transparent text-[#777] hover:text-[#333]'}`}>
               {k.label}
-              {n > 0 && <span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-[#e11d48] px-1.5 text-[10px] leading-[16px] text-white font-semibold">NEW <span className="tabular-nums">{n}</span></span>}
+              {n > 0 && <span className="ml-1.5 inline-block min-w-[16px] rounded-full bg-[#e11d48] px-1 text-center text-[10px] leading-[16px] text-white font-semibold tabular-nums">{n}</span>}
             </button>
           );
         })}

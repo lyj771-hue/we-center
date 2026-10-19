@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { Holiday, Schedule, ScheduleDraft, Teacher, Template, TemplateData } from '@/lib/schedule';
-import { worksAt } from '@/lib/timetable';
+import type { CellView } from '@/lib/timetable';
+import { ROW_LABEL, cellOf, getDayBoard, rowsForDay, worksAt } from '@/lib/timetable';
 import {
-  addDays, addTeacher, deleteTeacher, deleteTemplate, dowLabel, getTemplates, parseDateList, parseYmd,
+  addDays, addTeacher, deleteTeacher, deleteTemplate, dowLabel, getKoreanHolidays, getTemplates, parseDateList, parseYmd,
   saveSchedule, saveTemplate, scheduleRange, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
 } from '@/lib/schedule';
 
@@ -82,6 +83,8 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     }
     return t;
   });
+  // 새 스케쥴은 시간표에서 비어 있는 시간을 저절로 넣는다 — 시간을 직접 고치거나 형식을 불러오면 그 뒤로는 저절로 안 바꾼다
+  const [autoFree, setAutoFree] = useState(!existing);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateId, setTemplateId] = useState('');
   // 드롭박스의 "직접 입력"을 고른 칸 — 시간 입력 칸을 보여 준다
@@ -163,21 +166,27 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
   const addTime = (tid: string, day: string, raw: string) => {
     const time = raw.slice(0, 5);
     if (!/^\d{2}:\d{2}$/.test(time)) return;
+    setAutoFree(false);
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), time]) } }));
   };
   // 그날 시간을 통째로 바꾼다(신청된 시간은 남긴다) — ALL · 비우기(휴지통)
-  const setDayTimes = (tid: string, day: string, list: string[]) =>
+  const setDayTimes = (tid: string, day: string, list: string[]) => {
+    setAutoFree(false);
     setTimes(p => ({
       ...p,
       [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []).filter(x => locked.has(`${tid}|${day}|${x}`)), ...list]) },
     }));
-  const removeTime = (tid: string, day: string, time: string) =>
+  };
+  const removeTime = (tid: string, day: string, time: string) => {
+    setAutoFree(false);
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: (p[tid]?.[day] ?? []).filter(x => x !== time) } }));
+  };
   // 평일 동일 적용 — 첫 평일 시간을 나머지 평일(월~금)에 똑같이. 토·일은 건드리지 않는다
   const copyFirstToAll = (tid: string) => {
     const tt = teachers.find(x => x.id === tid);
     const open = days.filter(d => !closed[d] && teacherOff[`${tid}|${d}`] === undefined && !(tt && away(tt, d)) && parseYmd(d).getDay() >= 1 && parseYmd(d).getDay() <= 5);
     if (open.length < 2) return;
+    setAutoFree(false);
     const first = times[tid]?.[open[0]] ?? [];
     setTimes(p => ({
       ...p,
@@ -203,6 +212,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     setTemplateId(id);
     const tpl = templates.find(t => t.id === id);
     if (!tpl) return;
+    setAutoFree(false);
     setTimes(prev => {
       const t: Times = {};
       for (const teacher of active) {
@@ -216,6 +226,49 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
       return t;
     });
   };
+
+  // 비어 있는 시간 — 그날 시간표(관리자 시간표 관리)에서 9시부터 모든 줄 중 수업이 없는 시간.
+  // 빈타임 칸에 무언가 있으면 빈타임 칸이 기준, 빈타임 칸이 비어 있으면 고정 칸이 기준(고정 칸의 x는 빈 것으로). 결석·옮긴 수업 자리는 빈 것으로 보고, x(수업 안 함)·?(미정)·다른 스케쥴 신청은 찬 것으로. 평일 점심(12:20)·쉬는 시간(16:30)·20:10 줄은 빼고,
+  // 공휴일엔 고정 수업이 없다. 휴무일·그날 뺀 선생님·출근 안 하는 날은 넣지 않는다. 신청된 시간은 그대로 둔다
+  const [filling, setFilling] = useState(false);
+  const fillFree = async () => {
+    if (!days.length) return;
+    setFilling(true);
+    try {
+      const years = [...new Set(days.map(d => d.slice(0, 4)))];
+      const hols = (await Promise.all(years.map(y => getKoreanHolidays(y).catch(() => [] as string[])))).flat();
+      const boards = await Promise.all(days.map(d => getDayBoard(d, [], center)));
+      setTimes(p => {
+        const n: Times = { ...p };
+        days.forEach((d, i) => {
+          const b = boards[i];
+          const holiday = hols.includes(d);
+          const wd = parseYmd(d).getDay();
+          const busy = (c: CellView) => c.status === 'off' || c.status === 'undecided'
+            || (c.status === 'child' && !c.absent && !c.moved && !(holiday && c.source === 'fixed'));
+          const rows = rowsForDay(d, [], center).filter(t => t >= '09:00' && t < '20:00' && !(wd >= 1 && wd <= 5 && ROW_LABEL[t]));
+          for (const t of active) {
+            const keep = (n[t.id]?.[d] ?? []).filter(x => locked.has(`${t.id}|${d}|${x}`));
+            const skip = closed[d] || away(t, d) || teacherOff[`${t.id}|${d}`] !== undefined;
+            // 빈타임 칸이 차 있으면 빈타임 칸이, 비어 있으면 고정 칸이 기준
+            const free = skip ? [] : rows.filter(time => { const o = cellOf(b.open, t.id, time); if (o.status !== 'empty') return !busy(o);
+              const f = cellOf(b.fixed, t.id, time);
+              return f.status === 'off' || !busy(f);   // 고정 칸이 x여도 빈타임이 비어 있으면 넣는다
+            });
+            n[t.id] = { ...n[t.id], [d]: sortTimes([...keep, ...free]) };
+          }
+        });
+        return n;
+      });
+    } catch (e) {
+      alert(`시간표를 불러오지 못했어요.\n${(e as Error).message}`);
+    } finally {
+      setFilling(false);
+    }
+  };
+  // 새 스케쥴 — 주·날짜·선생님이 바뀔 때마다 빈 시간을 다시 (직접 고치기 전까지)
+  const fillKey = `${days.join(',')}|${active.map(t => t.id).join(',')}|${Object.keys(closed).join(',')}`;
+  useEffect(() => { if (autoFree) fillFree(); }, [fillKey, autoFree]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveTemplate = async () => {
     const current = templates.find(t => t.id === templateId);
@@ -367,6 +420,11 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
           </select>
           <button type="button" onClick={handleSaveTemplate} className="text-[13px] border border-[#0a0a0a] bg-white px-3 py-2 hover:bg-[#0a0a0a] hover:text-white transition-colors">
             지금 시간표를 형식으로 저장
+          </button>
+          <button type="button" onClick={() => { setTemplateId(''); setAutoFree(true); fillFree(); }} disabled={filling}
+            title="시간표 관리에서 수업이 없는 시간(9시부터)을 넣어요 — 지금 넣은 시간은 바뀌어요(신청된 시간은 그대로)"
+            className="text-[13px] border border-[var(--brand)] text-[var(--brand)] bg-white px-3 py-2 hover:bg-[var(--brand)] hover:text-white transition-colors disabled:opacity-50">
+            {filling ? '빈 시간 찾는 중…' : '시간표의 빈 시간 넣기'}
           </button>
           {templateId && (
             <button type="button" onClick={handleDeleteTemplate} className="text-[13px] border border-[#e5e5e5] bg-white text-red-400 px-3 py-2 hover:bg-red-50">형식 삭제</button>
