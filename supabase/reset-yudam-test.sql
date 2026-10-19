@@ -20,6 +20,13 @@ delete from prepaid_charges where child_id in (select id from t_kids);
 update slots set booked_by = null, booked_at = null, cancel_state = null where booked_by in (select uid from t_users);
 delete from bookings where user_id in (select uid from t_users);
 
+-- 보낼 알림 (휴무 등 — teacher-leave.sql 을 돌린 뒤에만 표가 있다)
+do $$ begin
+  if to_regclass('public.outbox_messages') is not null then
+    delete from outbox_messages where child_id in (select id from t_kids) or user_id in (select uid from t_users);
+  end if;
+end $$;
+
 -- 회원 정보 — 아이 연결 끊기, 지점 가입 기록·프로필 지우기 (카카오 계정은 남겨서 다시 로그인하면 새로 가입)
 update children set guardian_user_id = null where id in (select id from t_kids) or guardian_user_id in (select uid from t_users);
 delete from member_centers where user_id in (select uid from t_users);
