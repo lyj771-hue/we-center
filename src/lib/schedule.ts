@@ -185,10 +185,13 @@ export async function getScheduleTeachers(): Promise<Teacher[]> {
   return getTeachers();
 }
 
+/** 잠시 빼 둔 선생님 — 시간표(수색·의정부)·선생님 시간표·수업 현황·수업스케쥴 어디에도 안 나온다. 다시 넣으려면 이름을 지운다 */
+const HIDDEN_TEACHERS = ['이원재'];
+
 export async function getTeachers(): Promise<Teacher[]> {
   const { data, error } = await supabase.from('teachers').select('*').order('sort_order');
   if (error) throw error;
-  return (data ?? []).map(r => ({
+  return (data ?? []).filter(r => !HIDDEN_TEACHERS.includes((r.name as string).trim())).map(r => ({
     id: r.id, name: r.name, order: r.sort_order,
     centers: (r.centers as string[] | null) ?? ['eunpyeong'],
     workDays: (r.work_days as Record<string, number[]> | null) ?? undefined,
