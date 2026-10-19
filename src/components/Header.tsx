@@ -36,7 +36,7 @@ export default function Header() {
   // 관리자 메뉴 — 같은 메뉴의 지점은 한 묶음(PC 드롭다운 · 휴대폰 메뉴 안 버튼 줄)
   const adminGroups: { label: string; items: { href: string; label: string }[] }[] = [
     { label: '회원관리', items: [{ href: '/members', label: '수색' }, { href: '/members/uijeongbu', label: '의정부' }, { href: '/members/teachers', label: '선생님' }] },
-    { label: '시간표', items: [{ href: '/admin/timetable', label: '수색' }, { href: '/admin/timetable/uijeongbu', label: '의정부' }] },
+    { label: '시간표 관리', items: [{ href: '/admin/timetable', label: '수색' }, { href: '/admin/timetable/uijeongbu', label: '의정부' }] },
     { label: '선생님 시간표', items: [{ href: '/teacher/timetable', label: '수색' }, { href: '/teacher/timetable/uijeongbu', label: '의정부' }] },
     // 수업 현황 — 전체 관리자만 (직원 계정엔 안 보인다)
     ...(canSeeStats ? [{ label: '수업 현황', items: [{ href: '/admin/dashboard', label: '수업 현황' }] }] : []),

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAdmin } from '@/components/AdminContext';
 import { useMember } from '@/components/MemberContext';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, getHolidayNames, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
+import { addDays, getHolidayNames, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
 import type { Center } from '@/lib/timetable';
 import { ROW_LABEL, SUNDAY_TEACHERS, rowsForDay, worksAt } from '@/lib/timetable';
 import type { TeacherLesson } from '@/lib/teacher';
@@ -26,6 +26,9 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const can = isAdmin || !!teacher;
   // 한눈에 보기 — 열 때마다 늘 이걸로 시작: 표 전체(폭·높이)가 화면에 들어오게 줄인다 ([크게 보기] = 원래 크기, 옆으로 밀어 보기)
   const [fit, setFit] = useState(true);
+  // 접은 선생님 — 빼 둔 선생님(이원재)은 맨 오른쪽에 처음엔 접혀 있다. 이름을 누르면 펼치기·접기
+  const [folded, setFolded] = useState<Set<string>>(() => new Set(HIDDEN_TEACHERS));
+  const toggleFold = (name: string) => setFolded(f => { const n = new Set(f); if (n.has(name)) n.delete(name); else n.add(name); return n; });
   const toggleFit = () => setFit(v => !v);
   const wrapRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -49,7 +52,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
 
   const load = useCallback(async () => {
     try {
-      const [t, l, h] = await Promise.all([getTeachers(), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({}))]);
+      const [t, l, h] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({}))]);
       setTeachers(t); setLessons(l); setHolidays(h); setFailed('');
     } catch (e) {
       setFailed((e as Error).message);
@@ -121,19 +124,23 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           <thead>
             <tr>
               <th className={`${th} sticky left-0 z-10 bg-white w-12`}>시간</th>
-              <th className={`${th} text-[13px] ${holiday ? 'text-red-500' : 'text-[#c026d3]'}`} colSpan={Math.max(1, shown.length * 2)}>
+              <th className={`${th} text-[13px] ${holiday ? 'text-red-500' : 'text-[#c026d3]'}`} colSpan={Math.max(1, shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : 2), 0))}>
                 {DOW[wd]} / {d.getMonth() + 1}월 {d.getDate()}일{holiday && <span className="ml-2 text-[12px]">{holiday} — 고정 수업 없음</span>}
               </th>
             </tr>
             <tr>
               <th className={`${th} sticky left-0 z-10 bg-white`} />
               {shown.map(t => (
-                <th key={t.id} colSpan={2} className={`${th} text-[13px] ${t.id === teacher?.teacherId ? 'text-[var(--brand)] bg-[#eef5fe]' : 'text-[#16a34a]'}`}>{t.name}</th>
+                <th key={t.id} colSpan={folded.has(t.name) ? 1 : 2} className={`${th} text-[13px] ${t.id === teacher?.teacherId ? 'text-[var(--brand)] bg-[#eef5fe]' : 'text-[#16a34a]'}`}>
+                  <button type="button" onClick={() => toggleFold(t.name)} title={folded.has(t.name) ? '펼치기' : '접기'} className="inline-flex items-center gap-1 hover:opacity-70">
+                    {t.name}<span className={`text-[14px] leading-none ${folded.has(t.name) ? '' : 'opacity-60'}`}>{folded.has(t.name) ? '▶' : '◀'}</span>
+                  </button>
+                </th>
               ))}
             </tr>
             <tr>
               <th className={`${th} sticky left-0 z-10 bg-white`} />
-              {shown.map(t => (
+              {shown.map(t => folded.has(t.name) ? <th key={t.id} className={`${th} text-[10px] text-[#ccc] w-8`}>접음</th> : (
                 <FragmentCols key={t.id}>
                   <th className={`${th} text-[10px] text-[#999] min-w-[64px]`}>고정</th>
                   <th className={`${th} text-[10px] text-[#999] min-w-[64px]`}>빈타임</th>
@@ -146,6 +153,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
               <tr key={time}>
                 <td className={`border border-[#d4d4d8] px-1 text-center sticky left-0 z-10 bg-white ${ROW_LABEL[time] ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
                 {shown.map(t => {
+                  if (folded.has(t.name)) return <td key={t.id} className={`${td} bg-[#fafafa]`} />;
                   const f = cellOf(t.id, time, 'fixed'), o = cellOf(t.id, time, 'open');
                   const openKid = o && (o.status === 'child' || o.status === 'cancel_requested');
                   return (

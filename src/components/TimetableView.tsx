@@ -6,7 +6,7 @@ import Portal from '@/components/Portal';
 import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFile';
 import { askChoice, askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, addTeacherWorkDay, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
+import { addDays, addTeacherWorkDay, getKoreanHolidays, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
 import { getDayLeaves, type TeacherLeave } from '@/lib/leave';
@@ -58,7 +58,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const [mode, setMode] = useState<Mode>('day');
   const [center, setCenter] = useState<Center>(fixedCenter ?? 'eunpyeong');
   // 접어 둔 선생님(이름만 보이고 칸은 숨김) — 이원재 선생님은 병가라 처음부터 접어 둔다
-  const [folded, setFolded] = useState<Set<string>>(() => new Set(['이원재']));
+  const [folded, setFolded] = useState<Set<string>>(() => new Set(HIDDEN_TEACHERS));
   const toggleFold = (name: string) => setFolded(f => { const n = new Set(f); if (n.has(name)) n.delete(name); else n.add(name); return n; });
   const [day, setDay] = useState(() => toYmd(new Date()));
   const [weekday, setWeekday] = useState(() => new Date().getDay());
@@ -93,7 +93,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   const load = useCallback(async () => {
     try {
-      const [t, c] = await Promise.all([getTeachers(), getChildren()]);
+      const [t, c] = await Promise.all([getTeachers({ includeHidden: true }), getChildren()]);   // 빼 둔 선생님(이원재)도 — 맨 오른쪽, 처음엔 접힘
       setTeachers(t);
       setChildren(c);
       if (mode === 'day') {

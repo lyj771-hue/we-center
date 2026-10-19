@@ -185,13 +185,17 @@ export async function getScheduleTeachers(): Promise<Teacher[]> {
   return getTeachers();
 }
 
-/** 잠시 빼 둔 선생님 — 시간표(수색·의정부)·선생님 시간표·수업 현황·수업스케쥴 어디에도 안 나온다. 다시 넣으려면 이름을 지운다 */
-const HIDDEN_TEACHERS = ['이원재'];
+/** 잠시 빼 둔 선생님 — 선생님 시간표·수업 현황·수업스케쥴에는 안 나온다. 시간표 관리에서는 맨 오른쪽에 접어서 보인다(includeHidden).
+ *  다시 다 넣으려면 이름을 지운다 */
+export const HIDDEN_TEACHERS = ['이원재'];
 
-export async function getTeachers(): Promise<Teacher[]> {
+export async function getTeachers(opts: { includeHidden?: boolean } = {}): Promise<Teacher[]> {
   const { data, error } = await supabase.from('teachers').select('*').order('sort_order');
   if (error) throw error;
-  return (data ?? []).filter(r => !HIDDEN_TEACHERS.includes((r.name as string).trim())).map(r => ({
+  const rows = (data ?? []).filter(r => opts.includeHidden || !HIDDEN_TEACHERS.includes((r.name as string).trim()));
+  // 빼 둔 선생님은 맨 뒤로
+  rows.sort((x, y) => Number(HIDDEN_TEACHERS.includes((x.name as string).trim())) - Number(HIDDEN_TEACHERS.includes((y.name as string).trim())));
+  return rows.map(r => ({
     id: r.id, name: r.name, order: r.sort_order,
     centers: (r.centers as string[] | null) ?? ['eunpyeong'],
     workDays: (r.work_days as Record<string, number[]> | null) ?? undefined,
