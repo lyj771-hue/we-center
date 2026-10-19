@@ -7,6 +7,7 @@ import { useAdmin } from './AdminContext';
 import { useMember } from './MemberContext';
 import type { Profile } from '@/lib/types';
 import { askConfirm } from '@/lib/dialog';
+import { ALERTS_CHANGED, getUnreadAlertCount } from '@/lib/alerts';
 
 // 카카오톡 채널 주소 (채널 홈 → 공유 → 링크 복사). 비어 있으면 아이콘만 보이고 눌러도 아무 일 없다
 const KAKAO_CHANNEL_URL = '';
@@ -41,7 +42,21 @@ export default function Header() {
     // 수업 현황 — 전체 관리자만 (직원 계정엔 안 보인다)
     ...(canSeeStats ? [{ label: '수업 현황', items: [{ href: '/admin/dashboard', label: '수업 현황' }] }] : []),
     { label: '알림 메시지', items: [{ href: '/admin/messages', label: '알림 메시지' }] },
+    { label: '알림', items: [{ href: '/admin/alerts', label: '알림' }] },
   ];
+  // 관리자 알림 — 아직 안 본 수(빨간 숫자). 1분마다, 알림 화면에서 확인하면 바로 새로
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!isAdmin) { setUnread(0); return; }
+    const refresh = () => { getUnreadAlertCount().then(setUnread).catch(() => {}); };
+    refresh();
+    const t = setInterval(refresh, 60_000);
+    window.addEventListener(ALERTS_CHANGED, refresh);
+    return () => { clearInterval(t); window.removeEventListener(ALERTS_CHANGED, refresh); };
+  }, [isAdmin, pathname]);
+  const badge = (label: string) => (label === '알림' && unread > 0
+    ? <span className="ml-1 inline-block min-w-[16px] px-1 rounded-full bg-[#e11d48] text-white text-[10px] leading-[16px] text-center tracking-normal no-underline">{unread > 99 ? '99+' : unread}</span>
+    : null);
   const [adminOpen, setAdminOpen] = useState<string | null>(null);
   // 바깥을 누르거나 페이지가 바뀌면 드롭다운 닫기
   useEffect(() => {
@@ -89,7 +104,7 @@ export default function Header() {
               {adminGroups.map(g => {
                 const cur = g.items.find(i => pathname === i.href);
                 if (g.items.length === 1) {
-                  return <Link key={g.label} href={g.items[0].href} className={`underline underline-offset-2 hover:opacity-100 ${cur ? 'opacity-100' : 'opacity-60'}`}>{g.label}</Link>;
+                  return <Link key={g.label} href={g.items[0].href} className={`underline underline-offset-2 hover:opacity-100 ${cur || (g.label === '알림' && unread) ? 'opacity-100' : 'opacity-60'}`}>{g.label}{badge(g.label)}</Link>;
                 }
                 return (
                   <span key={g.label} className="relative">
@@ -113,7 +128,7 @@ export default function Header() {
             {/* 휴대폰 — 관리자 메뉴는 오른쪽 메뉴(☰) 안에 크게 */}
             <div className="md:hidden flex items-center justify-center gap-4">
               <span>관리자 모드</span>
-              <button type="button" onClick={() => setMobileOpen(true)} className="underline underline-offset-2">관리자 메뉴 ☰</button>
+              <button type="button" onClick={() => setMobileOpen(true)} className="underline underline-offset-2">관리자 메뉴 ☰{badge('알림')}</button>
               <button onClick={logout} className="underline underline-offset-2 opacity-60">종료</button>
             </div>
           </div>
@@ -219,7 +234,7 @@ export default function Header() {
                   <div className="flex gap-1.5">
                     {g.items.map(i => (
                       <Link key={i.href} href={i.href} onClick={() => setMobileOpen(false)}
-                        className={`flex-1 text-center py-2 text-[13px] rounded-md border ${pathname === i.href ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#333]'}`}>{i.label}</Link>
+                        className={`flex-1 text-center py-2 text-[13px] rounded-md border ${pathname === i.href ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#333]'}`}>{i.label}{badge(i.label)}</Link>
                     ))}
                   </div>
                 </div>

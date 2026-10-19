@@ -17,6 +17,7 @@ export interface MyLesson {
   day: string;
   time: string;
   teacher: string;
+  teacherId: string;
   side: 'fixed' | 'open';
   source: 'fixed' | 'override' | 'booking';
   status: 'child' | 'undecided' | 'off' | 'none' | 'cancelled' | 'cancel_requested';
@@ -53,6 +54,7 @@ export async function getMyLessons(from: string, to: string): Promise<MyLesson[]
     day: r.day as string,
     time: r.lesson_time as string,
     teacher: r.teacher_name as string,
+    teacherId: r.teacher_id as string,
     side: r.side as MyLesson['side'],
     source: r.source as MyLesson['source'],
     status: r.status as MyLesson['status'],
@@ -65,6 +67,18 @@ export async function getMyLessons(from: string, to: string): Promise<MyLesson[]
     center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
   }));
 }
+
+/** 보호자 수업 취소 — 수업 시작 전이면 바로 취소 (supabase/lesson-cancel.sql). ok / ok_late(2시간 안 남음) / not_found / too_late / no_login */
+export async function cancelMyLesson(l: MyLesson): Promise<string> {
+  const { data, error } = await supabase.rpc('cancel_my_lesson', { p_day: l.day, p_time: l.time, p_teacher: l.teacherId, p_side: l.side });
+  if (error) throw error;
+  return data as string;
+}
+
+/** 마이페이지에서 취소할 수 있는 수업 — 진행할 수업이고 아직 시작 전 */
+export const canCancel = (l: MyLesson, now = new Date()) =>
+  (l.status === 'child' || l.status === 'cancel_requested') && !l.moved && !l.absent
+  && new Date(`${l.day}T${l.time.length === 4 ? `0${l.time}` : l.time}:00`) > now;
 
 /** 실제로 하는 수업인지 — 비움·미정·안 함·옮김·취소 승인은 뺀다 */
 export const isRealLesson = (l: MyLesson) => (l.status === 'child' || l.status === 'cancel_requested') && !l.moved;

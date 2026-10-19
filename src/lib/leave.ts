@@ -56,3 +56,4 @@ export async function deleteOutbox(id: string): Promise<void> {
   const { error } = await supabase.from('outbox_messages').delete().eq('id', id);
   if (error) throw error;
 }
+

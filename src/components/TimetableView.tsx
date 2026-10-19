@@ -911,8 +911,8 @@ function CellText({ cell, label, muted, nonMember }: { cell: CellView; label?: s
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
       {/* 선생님 휴무로 취소된 수업 — 줄 + 휴무 */}
-      {cell.moved && cell.note?.startsWith('휴무')
-        ? <span className="ml-0.5 text-[9px] text-[#e11d48] no-underline inline-block">휴무</span>
+      {cell.moved && (cell.note?.startsWith('휴무') || cell.note?.startsWith('취소'))
+        ? <span className="ml-0.5 text-[9px] text-[#e11d48] no-underline inline-block" title={cell.note}>{cell.note.startsWith('휴무') ? '휴무' : '취소'}</span>
         : cell.note && <span className="ml-0.5 text-[9px] text-[#f59e0b]">●</span>}
     </span>
   );

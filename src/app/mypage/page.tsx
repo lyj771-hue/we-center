@@ -170,7 +170,7 @@ export default function MyPage() {
 
   return wrap(
     <div className="space-y-6">
-      <MyPageView child={child} nickname={profile?.nickname} approved={viewable(branch)} week={week} setWeek={setWeek}
+      <MyPageView onChanged={load} child={child} nickname={profile?.nickname} approved={viewable(branch)} week={week} setWeek={setWeek}
         weekLessons={lessonsHere} payments={paymentsHere} ledger={ledger} history={historyHere} today={today} center={branch} failed={failed}
         top={top} bottom={bottom} />
       {withdrawLink}

@@ -1,7 +1,8 @@
 'use client';
 
 import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
-import { getMyLessons, isRealLesson } from '@/lib/mypage';
+import { canCancel, cancelMyLesson, getMyLessons, isRealLesson } from '@/lib/mypage';
+import { askConfirm, showAlert } from '@/lib/dialog';
 import UsageCard from '@/components/UsageCard';
 import type { LedgerRow } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
@@ -41,6 +42,8 @@ export interface MyPageViewProps {
   /** 맨 위(보는 지점)·맨 아래(지점 가입) — 페이지가 만들어 넘긴다 */
   top?: React.ReactNode;
   bottom?: React.ReactNode;
+  /** 수업을 취소한 뒤 — 다시 불러오기 */
+  onChanged?: () => void;
 }
 
 // 결제별 사용 카드 — 선결제 카드 아래에 이 순서로 (쓰는 결제이거나 이번 달 기록이 있는 것만)
@@ -53,7 +56,7 @@ const inBranch = (method: string, center?: string) => methodInCenter(method, cen
 // 년/월/일 (주별 시간표 날짜 넘기기)
 const ymd = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, center, failed, top, bottom }: MyPageViewProps) {
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, center, failed, top, bottom, onChanged }: MyPageViewProps) {
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
   const payRows = payments.filter(p => inBranch(p.method, center)).sort((a, b) => (a.method === 'prepaid' ? -1 : b.method === 'prepaid' ? 1 : 0));   // 선결제를 맨 위로
 
@@ -115,6 +118,24 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   const isRegular = (l: MyLesson, weekday: number) => {
     const t = teachers.find(x => x.name === l.teacher);
     return !t || worksAt(t, l.center, weekday);
+  };
+
+  // 수업 취소 — 시작 전이면 바로 취소(관리자 승인 없음). 고정 수업은 줄 + 취소로 남고, 신청한 빈타임은 다시 빈 시간이 된다
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const cancel = async (l: MyLesson) => {
+    const dd = parseYmd(l.day);
+    if (!(await askConfirm(`${dd.getMonth() + 1}/${dd.getDate()}(${DOW[dd.getDay()]}) ${l.time.replace(/^0/, '')} ${l.teacher} 선생님 수업을 취소할까요?\n바로 취소되고, 되돌리려면 센터로 연락해 주세요.`))) return;
+    setCancelling(`${l.day}|${l.time}|${l.teacherId}`);
+    try {
+      const r = await cancelMyLesson(l);
+      if (r === 'ok') { await showAlert('취소했어요.'); onChanged?.(); }
+      else if (r === 'ok_late') { await showAlert('취소했어요.\n\n수업 시작까지 2시간이 남지 않았어요.\n다음부터는 수업 시작 최소 2시간 전에 취소해 주세요.'); onChanged?.(); }
+      else showAlert(r === 'too_late' ? '이미 시작한 수업이라 취소할 수 없어요. 센터로 연락해 주세요.' : '취소할 수 없는 수업이에요. 화면을 새로고침해 주세요.');
+    } catch (e) {
+      showAlert(`취소하지 못했어요. 잠시 후 다시 시도해 주세요.\n${(e as Error).message}`);
+    } finally {
+      setCancelling(null);
+    }
   };
 
   // 이 지점 승인 전 — 칸마다 내용 대신 "승인 대기 중"
@@ -182,6 +203,14 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                       {l.payment.replace(/[x~]/gi, '') && <span className="text-[11px] text-[#999]">{payName(payKind(l.payment))}</span>}
                       {l.status === 'cancel_requested' && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded">취소 신청 중</span>}
                       {l.status === 'cancelled' && <span className="text-[11px] no-underline">취소</span>}
+                      {l.moved && l.note?.startsWith('취소') && <span className="text-[11px] text-[#e11d48]">취소</span>}
+                      {l.moved && l.note?.startsWith('휴무') && <span className="text-[11px] text-[#e11d48]">휴무</span>}
+                      {canCancel(l) && (
+                        <button type="button" onClick={() => cancel(l)} disabled={cancelling === `${l.day}|${l.time}|${l.teacherId}`}
+                          className="ml-auto text-[11px] px-2 py-0.5 rounded-full border border-[#e5e5e5] text-[#888] hover:border-[#e11d48] hover:text-[#e11d48] disabled:opacity-40">
+                          {cancelling === `${l.day}|${l.time}|${l.teacherId}` ? '취소 중…' : '취소'}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

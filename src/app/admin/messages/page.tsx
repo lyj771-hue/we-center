@@ -3,10 +3,10 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import type { MessageRow, MessageSpec, MessageTemplate } from '@/lib/messages';
-import { MESSAGE_GROUPS, MESSAGE_IMAGES, deleteMessageTemplate, fillVars, getMessageTemplates, isMissingTable, newSpec, saveMessageTemplate, specToBody, toRows } from '@/lib/messages';
+import { MESSAGE_GROUPS, MESSAGE_IMAGES, deleteMessageTemplate, getMessageTemplates, isMissingTable, newSpec, saveMessageTemplate, specToBody, toRows } from '@/lib/messages';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
-import type { OutboxMessage } from '@/lib/leave';
-import { deleteOutbox, getOutbox } from '@/lib/leave';
+import Link from 'next/link';
+import KakaoPreview from '@/components/KakaoPreview';
 
 // 알림 메시지 (관리자) — 알림 종류마다 카카오 알림톡 모양(아이템리스트형)과 알림 조건을 적어 둔다.
 // 왼쪽에서 그림·타이틀·항목 표·안내 글·버튼을 고치면 오른쪽 카톡 미리보기가 바로 바뀐다(예시 값으로 채움).
@@ -126,7 +126,8 @@ export default function MessagesPage() {
           </Fragment>
         ))}
 
-        <Outbox rows={rows} />
+        {/* 보낼 알림(보호자 알림 내역)은 '알림' 페이지로 옮겼다 */}
+        <p className="mt-12 text-[12px] text-[#999]">보호자에게 보낼·보낸 알림 내역은 <Link href="/admin/alerts?tab=sent" className="underline underline-offset-2 text-[var(--brand)]">알림 → 보호자 알림 내역</Link>에서 봐요.</p>
       </div>
     </div>
   );
@@ -268,42 +269,6 @@ function Card({ t, vars, draft, dirty, busy, onEdit, onSave, onCancel, onRename,
   );
 }
 
-/** 카카오톡 대화방에 보일 모양 — 실제 카카오톡에서는 글꼴·여백이 조금 다르고 글자 색은 바꿀 수 없다 */
-function KakaoPreview({ spec, vars }: { spec: MessageSpec; vars: Record<string, string> }) {
-  const img = MESSAGE_IMAGES.find(m => m.key === spec.image)?.src;
-  const fill = (s: string) => fillVars(s, vars);
-  return (
-    <div className="rounded-lg bg-[#b2c7da] p-3">
-      <div className="flex gap-2 items-start">
-        <div className="w-9 h-9 shrink-0 rounded-[13px] bg-white grid place-items-center text-[12px] font-bold text-[var(--brand)]">We</div>
-        <div className="min-w-0 flex-1">
-          <div className="text-[11px] text-[#3f4b5a] mb-1">위 We</div>
-          <div className="w-full max-w-[260px] rounded-[4px_14px_14px_14px] bg-white overflow-hidden shadow-[0_1px_1px_rgba(0,0,0,0.06)]">
-            <div className="bg-[#fee500] px-3 py-2 text-[11px] font-bold text-[#3c1e1e]">알림톡 도착</div>
-            {img && <img src={img} alt="" className="block w-[calc(100%-20px)] mx-[10px] mt-[10px] rounded-md" />}
-            {spec.title && <div className="px-3 pt-3 text-[13.5px] font-bold text-[#1f2328] break-keep">{fill(spec.title)}</div>}
-            {spec.sub && <div className="px-3 text-[11.5px] text-[#6b7280]">{fill(spec.sub)}</div>}
-            {spec.items.length > 0 && (
-              <dl className="mx-3 mt-2 mb-1 border-t border-[#eceef1]">
-                {spec.items.map((it, i) => (
-                  <div key={i} className="flex justify-between gap-3 py-1.5 border-b border-[#eceef1] text-[12.5px]">
-                    <dt className="shrink-0 text-[#6b7280]">{fill(it.name)}</dt>
-                    <dd className="text-right font-bold tabular-nums text-[#1f2328] break-keep">{fill(it.value)}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-            {spec.body && <div className="px-3 pt-2 pb-3 text-[12.5px] leading-[1.65] text-[#1f2328] whitespace-pre-line">{fill(spec.body)}</div>}
-            {spec.button.name && (
-              <div className="mx-2.5 mb-2.5 rounded-md border border-[#eceef1] bg-[#f7f8fa] py-2 text-center text-[12.5px]" title={spec.button.url}>{fill(spec.button.name)}</div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** 입력칸 오른쪽 아래 손잡이 — 잡고 위아래로 끌면 높이가 바뀐다 (마우스·손가락 둘 다) */
 function Resizable({ children }: { children: React.ReactNode }) {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -326,52 +291,5 @@ function Resizable({ children }: { children: React.ReactNode }) {
         <svg width="10" height="10" viewBox="0 0 10 10"><path d="M9 1 1 9M9 5 5 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" /></svg>
       </div>
     </div>
-  );
-}
-
-/** 보낼 알림 — 휴무 등으로 쌓인 알림 (솔라피 연결 전이라 아직 안 보냄). 받는 아이·번호·내용 미리보기, 지우기 */
-function Outbox({ rows }: { rows: MessageRow[] }) {
-  const [list, setList] = useState<OutboxMessage[] | null>(null);
-  const [failed, setFailed] = useState('');
-  const [open, setOpen] = useState<string | null>(null);
-  const load = useCallback(() => { getOutbox().then(l => { setList(l); setFailed(''); }).catch(e => setFailed((e as Error).message)); }, []);
-  useEffect(() => { load(); }, [load]);
-  const STATUS: Record<OutboxMessage['status'], string> = { pending: '보낼 것', sent: '보냄', failed: '실패', skipped: '안 보냄' };
-  const remove = async (m: OutboxMessage) => {
-    if (!(await askConfirm(`${m.childName} 알림을 지울까요? (보내지 않아요)`))) return;
-    try { await deleteOutbox(m.id); load(); } catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }
-  };
-  return (
-    <section className="mt-12">
-      <h2 className="mb-1 text-[14px] text-[var(--brand)]">보낼 알림</h2>
-      <p className="text-[12px] text-[#999] mb-3">휴무 등으로 쌓인 알림이에요. 솔라피(알림톡) 연결 뒤 여기서 보내요 — 지금은 아직 보내지 않아요.</p>
-      {failed && <p className="text-[13px] text-[#b45309]">불러오지 못했어요 — SQL(supabase/teacher-leave.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
-      {list && list.length === 0 && <p className="text-[13px] text-[#bbb]">쌓인 알림이 없어요.</p>}
-      {list && list.length > 0 && (
-        <div className="rounded-xl border border-[#e5e5e5] bg-white divide-y divide-[#f0f0f0]">
-          {list.map(m => {
-            const t = rows.find(r => r.id === m.templateId);
-            const vars = { ...(t?.samples ?? {}), ...m.vars };
-            return (
-              <div key={m.id} className="px-4 py-2.5 text-[13px]">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="text-[#999] tabular-nums">{new Date(m.createdAt).toLocaleDateString('ko-KR')}</span>
-                  <span className="text-[#27272a]">{m.childName}</span>
-                  <span className="text-[#888] tabular-nums">{m.phone ?? '번호 없음'}</span>
-                  <span className="text-[#888]">{t?.label ?? m.templateId}</span>
-                  <span className="text-[#555]">{[m.vars['날짜'], m.vars['시간'], m.vars['사유']].filter(Boolean).join(' · ')}</span>
-                  <span className={`text-[11px] px-1.5 rounded ${m.status === 'pending' ? 'bg-[#fffbeb] text-[#b45309]' : m.status === 'sent' ? 'bg-[#ecfdf5] text-[#047857]' : 'bg-[#fef2f2] text-[#b91c1c]'}`}>{STATUS[m.status]}</span>
-                  <div className="ml-auto flex gap-2">
-                    {t && <button onClick={() => setOpen(o => (o === m.id ? null : m.id))} className="text-[11px] text-[#888] underline underline-offset-2">{open === m.id ? '접기' : '미리보기'}</button>}
-                    {m.status === 'pending' && <button onClick={() => remove(m)} className="text-[11px] text-[#aaa] underline underline-offset-2 hover:text-red-500">지우기</button>}
-                  </div>
-                </div>
-                {open === m.id && t && <div className="mt-2 max-w-[300px]"><KakaoPreview spec={t.spec} vars={vars} /></div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
   );
 }
