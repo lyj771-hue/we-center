@@ -653,8 +653,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                     <button type="button" onClick={() => toggleFold(t.name)} title={folded.has(t.name) ? '펼치기' : '접기'}
                       className="inline-flex items-center gap-1 hover:opacity-70">
                       {t.name}{folded.has(t.name)
-                        ? <span className="text-[12px] leading-none text-[#16a34a]" aria-label="펼치기">▶</span>
-                        : <span className="text-[10px] text-[#aaa]">◂</span>}
+                        ? <span className="text-[16px] leading-none text-[#16a34a]" aria-label="펼치기">▶</span>
+                        : <span className="text-[16px] leading-none text-[#16a34a] opacity-70" aria-label="접기">◀</span>}
                     </button>
                     {!isTest && !folded.has(t.name) && (
                       <button type="button" onClick={() => clearTeacher(t)}
