@@ -616,3 +616,10 @@ export async function getMonthLessonPayments(month: string): Promise<{ teacher_i
   const data = await fetchAll<Record<string, unknown>>((a, b) => supabase.from('lesson_payments').select('teacher_id, method, confirmed, center').gte('day', `${month}-01`).lte('day', end).order('id').range(a, b));
   return data.map(r => ({ teacher_id: r.teacher_id as string | null, method: r.method as PayMethod, confirmed: r.confirmed !== false, center: (r.center as string) ?? 'eunpyeong' }));
 }
+
+/** 보호자가 마이페이지에서 취소한 수업스케쥴 신청을 되살린다 — 그 칸의 "취소완료"를 지워 다시 신청된 상태로 */
+export async function restoreBookedSlot(day: string, time: string, teacherId: string): Promise<void> {
+  const { error } = await supabase.from('slots').update({ cancel_state: null })
+    .match({ day, time, teacher_id: teacherId }).eq('cancel_state', 'approved').not('booked_by', 'is', null);
+  if (error) throw error;
+}

@@ -5,6 +5,7 @@ import { useAdmin } from '@/components/AdminContext';
 import Portal from '@/components/Portal';
 import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFile';
 import { askChoice, askConfirm, askPrompt, showAlert } from '@/lib/dialog';
+import { addAdminLog } from '@/lib/adminLog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, addTeacherWorkDay, getKoreanHolidays, getTeachers, HIDDEN_TEACHERS, parseYmd, removeTeacherWorkDay, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
@@ -12,7 +13,7 @@ import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveD
 import { getDayLeaves, type TeacherLeave } from '@/lib/leave';
 import {
   CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
-  rowsForDay, rowsForWeekday, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
+  rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
 } from '@/lib/timetable';
 
 // 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임 | 결제방식] 세 칸.
@@ -317,6 +318,22 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     putOps([o]);
     setEditing(null);
     setPicking(null);
+  };
+
+  // 보호자가 마이페이지에서 취소한 수업(줄 + "취소 · 보호자")을 취소 전으로 — 바로 저장한다
+  const restoreCancel = async (e: Editing) => {
+    const c = e.cell;
+    if (!(await askConfirm(`${c.name} — ${e.time} ${e.teacher.name} 선생님\n보호자가 취소한 수업을 취소 전으로 되돌릴까요?\n(취소할 때 지워진 '선택'한 결제방식은 다시 골라 주세요)`))) return;
+    try {
+      await saveDayCell(day, e.teacher.id, e.time, e.side,
+        { status: 'child', childId: c.childId ?? null, name: c.name, payment: c.payment, kind: c.kind ?? null, absent: false, moved: false, note: '' }, center);
+      if (e.side === 'open') await restoreBookedSlot(day, e.time, e.teacher.id).catch(() => {});
+      await addAdminLog({ center, kind: 'cancel_restore', title: `보호자 취소 되돌리기 — ${c.name}`, detail: `${day.replace(/-/g, '/')} ${e.time} ${e.teacher.name} 선생님 (${e.side === 'fixed' ? '고정' : '빈타임'})` });
+      setEditing(null);
+      await load();
+    } catch (err) {
+      showAlert(`되돌리지 못했어요.\n${(err as Error).message}`);
+    }
   };
 
   // 표에서 이름 옆 수업 종류 바꾸기 — 고정 수업이면 이 날부터(날짜별) / 오늘부터(고정 시간표), 그날 칸이면 그날만
@@ -873,6 +890,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           kids={pickKids}
           onClose={() => setEditing(null)}
           onSave={(input, weekly) => stage(editing, input, weekly)}
+          onRestoreCancel={mode === 'day' ? () => restoreCancel(editing) : undefined}
         /></Portal>
       )}
 
@@ -1034,7 +1052,7 @@ function ChildPicker({ picking, kids, onPick, onSave, onMore, onClose }: {
   );
 }
 
-function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave }: {
+function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, onRestoreCancel }: {
   editing: Editing;
   /** 이 센터에서 쓰는 결제 (수색 굳센 / 의정부 장맞춤) */
   methods: typeof PAY_METHODS;
@@ -1044,8 +1062,18 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave }:
   onClose: () => void;
   /** from = 날짜별 화면의 고정 칸에서 "이 날부터 고정" */
   onSave: (input: CellInput | 'reset', from?: boolean) => void;
+  /** 보호자가 취소한 수업 되돌리기 (날짜별 화면) */
+  onRestoreCancel?: () => void;
 }) {
   const { teacher, time, side, cell } = editing;
+  // 보호자가 마이페이지에서 취소한 칸 — 줄 + "취소 · 보호자"
+  const guardianCancelled = cell.status === 'child' && cell.moved && !!cell.note?.startsWith('취소');
+  const restoreBox = guardianCancelled && onRestoreCancel ? (
+    <div className="rounded-lg bg-[#fef2f2] px-3 py-2.5 space-y-2">
+      <p className="text-[12px] leading-[1.7] text-[#b91c1c]">보호자가 마이페이지에서 취소한 수업이에요.</p>
+      <button onClick={onRestoreCancel} className="text-[13px] px-3 py-1.5 rounded-full border border-[#b91c1c] text-[#b91c1c] bg-white hover:bg-[#fff5f5]">취소 되돌리기 (취소 전으로)</button>
+    </div>
+  ) : null;
   // 이름 칸은 "이름숫자"(동명이인 구분)로 보여 주고 고른다 — 저장할 땐 이름과 숫자를 나눠 둔 명단 아이로
   const disp = (c: Child) => `${c.name}${c.number ?? ''}`;
   const [name, setName] = useState(() => {
@@ -1094,6 +1122,7 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave }:
       <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
           <p className="text-[13px] text-[#888]">{dayLabel} · {time} · {teacher.name} 선생님 · 고정 자리</p>
+          {restoreBox}
           <label className="block">
             <span className="block text-[11px] text-[#999] mb-1">아이 (명단에서 검색)</span>
             <input list="tt-children" value={name} onChange={e => pickName(e.target.value)} autoFocus placeholder="이름 (비우면 고정 수업 없음)"
@@ -1122,9 +1151,17 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave }:
             <button onClick={saveFixedSeat} disabled={!!name.trim() && !child} className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white disabled:opacity-40`}>
               {mode === 'day' ? '이 날부터 반영' : '오늘부터 반영'}
             </button>
+            {/* 이 날만 결석 — 고정 수업은 그대로, 그날 칸에만 결석(x) */}
+            {mode === 'day' && cell.status === 'child' && !guardianCancelled && (
+              <button onClick={() => onSave({ status: 'child', childId: cell.childId ?? null, name: cell.name, payment: cell.payment, kind: cell.kind ?? null, absent: !cell.absent, moved: cell.moved, note: cell.note })}
+                className={`${chip} ${cell.absent ? 'border-[#ddd] text-[#555]' : 'border-[#a1a1aa] text-[#52525b]'}`}>
+                {cell.absent ? '결석 취소' : '이 날만 결석'}
+              </button>
+            )}
             <button onClick={onClose} className={`${chip} border-transparent text-[#888]`}>닫기</button>
           </div>
           <p className="text-[11px] text-[#aaa] leading-[1.7]">[스케줄 변경 완료]를 누르면 {mode === 'day' ? dayLabel : '오늘'}부터 매주 이렇게(아이·수업·결제방식) 바뀌어요. 지난 날짜는 그대로 남아요.</p>
+          {mode === 'day' && cell.status === 'child' && <p className="text-[11px] text-[#aaa] leading-[1.7] -mt-2">[이 날만 결석]은 {dayLabel} 하루만 결석으로 바꿔요(고정 수업은 그대로).</p>}
         </div>
       </div>
     );
@@ -1136,6 +1173,7 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave }:
         <p className="text-[13px] text-[#888]">
           {dayLabel} · {time} · {teacher.name} 선생님 · 빈타임 칸
         </p>
+        {restoreBox}
         {isBooking && (
           <p className="text-[12px] leading-[1.8] text-[#b45309] bg-[#fef3c7] rounded-lg px-3 py-2">
             보호자가 수업스케쥴에서 신청한 칸이에요. 여기서 저장하면 이 표에서만 바뀌어요(신청 자체는 수업스케쥴에서 취소).

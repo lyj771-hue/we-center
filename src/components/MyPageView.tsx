@@ -181,8 +181,8 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         <div className="divide-y divide-[#f0f0f0]">
           {days.map(d => {
             // 공휴일에는 고정 수업을 하지 않는다(빈타임만) — 그날 넣은 칸·신청만 보인다
-            // 결석한 수업은 아예 보이지 않는다
-            const list = weekLessons.filter(l => l.day === d && !l.absent && l.status !== 'none' && l.status !== 'off' && l.status !== 'undecided' && !(holidays[d] && l.source === 'fixed'));
+            // 센터에서 결석 처리한 수업은 줄 + "취소"로 보인다
+            const list = weekLessons.filter(l => l.day === d && l.status !== 'none' && l.status !== 'off' && l.status !== 'undecided' && !(holidays[d] && l.source === 'fixed'));
             const dd = parseYmd(d);
             return (
               <div key={d} className={`flex gap-3 py-3 ${d === today ? 'bg-[#f8fbff] -mx-3 px-3 rounded-lg' : ''}`}>
@@ -197,14 +197,14 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                     // 고정 수업은 글자 없이 파란 글씨로 (빈타임·신청은 검정). 공휴일·일요일, 선생님이 원래 출근하지 않는 요일은 고정 아님
                     const fixed = l.source !== 'booking' && l.side === 'fixed' && !holidays[d] && dd.getDay() !== 0 && isRegular(l, dd.getDay());
                     return (
-                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] ${l.moved || l.status === 'cancelled' ? 'text-[#bbb] line-through' : fixed ? 'text-[#2563eb]' : 'text-[#27272a]'}`}>
+                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] ${l.moved || l.absent || l.status === 'cancelled' ? 'text-[#bbb] line-through' : fixed ? 'text-[#2563eb]' : 'text-[#27272a]'}`}>
                       <span className="tabular-nums">{l.time}</span>
                       <span>{l.teacher} 선생님</span>
                       {l.oral && <span className="text-[11px] text-[#8b5cf6]">구강</span>}
                       {l.payment.replace(/[x~]/gi, '') && <span className="text-[11px] text-[#999]">{payName(payKind(l.payment))}</span>}
                       {l.status === 'cancel_requested' && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded">취소 신청 중</span>}
                       {l.status === 'cancelled' && <span className="text-[11px] no-underline">취소</span>}
-                      {l.moved && l.note?.startsWith('취소') && <span className="text-[11px] text-[#e11d48]">취소</span>}
+                      {((l.moved && l.note?.startsWith('취소')) || l.absent) && <span className="text-[11px] text-[#e11d48]">취소</span>}
                       {l.moved && l.note?.startsWith('휴무') && <span className="text-[11px] text-[#e11d48]">휴무</span>}
                       {canCancel(l) && (
                         <button type="button" onClick={() => cancel(l)} disabled={cancelling === `${l.day}|${l.time}|${l.teacherId}`}
