@@ -7,8 +7,8 @@ import { dowLabel, scheduleDays, scheduleRange, shortDay } from '@/lib/schedule'
 // (신청·취소 기록은 DB bookings 표에 계속 남지만 화면에는 보이지 않는다)
 // 보호자: 빈 시간 = 누르면 신청, 내 신청 = "✓ 신청완료"(누르면 취소 신청) → "취소중"(누르면 철회) → 회색 "취소완료",
 //         다른 분 신청 = 언제나 "마감".
-// 관리자: 신청된 칸 = "시간 + 닉네임 ✕"(누르면 시간 다시 열기), 취소 신청된 칸 = "취소요청"(누르면 승인),
-//         취소 승인된 칸 = 회색 "취소완료 ✕"(누르면 시간 다시 열기). 빈 칸은 그냥 보인다.
+// 관리자: 신청된 칸 = "시간 + 닉네임", 취소 신청된 칸 = "취소요청", 취소 승인된 칸 = 회색 "취소완료" — 보기만.
+//         취소 승인·신청 취소(시간 다시 열기)는 [수정](ScheduleEditor)에서 한다. 빈 칸은 그냥 보인다.
 
 interface Props {
   schedule: Schedule;
@@ -20,10 +20,6 @@ interface Props {
   /** 보호자: 우리 아이 수업과 시간이 겹쳐 신청할 수 없는 칸 */
   conflicts?: Set<string>;
   onPick: (slot: Slot, teacher: Teacher) => void;
-  /** 관리자: 신청을 지우고 시간을 다시 연다 */
-  onCancel: (slot: Slot, teacher: Teacher) => void;
-  /** 관리자: 보호자의 취소 신청을 승인 */
-  onApproveCancel: (slot: Slot, teacher: Teacher) => void;
   /** 보호자: 내 신청을 취소 신청 / 취소 신청 철회 */
   onRequestCancel: (slot: Slot, teacher: Teacher) => void;
   onWithdrawCancel: (slot: Slot, teacher: Teacher) => void;
@@ -36,7 +32,7 @@ const TINTS = ['#e8f1fd', '#fdf1e3', '#e8f5ee', '#f3ecfb', '#fdecef', '#eef3f5']
 const pill = 'inline-flex items-center gap-1.5 text-[11px] md:text-[12px] px-3 min-h-[32px] rounded-full border-[1.5px] transition-colors';
 
 export default function ScheduleBoard({
-  schedule, teachers, isAdmin, myId, nickname, busySlot, conflicts, onPick, onCancel, onApproveCancel, onRequestCancel, onWithdrawCancel, onEdit, onDelete,
+  schedule, teachers, isAdmin, myId, nickname, busySlot, conflicts, onPick, onRequestCancel, onWithdrawCancel, onEdit, onDelete,
 }: Props) {
   const days = scheduleDays(schedule);
   const centerHolidays = schedule.holidays.filter(h => !h.teacherId);
@@ -116,37 +112,31 @@ export default function ScheduleBoard({
                     ) : slots.map(s => {
                       const busy = busySlot === s.id;
                       if (isAdmin) {
+                        // 관리자 — 보기만. 취소 승인·신청 취소(시간 다시 열기)는 [수정]에서
+                        const hint = '취소 승인·신청 취소는 [수정]에서 해요';
                         if (s.bookedBy && s.cancelState === 'requested') {
                           return (
-                            <button key={s.id} type="button" disabled={busy} onClick={() => onApproveCancel(s, teacher)}
-                              aria-label={`${teacher.name} 선생님 ${shortDay(day)} ${s.time} ${s.owner ?? ''} 취소 요청 승인`}
-                              className={`${pill} pr-2.5 border-[#f59e0b] bg-[#fef3c7] text-[#b45309] hover:bg-[#fde68a]`}>
+                            <span key={s.id} title={hint} className={`${pill} pr-2.5 border-[#f59e0b] bg-[#fef3c7] text-[#b45309]`}>
                               {s.time}
                               <OwnerTag slot={s} className="bg-white/60" />
                               취소요청
-                            </button>
+                            </span>
                           );
                         }
                         if (s.bookedBy && s.cancelState === 'approved') {
                           return (
-                            <button key={s.id} type="button" disabled={busy} onClick={() => onCancel(s, teacher)}
-                              aria-label={`${teacher.name} 선생님 ${shortDay(day)} ${s.time} 취소완료 — 시간 다시 열기`}
-                              className={`${pill} pr-2.5 border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa] hover:bg-[#e4e4e7]`}>
+                            <span key={s.id} title={hint} className={`${pill} pr-2.5 border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa]`}>
                               {s.time}
                               <OwnerTag slot={s} className="bg-white" />
                               취소완료
-                              <span aria-hidden="true" className="text-[11px]">✕</span>
-                            </button>
+                            </span>
                           );
                         }
                         return s.bookedBy ? (
-                          <button key={s.id} type="button" disabled={busy} onClick={() => onCancel(s, teacher)}
-                            aria-label={`${teacher.name} 선생님 ${shortDay(day)} ${s.time} ${s.owner ?? ''} 신청 취소`}
-                            className={`${pill} pr-2.5 border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90`}>
+                          <span key={s.id} title={hint} className={`${pill} pr-2.5 border-[var(--brand)] bg-[var(--brand)] text-white`}>
                             {s.time}
                             <OwnerTag slot={s} className="bg-white/20" />
-                            <span aria-hidden="true" className="text-[11px] opacity-80">✕</span>
-                          </button>
+                          </span>
                         ) : (
                           <span key={s.id} className={`${pill} border-[#d4d4d8] text-[#71717b]`}>{s.time}</span>
                         );

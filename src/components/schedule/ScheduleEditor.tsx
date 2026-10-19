@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Holiday, Schedule, ScheduleDraft, Teacher, Template, TemplateData } from '@/lib/schedule';
 import type { CellView } from '@/lib/timetable';
-import { ROW_LABEL, cellOf, getDayBoard, rowsForDay, worksAt } from '@/lib/timetable';
+import { ROW_LABEL, cellOf, childLabel, getChildren, getDayBoard, rowsForDay, worksAt } from '@/lib/timetable';
+import { getMemberCenters, getMembers } from '@/lib/store';
+import { addOutbox } from '@/lib/leave';
 import {
-  addDays, addTeacher, deleteTeacher, deleteTemplate, dowLabel, getKoreanHolidays, getTemplates, parseDateList, parseYmd,
+  addDays, addTeacher, approveCancel, cancelSlot, deleteTeacher, deleteTemplate, dowLabel, getKoreanHolidays, getTemplates, parseDateList, parseYmd,
   saveSchedule, saveTemplate, scheduleRange, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
 } from '@/lib/schedule';
 
@@ -120,12 +122,16 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     setExtra(x => { const n = new Set(x); n.delete(t.id); return n; });
   };
 
-  // 신청된 시간 (잠금) — "선생님|날짜|시간" → 닉네임
-  const locked = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const s of existing?.slots ?? []) if (s.bookedBy) m.set(`${s.teacherId}|${s.day}|${s.time}`, s.owner ?? '신청됨');
-    return m;
-  }, [existing]);
+  // 신청된 시간 — "선생님|날짜|시간" → 칸 id · 닉네임 · 취소 상태
+  type Booked = { id: string; owner: string; cancel?: 'requested' | 'approved' };
+  const booked = useMemo(() => new Map<string, Booked>((existing?.slots ?? []).filter(s => s.bookedBy)
+    .map(s => [`${s.teacherId}|${s.day}|${s.time}`, { id: s.id, owner: s.owner ?? '신청됨', cancel: s.cancelState }])), [existing]);
+  // 잠금 — 신청된 시간은 뺄 수 없다 → "선생님|날짜|시간" → 닉네임
+  const locked = useMemo(() => new Map([...booked].map(([k, v]) => [k, v.owner])), [booked]);
+  // 취소 승인 · 신청 취소(시간 다시 열기) — 바로 바꾸지 않고 표시만 해 두었다가 [저장]할 때 적용한다. 다시 누르면 되돌린다
+  const [pending, setPending] = useState<Map<string, 'approve' | 'reopen'>>(new Map());
+  const togglePending = (key: string, act: 'approve' | 'reopen') =>
+    setPending(m => { const n = new Map(m); if (n.get(key) === act) n.delete(key); else n.set(key, act); return n; });
   const lockedDays = useMemo(() => new Set([...locked.keys()].map(k => k.split('|')[1])), [locked]);
 
   const autoTitle = mode === 'holiday' ? '공휴일 빈 수업 안내' : weekStart === monday ? '이번 주 빈 수업 안내' : weekStart === nextMonday ? '다음 주 빈 수업 안내' : '빈 수업 안내';
@@ -294,6 +300,30 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     } catch { alert('형식을 지우지 못했어요.'); }
   };
 
+  // 게시글을 고쳐 저장하면 — 고를 수 있게 물어보고, 이 센터에 승인된 보호자(번호 있는)마다 '스케줄 수정 알림'을 보낼 알림에 남긴다
+  const notifyUpdated = async (scheduleId: string, scheduleTitle: string) => {
+    try {
+      const [members, extra, kids] = await Promise.all([getMembers(), getMemberCenters(), getChildren()]);
+      const approved = members.filter(m => m.nickname && (((m.center ?? 'eunpyeong') === center && m.approvedAt) || extra.get(`${m.userId}|${center}`)));
+      const withPhone = approved.filter(m => m.phone);
+      if (!withPhone.length) return;
+      if (!confirm(`보호자에게 "${scheduleTitle}" 업데이트 알림을 남길까요?\n(${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자 ${withPhone.length}명${approved.length > withPhone.length ? ` · 번호 없는 ${approved.length - withPhone.length}명은 빼요` : ''})`)) return;
+      const now = new Date();
+      const day = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+      await addOutbox(withPhone.map(m => {
+        const kid = kids.find(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') === center);
+        const name = kid ? childLabel(kid) : m.nickname;
+        return {
+          templateId: 'schedule_updated', refId: scheduleId, childId: kid?.id, userId: m.userId, childName: name, phone: m.phone,
+          vars: { 이름: kid?.name ?? m.nickname, 제목: scheduleTitle, 날짜: day, 센터: center === 'uijeongbu' ? '의정부점' : '은평점' },
+        };
+      }));
+      alert(`보낼 알림 ${withPhone.length}건을 남겼어요.\n(알림은 솔라피 연결 뒤 보내요 — 알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+    } catch (e) {
+      alert(`스케줄은 저장했지만 알림을 남기지 못했어요.\n${(e as Error).message}`);
+    }
+  };
+
   const handleSave = async () => {
     if (mode === 'holiday' && !days.length) { alert('공휴일 날짜를 적어 주세요. (예: 2026/10/9, 2026/12/25)'); return; }
     const slots: ScheduleDraft['slots'] = [];
@@ -308,6 +338,17 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     if (!slots.length && !confirm('넣은 시간이 하나도 없어요. 그래도 올릴까요?')) return;
     setSaving(true);
     try {
+      // 표시해 둔 취소 승인 · 신청 취소를 먼저 적용
+      let failed = 0;
+      for (const [key, act] of pending) {
+        const b = booked.get(key);
+        if (!b) continue;
+        try {
+          if (act === 'approve') { if ((await approveCancel(b.id)) !== 'ok') failed++; }
+          else await cancelSlot(b.id);
+        } catch { failed++; }
+      }
+      if (failed) alert(`취소 승인·신청 취소 ${failed}건은 적용하지 못했어요. (보호자가 그 사이 취소 신청을 철회했을 수 있어요)`);
       const id = await saveSchedule({
         center,
         weekStart: mode === 'holiday' ? days[0] : weekStart,
@@ -322,6 +363,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
         ],
         slots,
       }, existing);
+      if (existing) await notifyUpdated(id, shownTitle.trim() || autoTitle);
       onClose(id);
     } catch {
       alert('저장하지 못했어요. 다시 시도해 주세요.');
@@ -505,11 +547,32 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
                     ) : (
                     <div className="flex flex-wrap items-center gap-1.5 flex-1">
                       {(times[t.id]?.[d] ?? []).map(time => {
-                        const owner = locked.get(`${t.id}|${d}|${time}`);
-                        return owner ? (
-                          <span key={time} title="신청된 시간 — 먼저 신청을 취소해야 뺄 수 있어요"
-                            className={`${chip} pr-3 border-[var(--brand)] bg-[var(--brand)] text-white`}>
-                            {time} <span className="text-[11px] bg-white/20 px-1.5 rounded-full">{owner}</span>
+                        const bkey = `${t.id}|${d}|${time}`;
+                        const b = booked.get(bkey);
+                        const act = pending.get(bkey);
+                        // 신청된 시간 — 취소요청이면 [승인], 신청·취소완료면 ✕(신청 취소 → 시간 다시 열기). [저장]할 때 적용, 다시 누르면 되돌리기
+                        return b ? (
+                          <span key={time} title={act ? '저장하면 적용돼요 — 다시 누르면 되돌려요' : b.cancel === 'requested' ? '취소 신청 — [승인]을 누르고 저장하면 취소완료' : '신청된 시간 — ✕를 누르고 저장하면 신청을 취소하고 시간을 다시 열어요'}
+                            className={`${chip} ${act ? 'border-dashed border-[#a1a1aa] bg-white text-[#71717b]' : b.cancel === 'requested' ? 'border-[#f59e0b] bg-[#fef3c7] text-[#b45309]' : b.cancel === 'approved' ? 'border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa]' : 'border-[var(--brand)] bg-[var(--brand)] text-white'}`}>
+                            {time} <span className={`text-[11px] px-1.5 rounded-full ${b.cancel || act ? 'bg-[#f4f4f5]' : 'bg-white/20'} ${act === 'reopen' ? 'line-through' : ''}`}>{b.owner}</span>
+                            {act ? (
+                              <>
+                                <span className="text-[11px]">{act === 'approve' ? '취소완료 예정' : '신청 취소 예정'}</span>
+                                <button type="button" onClick={() => togglePending(bkey, act)} className="ml-0.5 text-[11px] underline underline-offset-2 hover:text-[#0a0a0a]">되돌리기</button>
+                              </>
+                            ) : b.cancel === 'requested' ? (
+                              <>
+                                <span className="text-[11px]">취소요청</span>
+                                <button type="button" onClick={() => togglePending(bkey, 'approve')}
+                                  className="ml-0.5 text-[11px] px-2 py-0.5 rounded-full bg-[#b45309] text-white hover:opacity-90">승인</button>
+                              </>
+                            ) : (
+                              <>
+                                {b.cancel === 'approved' && <span className="text-[11px]">취소완료</span>}
+                                <button type="button" onClick={() => togglePending(bkey, 'reopen')} aria-label={`${time} ${b.owner} 신청 취소`}
+                                  className={`w-5 h-5 text-[11px] ${b.cancel ? 'text-[#999] hover:text-red-500' : 'text-white/80 hover:text-white'}`}>✕</button>
+                              </>
+                            )}
                           </span>
                         ) : (
                           <span key={time} className={`${chip} border-[var(--brand)] text-[var(--brand)]`}>

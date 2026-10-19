@@ -12,7 +12,7 @@ import ScheduleEditor from './ScheduleEditor';
 import ScheduleGate from './ScheduleGate';
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import {
-  approveCancel, bookSlot, cancelSlot, deleteSchedule, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, withdrawCancel,
+  bookSlot, deleteSchedule, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, withdrawCancel,
 } from '@/lib/schedule';
 import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -91,15 +91,8 @@ export default function ScheduleDetail({ id }: { id: string }) {
     }
   };
 
-  const handleCancel = async (slot: Slot, teacher: Teacher) => {
-    if (!(await askConfirm(`${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}\n${slot.owner ?? ''} 님의 신청을 취소할까요?\n(시간이 다시 열려요)`))) return;
-    setBusySlot(slot.id);
-    try { await cancelSlot(slot.id); }
-    catch { showAlert('취소하지 못했어요. 다시 시도해 주세요.'); }
-    finally { setBusySlot(null); load(); }
-  };
 
-  // 보호자 취소 신청 · 철회, 관리자 승인 — 끝나면 새로 불러온다
+  // 보호자 취소 신청 · 철회 — 끝나면 새로 불러온다 (관리자 승인·신청 취소는 수정 화면에서)
   const runSlot = async (slot: Slot, ask: string, fn: (id: string) => Promise<string>, fail: string) => {
     if (!(await askConfirm(ask))) return;
     setBusySlot(slot.id);
@@ -118,8 +111,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
     runSlot(slot, `${label(slot, teacher)}\n취소를 신청할까요?\n(센터에서 승인하기 전까지는 다시 눌러 철회할 수 있어요)`, requestCancel, '취소 신청을 하지 못했어요.');
   const handleWithdrawCancel = (slot: Slot, teacher: Teacher) =>
     runSlot(slot, `${label(slot, teacher)}\n취소 신청을 철회할까요?`, withdrawCancel, '이미 센터에서 취소를 승인했어요.');
-  const handleApproveCancel = (slot: Slot, teacher: Teacher) =>
-    runSlot(slot, `${label(slot, teacher)}\n${slot.owner ?? ''} 님의 취소 신청을 승인할까요?\n(시간은 다시 열리지 않고, 다른 분에겐 계속 마감으로 보여요)`, approveCancel, '보호자가 이미 취소 신청을 철회했어요.');
+
 
   const handleDelete = async () => {
     if (!schedule) return;
@@ -139,7 +131,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
             teachers={teachers}
             existing={schedule}
             onTeachersChanged={async () => setTeachers(await getScheduleTeachers())}
-            onClose={savedId => { setEditing(false); if (savedId) load(); }}
+            onClose={() => { setEditing(false); load(); }}   // 수정 화면에서 취소 승인·신청 취소를 했을 수 있어 늘 새로
           />
         ) : loaded && !schedule ? (
           <p className="text-center text-[14px] text-[#aaa] py-16">스케쥴을 찾을 수 없어요.</p>
@@ -153,8 +145,6 @@ export default function ScheduleDetail({ id }: { id: string }) {
             busySlot={busySlot}
             conflicts={conflicts}
             onPick={handlePick}
-            onCancel={handleCancel}
-            onApproveCancel={handleApproveCancel}
             onRequestCancel={handleRequestCancel}
             onWithdrawCancel={handleWithdrawCancel}
             onEdit={() => { setEditing(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}

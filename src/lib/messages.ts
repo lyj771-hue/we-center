@@ -88,6 +88,14 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
     condition: '수업스케줄에 빈 수업 게시글을 올릴 때 관리자가 보낼지 고르면, 그 센터에 승인된 보호자 모두에게 한 번.\n먼저 신청한 순서로 정해지니 게시글을 올리는 즉시 보낸다.',
   },
   {
+    id: 'schedule_updated', grp: 'lesson', label: '스케줄 수정 알림', sort: 35,
+    spec: { image: 'logo', title: '#{센터} 빈 수업 안내 수정', sub: 'We 센터',
+      items: [{ name: '제목', value: '#{제목}' }, { name: '수정일', value: '#{날짜}' }],
+      body: '#{이름} 님, 빈 수업 안내가 업데이트되었어요.\n아래 버튼을 눌러 바뀐 시간을 확인해 주세요.', button: { name: '수업 신청하기', url: `${SITE}/schedule` } },
+    samples: { 제목: '이번주 10/20~10/24 빈타임 안내' },
+    condition: '수업스케줄 게시글을 [고치기]로 저장할 때 관리자가 보낼지 고르면, 그 센터에 승인된 보호자(전화번호 있는) 모두에게 한 번.\n지금은 [보낼 알림]에 쌓아 두고, 솔라피 연결 뒤 보낸다.',
+  },
+  {
     id: 'teacher_leave', grp: 'lesson', label: '선생님 휴무 수업 취소 알림', sort: 40,
     spec: { image: 'logo', title: '#{이름} 님 수업 취소 안내', sub: 'We 센터',
       items: [{ name: '일자', value: '#{날짜}(#{요일})' }, { name: '시간', value: '#{시간}' }, { name: '선생님', value: '#{선생님} 선생님' }, { name: '사유', value: '#{사유}' }],
