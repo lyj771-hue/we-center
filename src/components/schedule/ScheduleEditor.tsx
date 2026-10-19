@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { addAdminLog } from '@/lib/adminLog';
 import type { Holiday, Schedule, ScheduleDraft, Teacher, Template, TemplateData } from '@/lib/schedule';
 import type { CellView } from '@/lib/timetable';
 import { ROW_LABEL, cellOf, childLabel, getChildren, getDayBoard, rowsForDay, worksAt } from '@/lib/timetable';
@@ -337,6 +338,35 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     }
     if (!slots.length && !confirm('넣은 시간이 하나도 없어요. 그래도 올릴까요?')) return;
     setSaving(true);
+    // 관리 내역 — 저장하기 전에 이 화면에서 한 일을 모아 둔다
+    const tName = (id: string) => teachers.find(t => t.id === id)?.name ?? '선생님';
+    const fullDay = (d: string) => `${d.slice(0, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}(${dowLabel(d)})`;
+    const slotText = (k: string) => { const [tid, d, time] = k.split('|'); return `${tName(tid)} ${fullDay(d)} ${time}`; };
+    const logLines: string[] = [];
+    for (const [key, act] of pending) {
+      const b = booked.get(key);
+      if (b) logLines.push(`${act === 'approve' ? '취소 승인 · 시간 다시 열기' : '신청 취소 · 시간 다시 열기'}: ${slotText(key)} ${b.owner}`);
+    }
+    if (existing) {
+      const before = new Set(existing.slots.map(x => `${x.teacherId}|${x.day}|${x.time}`));
+      const after = new Set(slots.map(x => `${x.teacherId}|${x.day}|${x.time}`));
+      for (const k of [...after].filter(k => !before.has(k)).sort()) logLines.push(`시간 넣기: ${slotText(k)}`);
+      for (const k of [...before].filter(k => !after.has(k)).sort()) logLines.push(`시간 빼기: ${slotText(k)}`);
+      const newTitle = shownTitle.trim() || autoTitle;
+      if (newTitle !== existing.title) logLines.push(`제목: ${existing.title} → ${newTitle}`);
+      if (notice !== existing.notice) logLines.push('안내 글 고침');
+      const hKey = (h: { date: string; teacherId?: string; label: string }) => `${h.teacherId ?? ''}|${h.date}|${h.label}`;
+      const oldH = new Set(existing.holidays.map(hKey));
+      const newHolidays = [
+        ...(mode === 'holiday' ? [] : days.filter(d => closed[d]).map(d => closed[d])),
+        ...Object.entries(mode === 'holiday' ? {} : teacherOff).map(([k, label]) => { const [teacherId, date] = k.split('|'); return { teacherId, date, label: label.trim() }; })
+          .filter(h => days.includes(h.date) && active.some(t => t.id === h.teacherId)),
+      ];
+      const newH = new Set(newHolidays.map(hKey));
+      const hText = (k: string) => { const [tid, d, l] = k.split('|'); return `${tid ? `${tName(tid)} ` : ''}${fullDay(d)}${l ? ` ${l}` : ''}`; };
+      for (const k of [...newH].filter(k => !oldH.has(k))) logLines.push(`휴무 넣기: ${hText(k)}`);
+      for (const k of [...oldH].filter(k => !newH.has(k))) logLines.push(`휴무 빼기: ${hText(k)}`);
+    }
     try {
       // 표시해 둔 취소 승인 · 신청 취소를 먼저 적용
       let failed = 0;
@@ -344,7 +374,8 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
         const b = booked.get(key);
         if (!b) continue;
         try {
-          if (act === 'approve') { if ((await approveCancel(b.id)) !== 'ok') failed++; }
+          // 취소 승인 — 승인 기록을 남기고 바로 시간을 다시 열어 다른 분이 신청할 수 있게
+          if (act === 'approve') { if ((await approveCancel(b.id)) !== 'ok') failed++; else await cancelSlot(b.id); }
           else await cancelSlot(b.id);
         } catch { failed++; }
       }
@@ -363,6 +394,10 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
         ],
         slots,
       }, existing);
+      const logTitle = `수업스케쥴 ${existing ? '고침' : '올림'} — ${shownTitle.trim() || autoTitle} (${range})`;
+      if (!existing) logLines.unshift(`시간 ${slots.length}개 올림`);
+      if (failed) logLines.push(`※ 취소 승인·신청 취소 ${failed}건은 적용하지 못함`);
+      await addAdminLog({ center, kind: existing ? 'schedule_edit' : 'schedule_new', title: logTitle, detail: logLines.join('\n') || '바꾼 내용 없음', refId: id });
       if (existing) await notifyUpdated(id, shownTitle.trim() || autoTitle);
       onClose(id);
     } catch {
@@ -552,12 +587,12 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
                         const act = pending.get(bkey);
                         // 신청된 시간 — 취소요청이면 [승인], 신청·취소완료면 ✕(신청 취소 → 시간 다시 열기). [저장]할 때 적용, 다시 누르면 되돌리기
                         return b ? (
-                          <span key={time} title={act ? '저장하면 적용돼요 — 다시 누르면 되돌려요' : b.cancel === 'requested' ? '취소 신청 — [승인]을 누르고 저장하면 취소완료' : '신청된 시간 — ✕를 누르고 저장하면 신청을 취소하고 시간을 다시 열어요'}
+                          <span key={time} title={act ? '저장하면 적용돼요 — 다시 누르면 되돌려요' : b.cancel === 'requested' ? '취소 신청 — [승인]을 누르고 저장하면 취소되고 시간이 다시 열려요' : '신청된 시간 — ✕를 누르고 저장하면 신청을 취소하고 시간을 다시 열어요'}
                             className={`${chip} ${act ? 'border-dashed border-[#a1a1aa] bg-white text-[#71717b]' : b.cancel === 'requested' ? 'border-[#f59e0b] bg-[#fef3c7] text-[#b45309]' : b.cancel === 'approved' ? 'border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa]' : 'border-[var(--brand)] bg-[var(--brand)] text-white'}`}>
                             {time} <span className={`text-[11px] px-1.5 rounded-full ${b.cancel || act ? 'bg-[#f4f4f5]' : 'bg-white/20'} ${act === 'reopen' ? 'line-through' : ''}`}>{b.owner}</span>
                             {act ? (
                               <>
-                                <span className="text-[11px]">{act === 'approve' ? '취소완료 예정' : '신청 취소 예정'}</span>
+                                <span className="text-[11px]">{act === 'approve' ? '승인 · 다시 열림 예정' : '신청 취소 예정'}</span>
                                 <button type="button" onClick={() => togglePending(bkey, act)} className="ml-0.5 text-[11px] underline underline-offset-2 hover:text-[#0a0a0a]">되돌리기</button>
                               </>
                             ) : b.cancel === 'requested' ? (

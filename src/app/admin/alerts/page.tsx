@@ -11,12 +11,15 @@ import { deleteOutbox, getOutbox } from '@/lib/leave';
 import type { MessageRow } from '@/lib/messages';
 import { getMessageTemplates, toRows } from '@/lib/messages';
 import { askConfirm, showAlert } from '@/lib/dialog';
+import type { AdminLog } from '@/lib/adminLog';
+import { getAdminLogs } from '@/lib/adminLog';
 
 // 알림 (관리자) — 두 탭
 //   관리자 알림     보호자가 가입·다른 지점 가입·수업 신청·취소 신청을 하면 쌓인다(supabase/admin-alerts.sql). 누르면 확인함 + 그 화면으로
 //   보호자 알림 내역 어떤 보호자에게 어떤 알림을 보냈는지(보낼 것·보냄·실패) — outbox_messages(supabase/teacher-leave.sql)
+//   관리 내역       관리자가 한 일(수업스케쥴 올리기·고치기 등) — admin_logs(supabase/admin-logs.sql)
 
-type Tab = 'admin' | 'sent';
+type Tab = 'admin' | 'sent' | 'log';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const fmt = (iso?: string) => {
@@ -48,8 +51,9 @@ export default function AlertsPage() {
       <div role="tablist" className="flex gap-1.5 mb-5">
         {tabBtn('admin', '관리자 알림')}
         {tabBtn('sent', '보호자 알림 내역')}
+        {tabBtn('log', '관리 내역')}
       </div>
-      {tab === 'admin' ? <AdminAlerts /> : <SentLog />}
+      {tab === 'admin' ? <AdminAlerts /> : tab === 'sent' ? <SentLog /> : <AdminLogs />}
     </div>
   );
 }
@@ -220,5 +224,40 @@ function FragmentRow({ children, cols, open, preview }: { children: React.ReactN
       <tr className="border-b border-[#f0f0f0] align-top">{children}</tr>
       {open && <tr className="border-b border-[#f0f0f0]"><td colSpan={cols} className="px-3 py-3 bg-[#fafafa]">{preview}</td></tr>}
     </>
+  );
+}
+
+/** 관리 내역 — 관리자가 한 일. 최근 것부터 */
+function AdminLogs() {
+  const [list, setList] = useState<AdminLog[] | null>(null);
+  const [failed, setFailed] = useState('');
+  const [center, setCenter] = useState<'all' | 'eunpyeong' | 'uijeongbu'>('all');
+  useEffect(() => { getAdminLogs().then(l => { setList(l); setFailed(''); }).catch(e => setFailed((e as Error).message)); }, []);
+  const shown = (list ?? []).filter(l => center === 'all' || l.center === center);
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-1.5 mb-4">
+        {([['all', '전체'], ['eunpyeong', '수색'], ['uijeongbu', '의정부']] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setCenter(k)}
+            className={`text-[12px] px-3 py-1.5 border ${center === k ? 'border-[#0a0a0a] bg-[#0a0a0a] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`}>{l}</button>
+        ))}
+      </div>
+      {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — SQL(supabase/admin-logs.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
+      {!list && !failed && <p className="text-[13px] text-[#aaa]">불러오는 중…</p>}
+      {list && !shown.length && <p className="py-10 text-center text-[13px] text-[#bbb]">아직 남은 관리 내역이 없어요.</p>}
+      <ul className="divide-y divide-[#f0f0f0] border-y border-[#f0f0f0]">
+        {shown.map(l => (
+          <li key={l.id} className="py-3">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="text-[12px] text-[#999] tabular-nums">{fmt(l.createdAt)}</span>
+              <span className="text-[11px] text-[#888] border border-[#e5e5e5] rounded px-1">{CENTER_LABEL[l.center as 'eunpyeong' | 'uijeongbu'] ?? l.center}</span>
+              {l.actor && <span className="text-[11px] text-[#888]">{l.actor}</span>}
+              <span className="text-[14px] text-[#27272a]">{l.title}</span>
+            </div>
+            {l.detail && <p className="mt-1 text-[12px] leading-[1.8] text-[#555] whitespace-pre-line">{l.detail}</p>}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
