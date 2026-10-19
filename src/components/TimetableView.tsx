@@ -39,7 +39,7 @@ interface Editing {
  *  day = 날짜별 칸, from = 날짜별 화면에서 "이 날부터 고정"(null = 이 날부터 고정 수업 없음), fixed = 고정 시간표 칸.
  *  auto = 선생님 빼기로 생긴 변경(다시 넣으면 같이 취소) */
 type Op =
-  | { kind: 'day'; teacherId: string; time: string; side: Side; input: CellInput | 'reset'; auto?: boolean }
+  | { kind: 'day'; teacherId: string; time: string; side: Side; input: CellInput | 'reset'; auto?: boolean; restore?: { name: string; teacherName: string } }
   | { kind: 'from'; teacherId: string; time: string; input: CellInput | null }
   | { kind: 'fixed'; teacherId: string; time: string; input: CellInput | 'reset'; start?: string };
 type AssignState = 'add' | 'off' | null;
@@ -320,20 +320,15 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     setPicking(null);
   };
 
-  // 보호자가 마이페이지에서 취소한 수업(줄 + "취소 · 보호자")을 취소 전으로 — 바로 저장한다
-  const restoreCancel = async (e: Editing) => {
+  // 보호자가 마이페이지에서 취소한 수업(줄 + "취소 · 보호자")을 취소 전으로 — 다른 변경처럼 [스케줄 변경 완료]를 눌러야 반영
+  const restoreCancel = (e: Editing) => {
     const c = e.cell;
-    if (!(await askConfirm(`${c.name} — ${e.time} ${e.teacher.name} 선생님\n보호자가 취소한 수업을 취소 전으로 되돌릴까요?\n(취소할 때 지워진 '선택'한 결제방식은 다시 골라 주세요)`))) return;
-    try {
-      await saveDayCell(day, e.teacher.id, e.time, e.side,
-        { status: 'child', childId: c.childId ?? null, name: c.name, payment: c.payment, kind: c.kind ?? null, absent: false, moved: false, note: '' }, center);
-      if (e.side === 'open') await restoreBookedSlot(day, e.time, e.teacher.id).catch(() => {});
-      await addAdminLog({ center, kind: 'cancel_restore', title: `보호자 취소 되돌리기 — ${c.name}`, detail: `${day.replace(/-/g, '/')} ${e.time} ${e.teacher.name} 선생님 (${e.side === 'fixed' ? '고정' : '빈타임'})` });
-      setEditing(null);
-      await load();
-    } catch (err) {
-      showAlert(`되돌리지 못했어요.\n${(err as Error).message}`);
-    }
+    putOps([{
+      kind: 'day', teacherId: e.teacher.id, time: e.time, side: e.side,
+      input: { status: 'child', childId: c.childId ?? null, name: c.name, payment: c.payment, kind: c.kind ?? null, absent: false, moved: false, note: '' },
+      restore: { name: c.name ?? '', teacherName: e.teacher.name },
+    }]);
+    setEditing(null);
   };
 
   // 표에서 이름 옆 수업 종류 바꾸기 — 고정 수업이면 이 날부터(날짜별) / 오늘부터(고정 시간표), 그날 칸이면 그날만
@@ -468,6 +463,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     } else {
       if (o.input === 'reset') await resetDayCell(day, o.teacherId, o.time, o.side, center);
       else await saveDayCell(day, o.teacherId, o.time, o.side, o.input, center);
+      // 보호자 취소 되돌리기 — 수업스케쥴 신청 칸의 "취소완료"도 지우고 관리 내역에 남긴다
+      if (o.restore) {
+        if (o.side === 'open') await restoreBookedSlot(day, o.time, o.teacherId).catch(() => {});
+        await addAdminLog({ center, kind: 'cancel_restore', title: `보호자 취소 되돌리기 — ${o.restore.name}`, detail: `${day.replace(/-/g, '/')} ${o.time} ${o.restore.teacherName} 선생님 (${o.side === 'fixed' ? '고정' : '빈타임'})` });
+      }
     }
   };
   const saveSchedule = async () => {
@@ -1070,7 +1070,7 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
   const guardianCancelled = cell.status === 'child' && cell.moved && !!cell.note?.startsWith('취소');
   const restoreBox = guardianCancelled && onRestoreCancel ? (
     <div className="rounded-lg bg-[#fef2f2] px-3 py-2.5 space-y-2">
-      <p className="text-[12px] leading-[1.7] text-[#b91c1c]">보호자가 마이페이지에서 취소한 수업이에요.</p>
+      <p className="text-[12px] leading-[1.7] text-[#b91c1c]">보호자가 마이페이지에서 취소한 수업이에요. 되돌린 뒤 [스케줄 변경 완료]를 눌러야 반영돼요. (취소할 때 지워진 '선택' 결제방식은 다시 골라 주세요)</p>
       <button onClick={onRestoreCancel} className="text-[13px] px-3 py-1.5 rounded-full border border-[#b91c1c] text-[#b91c1c] bg-white hover:bg-[#fff5f5]">취소 되돌리기 (취소 전으로)</button>
     </div>
   ) : null;
