@@ -6,7 +6,7 @@ import Portal from '@/components/Portal';
 import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFile';
 import { askChoice, askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, addTeacherWorkDay, getKoreanHolidays, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
+import { addDays, addTeacherWorkDay, getKoreanHolidays, getTeachers, HIDDEN_TEACHERS, parseYmd, removeTeacherWorkDay, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
 import { getDayLeaves, type TeacherLeave } from '@/lib/leave';
@@ -368,6 +368,10 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   };
   // 그날만 빼기 — 표에서 숨기고 그날 칸도 모두 비운다. 결제 체크도 버린다
   const hideTeacher = async (t: Teacher) => {
+    // 이 날만 / 앞으로 계속 (일요일은 이 날만)
+    const r = wd === 0 ? 'a' : await askChoice(`${t.name} 선생님을\n이 날(${d.getMonth() + 1}/${d.getDate()})만 뺄까요,\n앞으로 매주 ${DOW[wd]}요일 계속 뺄까요?`, '이 날만', '앞으로 계속');
+    if (!r) return;
+    if (r === 'b') { await hideForever(t); return; }
     if (!(await askConfirm(`${t.name} 선생님을 이 날 시간표에서 뺄까요?\n그날 칸도 모두 비워져요(보호자 신청 칸은 그대로).\n[스케줄 변경 완료]를 누르기 전에는 [되돌리기]로 취소할 수 있어요.`))) return;
     const st: AssignState = worksAt(t, center, wd) || hasCellsOf(t.id) ? 'off' : null;
     setAssign(t.id, st);
@@ -400,6 +404,26 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     const r = await askChoice(`${t.name} 선생님을\n이 날(${d.getMonth() + 1}/${d.getDate()})만 넣을까요,\n앞으로 매주 ${DOW[wd]}요일 계속 넣을까요?`, '이 날만', '앞으로 계속');
     if (r === 'a') showTeacher(t);
     else if (r === 'b') await addForever(t, wd);
+  };
+  // 앞으로 계속 빼기 — 바로 저장: 이 요일 출근에서 빼고, 이 날부터 그 요일 고정 수업을 끝내고, 그날 따로 넣은 칸을 지운다(보호자 신청은 그대로)
+  const hideForever = async (t: Teacher) => {
+    if (unsaved) { showAlert('저장 안 한 변경이 있어요.\n먼저 [스케줄 변경 완료]를 누른 뒤 빼 주세요.'); return; }
+    const fixedTimes = [...base].filter(([k, v]) => k.startsWith(`${t.id}|`) && v.status === 'child').map(([k]) => k.split('|')[1]);
+    const dayTimes = [...board.fixed, ...board.open].filter(([k, v]) => k.startsWith(`${t.id}|`) && v.source === 'override').map(([k]) => k.split('|')[1]);
+    if (!(await askConfirm(`${t.name} 선생님을 앞으로 매주 ${DOW[wd]}요일 ${CENTERS.find(c => c.key === center)?.label} 시간표에서 뺄까요?\n· ${DOW[wd]}요일 고정 수업 ${fixedTimes.length}개가 이 날(${d.getMonth() + 1}/${d.getDate()})부터 없어져요(지난 날짜는 그대로)\n· 이 날 따로 넣은 칸도 지워져요 (보호자 신청은 그대로)\n바로 저장돼요.`))) return;
+    try {
+      await removeTeacherWorkDay(t.id, center, wd);
+      for (const time of fixedTimes) await saveFixedFrom({ from: day, teacherId: t.id, weekday: wd, time, center, input: null });
+      for (const side of ['fixed', 'open'] as const) {
+        for (const [k, v] of board[side]) {
+          if (k.startsWith(`${t.id}|`) && v.source === 'override') await resetDayCell(day, t.id, k.split('|')[1], side, center);
+        }
+      }
+      if (assignOf(t.id) === 'add') await setDayAssign(day, t.id, center, null);
+      setDraft(dr => new Map([...dr].filter(([, x]) => x.teacherId !== t.id)));
+      await load();
+      showAlert(`${t.name} 선생님을 앞으로 매주 ${DOW[wd]}요일에서 뺐어요.${dayTimes.length ? `\n이 날 따로 넣은 칸 ${dayTimes.length}개도 지웠어요.` : ''}`);
+    } catch (e) { showAlert(`빼지 못했어요.\n${(e as Error).message}`); await load(); }
   };
   // 다시 넣기 — 저장 전에 뺐던 거면 빼기를 취소, 이미 빠진 선생님이면 그날 비운 칸을 고정 시간표대로 되돌린다
   const showTeacher = (t: Teacher) => {
@@ -685,7 +709,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                     {!isTest && mode === 'day' && !folded.has(t.name) && (
                       <button type="button" onClick={() => hideTeacher(t)}
                         className={`ml-1 text-[10px] rounded px-1 border ${assignOf(t.id) === 'add' ? 'text-[#f59e0b] border-[#fcd34d]' : 'text-[#a1a1aa] border-[#e4e4e7] hover:text-red-400'}`}
-                        title="이 날만 시간표에서 빼기 (칸도 비워져요)">✕ 빼기</button>
+                        title="이 날만 또는 앞으로 계속(이 요일) 시간표에서 빼기">✕ 빼기</button>
                     )}
                     {!isTest && mode === 'day' && !folded.has(t.name) && (
                       <button type="button" onClick={() => openLeave(t)}

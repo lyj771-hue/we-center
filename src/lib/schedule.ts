@@ -455,6 +455,18 @@ export async function addTeacherWorkDay(id: string, center: 'eunpyeong' | 'uijeo
   if (e2) throw e2;
 }
 
+/** 선생님을 앞으로 이 센터·요일에서 빼기 — 그 센터 출근 요일에서 요일을 뺀다(요일 목록이 없던 센터는 월~토에서 뺀다) */
+export async function removeTeacherWorkDay(id: string, center: 'eunpyeong' | 'uijeongbu', weekday: number): Promise<void> {
+  const { data, error } = await supabase.from('teachers').select('centers, work_days').eq('id', id).single();
+  if (error) throw error;
+  const centers = (data.centers as string[] | null) ?? ['eunpyeong'];
+  if (!centers.includes(center)) return;
+  const days = { ...((data.work_days as Record<string, number[]> | null) ?? {}) };
+  days[center] = (days[center] ?? [1, 2, 3, 4, 5, 6]).filter(d => d !== weekday);
+  const { error: e2 } = await supabase.from('teachers').update({ work_days: days }).eq('id', id);
+  if (e2) throw e2;
+}
+
 export async function deleteTeacher(id: string): Promise<void> {
   const { error } = await supabase.from('teachers').delete().eq('id', id);
   if (error) throw error;
