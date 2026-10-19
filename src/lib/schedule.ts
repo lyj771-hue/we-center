@@ -438,6 +438,19 @@ export async function updateTeacher(id: string, patch: { name?: string; order?: 
   if (error) throw error;
 }
 
+/** 선생님을 앞으로 계속 이 센터·요일에 나오게 — 센터를 더하고, 그 센터 출근 요일에 요일을 더한다(요일 목록이 없던 센터는 이 요일만) */
+export async function addTeacherWorkDay(id: string, center: 'eunpyeong' | 'uijeongbu', weekday: number): Promise<void> {
+  const { data, error } = await supabase.from('teachers').select('centers, work_days').eq('id', id).single();
+  if (error) throw error;
+  const centers = (data.centers as string[] | null) ?? ['eunpyeong'];
+  const days = { ...((data.work_days as Record<string, number[]> | null) ?? {}) };
+  const had = centers.includes(center);
+  if (had && !days[center]) return;   // 이미 이 센터 모든 요일
+  days[center] = [...new Set([...(had ? days[center] ?? [] : []), weekday])].sort();
+  const { error: e2 } = await supabase.from('teachers').update({ centers: had ? centers : [...centers, center], work_days: days }).eq('id', id);
+  if (e2) throw e2;
+}
+
 export async function deleteTeacher(id: string): Promise<void> {
   const { error } = await supabase.from('teachers').delete().eq('id', id);
   if (error) throw error;

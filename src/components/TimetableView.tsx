@@ -6,7 +6,7 @@ import Portal from '@/components/Portal';
 import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFile';
 import { askChoice, askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
+import { addDays, addTeacherWorkDay, getKoreanHolidays, getTeachers, parseYmd, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
 import { getDayLeaves, type TeacherLeave } from '@/lib/leave';
@@ -387,6 +387,20 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   });
   const leaveOf = (tid: string) => leaves.filter(x => x.teacherId === tid);
 
+  // 선생님 추가 — 이날만(그날만 넣기, [스케줄 변경 완료]로 저장) / 앞으로 계속(이 요일 출근으로 바로 저장 → 고정 시간표·앞으로의 날짜에 나온다)
+  const addForever = async (t: Teacher, w: number) => {
+    try {
+      await addTeacherWorkDay(t.id, center, w);
+      await load();
+      showAlert(`${t.name} 선생님을 앞으로 매주 ${DOW[w]}요일 ${CENTERS.find(c => c.key === center)?.label} 시간표에 넣었어요.\n고정 수업은 고정 시간표에서 넣으면 돼요.`);
+    } catch (e) { showAlert(`넣지 못했어요.\n${(e as Error).message}`); }
+  };
+  const addTeacher = async (t: Teacher) => {
+    if (wd === 0) { showTeacher(t); return; }   // 일요일은 그날만 (일요일 선생님은 따로 정해 둠)
+    const r = await askChoice(`${t.name} 선생님을\n이 날(${d.getMonth() + 1}/${d.getDate()})만 넣을까요,\n앞으로 매주 ${DOW[wd]}요일 계속 넣을까요?`, '이 날만', '앞으로 계속');
+    if (r === 'a') showTeacher(t);
+    else if (r === 'b') await addForever(t, wd);
+  };
   // 다시 넣기 — 저장 전에 뺐던 거면 빼기를 취소, 이미 빠진 선생님이면 그날 비운 칸을 고정 시간표대로 되돌린다
   const showTeacher = (t: Teacher) => {
     setAssign(t.id, worksAt(t, center, wd) ? null : 'add');
@@ -591,9 +605,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
               <button onClick={() => guard(() => setDay(x => addDays(x, 1)))} className="text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]" aria-label="다음날">›</button>
               <button onClick={() => guard(() => setDay(toYmd(new Date())))} className="text-[12px] text-[#888] underline underline-offset-2 ml-1">오늘</button>
               {!isTest && addable.length > 0 && (
-                <select value="" onChange={e => { const t = teachers.find(x => x.id === e.target.value); if (t) showTeacher(t); }}
-                  className="ml-2 text-[12px] border border-[#f59e0b] text-[#b45309] bg-white px-2 h-8" title="공휴일 등 그날만 이 센터에서 일하는 선생님">
-                  <option value="">+ 이 날 선생님 추가</option>
+                <select value="" onChange={e => { const t = teachers.find(x => x.id === e.target.value); if (t) addTeacher(t); }}
+                  className="ml-2 text-[12px] border border-[#f59e0b] text-[#b45309] bg-white px-2 h-8" title="이 날만 또는 앞으로 계속(이 요일 고정) 이 센터 시간표에 선생님 넣기">
+                  <option value="">+ 선생님 추가</option>
                   {addable.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               )}
@@ -604,6 +618,13 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                 <button key={w} onClick={() => guard(() => setWeekday(w))}
                   className={`text-[13px] w-9 h-8 border ${weekday === w ? 'border-[#0a0a0a] bg-[#0a0a0a] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>{DOW[w]}</button>
               ))}
+              {!isTest && addable.length > 0 && weekday !== 0 && (
+                <select value="" onChange={e => { const t = teachers.find(x => x.id === e.target.value); if (t) addForever(t, weekday); }}
+                  className="ml-2 text-[12px] border border-[#f59e0b] text-[#b45309] bg-white px-2 h-8" title="앞으로 계속 이 요일에 이 센터 시간표에 선생님 넣기">
+                  <option value="">+ 선생님 추가</option>
+                  {addable.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              )}
             </div>
           )}
         </div>
