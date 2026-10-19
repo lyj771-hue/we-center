@@ -119,7 +119,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const handleWithdrawCancel = (slot: Slot, teacher: Teacher) =>
     runSlot(slot, `${label(slot, teacher)}\n취소 신청을 철회할까요?`, withdrawCancel, '이미 센터에서 취소를 승인했어요.');
   const handleApproveCancel = (slot: Slot, teacher: Teacher) =>
-    runSlot(slot, `${label(slot, teacher)}\n${slot.owner ?? ''} 님의 취소 신청을 승인할까요?\n(시간은 다시 열리지 않고, 다른 분에겐 계속 마감으로 보여요)`, approveCancel, '보호자가 이미 취소 신청을 철회했어요.');
+    runSlot(slot, `${label(slot, teacher)}\n${slot.owner ?? ''} 님의 취소 신청을 승인할까요?\n(승인하면 시간이 다시 열려 다른 분이 신청할 수 있어요)`, approveCancel, '보호자가 이미 취소 신청을 철회했어요.');
 
   const handleDelete = async () => {
     if (!schedule) return;
