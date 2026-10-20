@@ -8,11 +8,11 @@ import { useMember } from '@/components/MemberContext';
 import ScheduleGate from '@/components/schedule/ScheduleGate';
 import ScheduleEditor from '@/components/schedule/ScheduleEditor';
 import type { ScheduleSummary, Teacher } from '@/lib/schedule';
-import { deleteSchedule, getScheduleTeachers, listSchedules, scheduleDays, scheduleRange, thisMonday } from '@/lib/schedule';
+import { getScheduleTeachers, listSchedules, scheduleDays, scheduleRange, setScheduleHidden, thisMonday } from '@/lib/schedule';
 import { askConfirm, showAlert } from '@/lib/dialog';
 
 // 수업스케쥴 목록 — 기타 메뉴처럼 제목 목록. 누르면 /schedule/[id] 에서 시간을 보고 신청한다.
-// 관리자는 여기서 새 스케쥴을 올리고 지운다.
+// 관리자는 여기서 새 스케쥴을 올리고 내린다(숨기기 — 신청 기록은 그대로).
 
 const fmt = (iso: string) => {
   const d = new Date(iso);
@@ -29,7 +29,8 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
-  const shownItems = items.filter(s => s.center === center);
+  // 숨긴 글은 관리자에게만 (흐리게 + 숨김)
+  const shownItems = items.filter(s => s.center === center && (isAdmin || !s.hiddenAt));
 
   const load = useCallback(async () => {
     try {
@@ -45,10 +46,15 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
 
   useEffect(() => { if (canView) load(); }, [canView, load]);
 
-  const handleDelete = async (s: ScheduleSummary) => {
-    if (!(await askConfirm(`"${s.title}"을(를) 지울까요?\n신청 기록도 모두 지워져요.`))) return;
-    try { await deleteSchedule(s.id); load(); }
-    catch { showAlert('지우지 못했어요. 다시 시도해 주세요.'); }
+  // 내리기 — 지우지 않고 숨긴다(보호자 목록에서만 안 보이고, 신청 수업·기록은 시간표·마이페이지에 그대로)
+  const handleHide = async (s: ScheduleSummary) => {
+    if (!(await askConfirm(`"${s.title}"을(를) 내릴까요?\n보호자 목록에서만 안 보이고, 신청한 수업은 시간표·마이페이지에 그대로 남아요.`))) return;
+    try { await setScheduleHidden(s.id, true); load(); }
+    catch (e) { showAlert(`내리지 못했어요 — SQL(supabase/schedule-hide.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); }
+  };
+  const unhide = async (s: ScheduleSummary) => {
+    try { await setScheduleHidden(s.id, false); load(); }
+    catch (e) { showAlert(`처리하지 못했어요.\n${(e as Error).message}`); }
   };
 
   // 지난 스케쥴(마지막 날이 이번 주 월요일보다 전)은 흐리게
@@ -86,15 +92,17 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
             ) : (
               <div className="divide-y divide-[#f0f0f0]">
                 {shownItems.map((s, i) => (
-                  <div key={s.id} className={`group flex items-center gap-5 py-4 hover:bg-[#fafafa] -mx-5 md:-mx-8 px-5 md:px-8 transition-colors ${isPast(s) ? 'opacity-50' : ''}`}>
+                  <div key={s.id} className={`group flex items-center gap-5 py-4 hover:bg-[#fafafa] -mx-5 md:-mx-8 px-5 md:px-8 transition-colors ${isPast(s) || s.hiddenAt ? 'opacity-50' : ''}`}>
                     <span className="text-[11px] text-[#ccc] w-7 shrink-0 tabular-nums">{String(shownItems.length - i).padStart(2, '0')}</span>
                     <Link href={`/schedule/${s.id}`} className="flex-1 min-w-0 block">
-                      <span className="text-[14px] leading-[1.8] group-hover:underline underline-offset-2 block truncate">{s.title}</span>
+                      <span className="text-[14px] leading-[1.8] group-hover:underline underline-offset-2 block truncate">{s.hiddenAt && <span className="mr-1.5 text-[11px] text-[#888] border border-[#ddd] rounded px-1 no-underline">숨김</span>}{s.title}</span>
                       <span className="text-[12px] leading-[2] pb-0.5 text-[#999] block truncate mt-1">{scheduleRange(s)}</span>
                     </Link>
                     <span className="text-[11px] text-[#bbb] shrink-0">{fmt(s.createdAt)}</span>
                     {isAdmin && (
-                      <button onClick={() => handleDelete(s)} className="text-[11px] text-[#ccc] hover:text-red-400 shrink-0 transition-colors">삭제</button>
+                      s.hiddenAt
+                        ? <button onClick={() => unhide(s)} className="text-[11px] text-[#888] hover:text-[var(--brand)] shrink-0 transition-colors">다시 보이기</button>
+                        : <button onClick={() => handleHide(s)} className="text-[11px] text-[#ccc] hover:text-red-400 shrink-0 transition-colors">내리기</button>
                     )}
                   </div>
                 ))}

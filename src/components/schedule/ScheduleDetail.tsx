@@ -12,7 +12,7 @@ import ScheduleEditor from './ScheduleEditor';
 import ScheduleGate from './ScheduleGate';
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import {
-  bookSlot, deleteSchedule, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, withdrawCancel,
+  bookSlot, setScheduleHidden, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, withdrawCancel,
 } from '@/lib/schedule';
 import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -113,12 +113,14 @@ export default function ScheduleDetail({ id }: { id: string }) {
     runSlot(slot, `${label(slot, teacher)}\n취소 신청을 철회할까요?`, withdrawCancel, '이미 센터에서 취소를 승인했어요.');
 
 
+  // 내리기 — 지우지 않고 숨긴다(보호자 목록에서만 안 보이고, 신청 수업·기록은 시간표·마이페이지에 그대로)
   const handleDelete = async () => {
     if (!schedule) return;
-    const booked = schedule.slots.filter(x => x.bookedBy).length;
-    if (!(await askConfirm(`"${schedule.title}"을(를) 지울까요?${booked ? `\n신청된 ${booked}건도 모두 지워져요.` : ''}`))) return;
-    try { await deleteSchedule(schedule.id); router.push('/schedule'); }
-    catch { showAlert('지우지 못했어요. 다시 시도해 주세요.'); }
+    if (!(await askConfirm(`"${schedule.title}"을(를) 내릴까요?\n보호자 목록에서만 안 보이고, 신청한 수업은 시간표·마이페이지에 그대로 남아요.`))) return;
+    try {
+      await setScheduleHidden(schedule.id, true);
+      router.push(schedule.center === 'uijeongbu' ? '/schedule/uijeongbu' : '/schedule');
+    } catch (e) { showAlert(`내리지 못했어요 — SQL(supabase/schedule-hide.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); }
   };
 
   return (
@@ -133,7 +135,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
             onTeachersChanged={async () => setTeachers(await getScheduleTeachers())}
             onClose={() => { setEditing(false); load(); }}   // 수정 화면에서 취소 승인·신청 취소를 했을 수 있어 늘 새로
           />
-        ) : loaded && !schedule ? (
+        ) : loaded && (!schedule || (schedule.hiddenAt && !isAdmin)) ? (
           <p className="text-center text-[14px] text-[#aaa] py-16">스케쥴을 찾을 수 없어요.</p>
         ) : schedule ? (
           <ScheduleBoard

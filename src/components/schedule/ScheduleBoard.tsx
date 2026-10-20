@@ -64,7 +64,7 @@ export default function ScheduleBoard({
             {isAdmin && (
               <span className="ml-auto flex gap-1.5">
                 {onEdit && <button onClick={onEdit} className="text-[12px] border border-[#0a0a0a] px-3 py-1 hover:bg-[#0a0a0a] hover:text-white transition-colors">수정</button>}
-                {onDelete && <button onClick={onDelete} className="text-[12px] border border-[#e5e5e5] text-red-400 px-3 py-1 hover:bg-red-50 transition-colors">삭제</button>}
+                {onDelete && <button onClick={onDelete} className="text-[12px] border border-[#e5e5e5] text-red-400 px-3 py-1 hover:bg-red-50 transition-colors">내리기</button>}
               </span>
             )}
           </div>

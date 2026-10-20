@@ -58,6 +58,8 @@ export interface Schedule {
   createdAt: string;
   /** 어느 센터 스케쥴인지 — 'eunpyeong'(수색) / 'uijeongbu'(의정부) */
   center: 'eunpyeong' | 'uijeongbu';
+  /** 숨긴 글 — 보호자에겐 안 보인다 */
+  hiddenAt?: string;
   slots: Slot[];
   bookings: Booking[];
 }
@@ -210,6 +212,8 @@ export interface ScheduleSummary {
   title: string;
   createdAt: string;
   center: 'eunpyeong' | 'uijeongbu';
+  /** 숨긴 글 — 보호자 목록에 안 보인다(신청 수업은 그대로) */
+  hiddenAt?: string;
 }
 
 type ScheduleRow = {
@@ -229,6 +233,7 @@ export async function listSchedules(): Promise<ScheduleSummary[]> {
     title: r.title,
     createdAt: r.created_at,
     center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
+    hiddenAt: r.hidden_at ?? undefined,
   }));
 }
 
@@ -268,6 +273,7 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
     notice: row.notice,
     holidays: (row.holidays ?? []) as Holiday[],
     createdAt: row.created_at,
+    hiddenAt: (r as { hidden_at?: string | null }).hidden_at ?? undefined,
     center: row.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
     slots: (slotsRes.data ?? [])
       .map(s => ({
@@ -400,6 +406,12 @@ export async function saveSchedule(draft: ScheduleDraft, existing?: Schedule): P
     if (error) throw error;
   }
   return id!;
+}
+
+/** 글 숨기기 / 다시 보이기 */
+export async function setScheduleHidden(id: string, hidden: boolean): Promise<void> {
+  const { error } = await supabase.from('schedules').update({ hidden_at: hidden ? new Date().toISOString() : null }).eq('id', id);
+  if (error) throw error;
 }
 
 export async function deleteSchedule(id: string): Promise<void> {
