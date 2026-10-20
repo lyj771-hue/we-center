@@ -9,7 +9,7 @@ import { getMemberCenters, getMembers } from '@/lib/store';
 import { addOutbox } from '@/lib/leave';
 import {
   addDays, addTeacher, approveCancel, cancelSlot, deleteTeacher, deleteTemplate, dowLabel, getKoreanHolidays, getTemplates, parseDateList, parseYmd,
-  saveSchedule, saveTemplate, scheduleRange, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
+  saveSchedule, saveTemplate, scheduleRange, setScheduleHidden, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
 } from '@/lib/schedule';
 
 // 관리자: 스케쥴 올리기·고치기.
@@ -302,13 +302,13 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
   };
 
   // 게시글을 고쳐 저장하면 — 고를 수 있게 물어보고, 이 센터에 승인된 보호자(번호 있는)마다 '스케줄 수정 알림'을 보낼 알림에 남긴다
-  const notifyUpdated = async (scheduleId: string, scheduleTitle: string) => {
+  const notifyUpdated = async (scheduleId: string, scheduleTitle: string, ask = true) => {
     try {
       const [members, extra, kids] = await Promise.all([getMembers(), getMemberCenters(), getChildren()]);
       const approved = members.filter(m => m.nickname && (((m.center ?? 'eunpyeong') === center && m.approvedAt) || extra.get(`${m.userId}|${center}`)));
       const withPhone = approved.filter(m => m.phone);
       if (!withPhone.length) return;
-      if (!confirm(`보호자에게 "${scheduleTitle}" 업데이트 알림을 남길까요?\n(${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자 ${withPhone.length}명${approved.length > withPhone.length ? ` · 번호 없는 ${approved.length - withPhone.length}명은 빼요` : ''})`)) return;
+      if (ask && !confirm(`보호자에게 "${scheduleTitle}" 업데이트 알림을 남길까요?\n(${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자 ${withPhone.length}명${approved.length > withPhone.length ? ` · 번호 없는 ${approved.length - withPhone.length}명은 빼요` : ''})`)) return;
       const now = new Date();
       const day = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
       await addOutbox(withPhone.map(m => {
@@ -325,7 +325,8 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     }
   };
 
-  const handleSave = async () => {
+  // republish — 내린 글을 [다시 올리기](보이게 + 업데이트 알림). 내린 글을 [저장]하면 숨긴 채로, 알림 없이
+  const handleSave = async (republish = false) => {
     if (mode === 'holiday' && !days.length) { alert('공휴일 날짜를 적어 주세요. (예: 2026/10/9, 2026/12/25)'); return; }
     const slots: ScheduleDraft['slots'] = [];
     for (const t of active) {
@@ -337,6 +338,8 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
       }
     }
     if (!slots.length && !confirm('넣은 시간이 하나도 없어요. 그래도 올릴까요?')) return;
+    // 다시 올리기 — 알림이 간다고 먼저 알려 준다
+    if (republish && !confirm(`다시 올리면 ${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자(번호 있는 분)에게 '스케줄 수정 알림'이 가요.\n다시 올릴까요?`)) return;
     setSaving(true);
     // 관리 내역 — 저장하기 전에 이 화면에서 한 일을 모아 둔다
     const tName = (id: string) => teachers.find(t => t.id === id)?.name ?? '선생님';
@@ -394,11 +397,14 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
         ],
         slots,
       }, existing);
-      const logTitle = `수업스케쥴 ${existing ? '고침' : '올림'} — ${shownTitle.trim() || autoTitle} (${range})`;
+      // 내린 글을 고쳐서 [다시 올리기] — 다시 보이게
+      if (republish && existing?.hiddenAt) { await setScheduleHidden(id, false); logLines.unshift('내린 글 다시 올림'); }
+      const logTitle = `수업스케쥴 ${republish ? '다시 올림' : existing?.hiddenAt ? '고침(내린 채로)' : existing ? '고침' : '올림'} — ${shownTitle.trim() || autoTitle} (${range})`;
       if (!existing) logLines.unshift(`시간 ${slots.length}개 올림`);
       if (failed) logLines.push(`※ 취소 승인·신청 취소 ${failed}건은 적용하지 못함`);
       await addAdminLog({ center, kind: existing ? 'schedule_edit' : 'schedule_new', title: logTitle, detail: logLines.join('\n') || '바꾼 내용 없음', refId: id });
-      if (existing) await notifyUpdated(id, shownTitle.trim() || autoTitle);
+      // 다시 올릴 때는 묻지 않고 업데이트 알림을 남긴다 / 내린 채로 저장하면 알림 없음
+      if (existing && (republish || !existing.hiddenAt)) await notifyUpdated(id, shownTitle.trim() || autoTitle, !republish);
       onClose(id);
     } catch {
       alert('저장하지 못했어요. 다시 시도해 주세요.');
@@ -686,9 +692,16 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
       </div>
 
       <div className="flex gap-2 pt-2">
-        <button onClick={handleSave} disabled={saving}
+        {/* 내린 글 — [저장](내린 채로, 알림 없음) · [다시 올리기](보이게 + 업데이트 알림) */}
+        {existing?.hiddenAt && (
+          <button onClick={() => handleSave(false)} disabled={saving}
+            className="flex-1 border border-[var(--brand)] text-[var(--brand)] text-[14px] py-3 tracking-widest hover:bg-[#eef5fe] disabled:opacity-50">
+            {saving ? '저장 중...' : '저장 (내린 채로)'}
+          </button>
+        )}
+        <button onClick={() => handleSave(!!existing?.hiddenAt)} disabled={saving}
           className="flex-1 bg-[var(--brand)] text-white text-[14px] py-3 tracking-widest hover:opacity-90 disabled:opacity-50">
-          {saving ? '저장 중...' : existing ? '저장' : '올리기'}
+          {saving ? '저장 중...' : existing?.hiddenAt ? '다시 올리기' : existing ? '저장' : '올리기'}
         </button>
         <button onClick={() => onClose()} className="flex-1 border border-[#e5e5e5] text-[14px] py-3 tracking-widest hover:bg-[#f8f8f8]">취소</button>
       </div>

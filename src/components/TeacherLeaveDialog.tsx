@@ -7,7 +7,7 @@ import { childLabel, saveDayCell, setLessonPayment } from '@/lib/timetable';
 import { getMembers } from '@/lib/store';
 import type { Member } from '@/lib/types';
 import { addLeave, addOutbox } from '@/lib/leave';
-import { showAlert } from '@/lib/dialog';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
 // 선생님 휴무 (시간표 날짜별) — 종일 또는 고른 시간. 그 시간 수업 칸은 "줄 + 휴무"(옮김처럼 수업·결제에서 빠짐)로 바꾸고,
 // 휴무 기록과 수업이 있던 아이들에게 보낼 알림(보낼 알림 목록)을 남긴다. 알림은 솔라피가 준비되면 거기서 보낸다.
@@ -68,6 +68,8 @@ export default function TeacherLeaveDialog({ teacher, day, center, rows, lessons
 
   const save = async () => {
     if (!allDay && !picked.size) { showAlert('휴무 시간을 골라 주세요.'); return; }
+    // 알림이 가면 먼저 알려 준다
+    if (sendable.length && !(await askConfirm(`휴무로 바꾸면 보호자 ${sendable.length}명에게 휴무 알림이 가요.\n(${sendable.map(k => k.name).join(', ')})\n진행할까요?`))) return;
     setSaving(true);
     const note = `휴무${reason.trim() ? ` · ${reason.trim()}` : ''}`;
     let failed = 0;
