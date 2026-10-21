@@ -8,6 +8,7 @@ import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost } from '@/lib/store';
 import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
+import WeslangBoard from './WeslangBoard';
 
 const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
   ssr: false,
@@ -17,8 +18,8 @@ const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
 interface Props {
   category: Category;
   basePath: string;
-  /** 'notes': 메모 보드(공지사항), 'scrapbook': 스크랩북(We재활생각) */
-  variant?: 'list' | 'notes' | 'scrapbook';
+  /** 'notes': 메모 보드(We재활생각), 'scrapbook': 스크랩북, 'weslang': We슐랭(가운데 사진 하나씩), 'list': 목록(공지사항·기타) */
+  variant?: 'list' | 'notes' | 'scrapbook' | 'weslang';
   /** notes 모드에서 맨 앞에 고정할 메모 */
   pinnedNote?: PinnedNote;
 }
@@ -27,15 +28,16 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
   const { isAdmin } = useAdmin();
   const [posts, setPosts] = useState<Post[]>([]);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: '', content: '' });
+  const [form, setForm] = useState({ title: '', content: '', location: '' });
+  const isWeslang = category === 'weslang';
 
   const refresh = async () => setPosts(await getAllPosts(category));
   useEffect(() => { refresh(); }, [category]);
 
   const handleAdd = async () => {
     if (!form.title.trim()) return;
-    await addPost(category, { title: form.title, content: form.content });
-    setForm({ title: '', content: '' });
+    await addPost(category, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location } : {}) });
+    setForm({ title: '', content: '', location: '' });
     setEditing(false);
     refresh();
   };
@@ -79,18 +81,25 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
           onClick={() => setEditing(false)}
         >
           <div
-            className="bg-white border border-[#e5e5e5] w-full max-w-2xl max-h-[90vh] shadow-2xl flex flex-col"
+            className="bg-white border border-[#e5e5e5] w-full max-w-4xl max-h-[92vh] shadow-2xl flex flex-col rounded-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="p-8 pb-4 shrink-0">
               <p className="text-[11px] tracking-[0.2em] text-[#888] mb-6">새 글 작성</p>
               <input
                 type="text"
-                placeholder="제목"
+                placeholder={isWeslang ? '가게 이름' : '제목'}
                 value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 className="w-full border-b border-[#ddd] py-2 text-[15px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]"
               />
+              {/* We슐랭 — 가게 위치. 본문 첫 사진이 목록 가운데 큰 사진이 된다 */}
+              {isWeslang && (
+                <input type="text" placeholder="위치 (예: 은평구 수색동, 수색역 2번 출구 앞)" value={form.location}
+                  onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                  className="mt-3 w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]" />
+              )}
+              {isWeslang && <p className="mt-2 text-[11px] text-[#aaa]">본문 첫 사진이 목록 가운데 큰 사진, 나머지 사진은 오른쪽 작은 사진이 돼요.</p>}
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-8">
               <RichTextEditor
@@ -117,7 +126,9 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       )}
 
       {/* List */}
-      {variant === 'scrapbook' ? (
+      {variant === 'weslang' ? (
+        <WeslangBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
+      ) : variant === 'scrapbook' ? (
         <ThoughtsScrapbook posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
       ) : variant === 'notes' ? (
         <NoteBoard posts={posts} pinned={pinnedNote} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />

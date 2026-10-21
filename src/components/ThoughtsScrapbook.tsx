@@ -30,7 +30,7 @@ const BASE_SLOTS: PhotoSlot[] = [
 const EXTRA_TILTS = [-4, 3, -2, 5, -5, 2];
 const EXTRA_RATIOS: [number, number][] = [[4, 3], [1, 1], [3, 4]];
 
-function layoutPhotos(count: number): PhotoSlot[] {
+export function layoutPhotos(count: number): PhotoSlot[] {
   if (count <= BASE_SLOTS.length) return BASE_SLOTS.slice(0, count);
   return Array.from({ length: count }, (_, i) => ({
     x: i % 2 === 0 ? 235 : 420,
@@ -43,9 +43,9 @@ function layoutPhotos(count: number): PhotoSlot[] {
 }
 
 // 스크랩북 한 칸의 기본 높이(원본 단위): 위 여백 30 + 카드 675 + 아래 여백 100
-const STAGE_HEIGHT = 805;
+export const STAGE_HEIGHT = 805;
 
-const place = (x: number, y: number, r: number, w: number) =>
+export const place = (x: number, y: number, r: number, w: number) =>
   ({ '--x': `${x}px`, '--y': `${y}px`, '--r': `${r}deg`, '--w': `${w}px` }) as React.CSSProperties;
 
 const fmt = (iso: string) => {

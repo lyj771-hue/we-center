@@ -94,6 +94,75 @@ body {
 
 .rich-editor .ProseMirror { min-height: 320px; outline: none; padding: 16px; }
 
+/* ── 글쓰기(네이버 블로그처럼) 블록 — 에디터와 게시글 화면에 같이 ── */
+.rich-content-editor .ProseMirror { max-width: 680px; margin: 0 auto; min-height: 360px; padding: 0; }
+.rich-content h2 { font-size: 1.55em; color: var(--brand); margin: 0.6em 0 0.5em; line-height: 1.4; }
+.rich-content h3 { font-size: 1.25em; margin: 0.5em 0 0.4em; line-height: 1.4; }
+.rich-content mark { border-radius: 3px; padding: 0 2px; }
+.rich-content [style*="text-align: center"] img, .rich-content img { border-radius: 12px; }
+/* 인용구 4가지 */
+.rich-content blockquote[data-style="quote"] { border: none; padding: 0.4em 2.2em; text-align: center; color: var(--ink-2); font-size: 1.05em; position: relative; }
+.rich-content blockquote[data-style="quote"]::before, .rich-content blockquote[data-style="quote"]::after { position: absolute; font-size: 2.4em; line-height: 1; color: #c7d2ee; font-family: Georgia, serif; }
+.rich-content blockquote[data-style="quote"]::before { content: '“'; left: 0; top: -0.1em; }
+.rich-content blockquote[data-style="quote"]::after { content: '”'; right: 0; bottom: -0.45em; }
+.rich-content blockquote[data-style="box"] { border: 1px solid #e4e4e7; background: #fafafa; border-radius: 14px; padding: 1em 1.2em; color: var(--ink-2); }
+.rich-content blockquote[data-style="bubble"] { border: none; background: #eef2fb; border-radius: 18px 18px 18px 4px; padding: 0.9em 1.2em; color: var(--ink-2); display: inline-block; max-width: 100%; }
+/* 구분선 5가지 */
+.rich-content hr[data-style="dashed"] { border-top: 1px dashed #c4c4cc; }
+.rich-content hr[data-style="double"] { border-top: 3px double #c4c4cc; }
+.rich-content hr[data-style="short"] { width: 60px; border-top: 2px solid #c4c4cc; margin-left: auto; margin-right: auto; }
+.rich-content hr[data-style="dots"] { border: none; text-align: center; height: 1em; overflow: visible; }
+.rich-content hr[data-style="dots"]::after { content: '•  •  •'; color: #a1a1aa; letter-spacing: 0.4em; font-size: 14px; }
+/* 사진 여러 장 — 나란히 / 슬라이드 */
+.rich-content .post-gallery { margin: 1.5em 0; }
+.rich-content .post-gallery img { margin: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+.rich-content .post-gallery-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.rich-content .post-gallery-row[data-count="3"], .rich-content .post-gallery-row[data-count="6"] { grid-template-columns: repeat(3, 1fr); }
+.rich-content .post-gallery-row img { aspect-ratio: 1 / 1; }
+.rich-content .post-gallery-slide { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+.rich-content .post-gallery-slide img { flex: 0 0 82%; aspect-ratio: 4 / 3; scroll-snap-align: center; }
+/* 장소 카드 */
+.rich-content .place-card { display: flex; gap: 12px; align-items: flex-start; border: 1px solid #e4e4e7; border-radius: 16px; padding: 14px 16px; margin: 1.5em 0; background: #fff; }
+.rich-content .place-pin { font-size: 22px; line-height: 1; padding-top: 2px; }
+.rich-content .place-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rich-content .place-body strong { color: var(--ink); font-size: 1.05em; }
+.rich-content .place-addr { color: var(--ink-3); font-size: 0.9em; }
+.rich-content .place-links { display: flex; gap: 12px; margin-top: 4px; font-size: 0.85em; }
+.rich-content .place-links a { color: var(--brand); text-decoration: none; }
+/* 링크 카드 */
+.rich-content .link-card { display: flex; border: 1px solid #e4e4e7; border-radius: 16px; overflow: hidden; margin: 1.5em 0; text-decoration: none !important; color: var(--ink); background: #fff; }
+.rich-content .link-card .lc-thumb { flex: 0 0 120px; background: #f4f4f5; }
+.rich-content .link-card .lc-thumb img { margin: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 0; }
+.rich-content .link-card .lc-body { display: flex; flex-direction: column; gap: 3px; padding: 12px 16px; min-width: 0; }
+.rich-content .link-card .lc-body strong { font-size: 0.98em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rich-content .link-card .lc-desc { font-size: 0.85em; color: var(--ink-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rich-content .link-card .lc-host { font-size: 0.78em; color: #a1a1aa; }
+/* 유튜브 */
+.rich-content div[data-youtube-video] { margin: 1.5em 0; }
+.rich-content div[data-youtube-video] iframe { width: 100%; aspect-ratio: 16 / 9; height: auto; border: 0; border-radius: 12px; }
+/* 에디터에서 고른 블록 */
+.rich-content-editor .ProseMirror-selectednode { outline: 3px solid #c7d2ee; outline-offset: 2px; border-radius: 12px; }
+/* 꾸미기 줄 — 묶음끼리 사이 줄, 줄이 넘어갈 땐 묶음째 */
+.fmt-group { display: inline-flex; align-items: center; gap: 2px; padding: 0 4px; }
+.fmt-group + .fmt-group { border-left: 1px solid #e4e4e7; }
+/* 넣기 창 미리보기 그림 */
+.quote-sample { display: block; font-size: 13px; color: #3f3f46; }
+.quote-sample-line { border-left: 3px solid #d4d4d8; padding-left: 8px; }
+.quote-sample-quote::before { content: '“ '; color: #a5b4dc; font-size: 18px; }
+.quote-sample-quote::after { content: ' ”'; color: #a5b4dc; font-size: 18px; }
+.quote-sample-box { border: 1px solid #e4e4e7; background: #fafafa; border-radius: 8px; padding: 3px 8px; }
+.quote-sample-bubble { background: #eef2fb; border-radius: 10px 10px 10px 2px; padding: 3px 8px; display: inline-block; }
+.divider-sample { display: block; height: 10px; }
+.divider-sample-line { border-top: 1px solid #a1a1aa; margin-top: 5px; height: 0; }
+.divider-sample-dashed { border-top: 1px dashed #a1a1aa; margin-top: 5px; height: 0; }
+.divider-sample-double { border-top: 3px double #a1a1aa; margin-top: 4px; height: 0; }
+.divider-sample-short { border-top: 2px solid #a1a1aa; width: 36px; margin: 5px auto 0; height: 0; }
+.divider-sample-dots::after { content: '•  •  •'; display: block; text-align: center; color: #a1a1aa; font-size: 12px; line-height: 10px; letter-spacing: 0.3em; }
+.gal-icon { display: block; height: 34px; margin: 0 auto 6px; width: 54px; background:
+  linear-gradient(#c7d2ee, #c7d2ee) 0 0 / 100% 100% no-repeat; border-radius: 6px; }
+.gal-icon-row { background: linear-gradient(90deg, #c7d2ee 31%, transparent 31% 34.5%, #c7d2ee 34.5% 65.5%, transparent 65.5% 69%, #c7d2ee 69%); }
+.gal-icon-slide { background: linear-gradient(90deg, #c7d2ee 72%, transparent 72% 78%, #e4e9f6 78%); }
+
 /* Serif display heading — used on every page */
 .display-heading {
   font-family: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
@@ -130,6 +199,16 @@ body {
   padding-top: 30px;
   transform: scale(0.33333);
   transform-origin: 0 0;
+}
+/* We슐랭 — 한 줄에 하나라 PC에선 더 크게(1/2 축소). 휴대폰은 재활생각과 같은 크기 */
+@media (min-width: 768px) {
+  .scrap-frame.scrap-lg { width: 720px; }
+  .scrap-lg .scrap-stage { width: 200%; transform: scale(0.5); }
+}
+/* We슐랭 가운데 대표 사진 — 재활생각 카드(540)보다 크게 */
+.scrap-lg .scrap-card { width: 680px; margin-left: calc(var(--cx) - 340px); }
+@media (max-width: 480px) {
+  .scrap-lg .scrap-card { margin: 0 auto; }
 }
 .scrap-card {
   position: relative;

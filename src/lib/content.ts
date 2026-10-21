@@ -107,7 +107,14 @@ export const WE_SUBJECTS = {
 
 // ── We재활생각 (/we-thoughts) ────────────────
 export const WE_THOUGHTS = {
+  eyebrow: 'We재활생각',
   heading: 'We재활생각',
+  subtext: '재활에 대한 We의 생각을 나눕니다.',
+};
+
+// ── We슐랭 (/we-slang) ───────────────────────
+export const WE_SLANG = {
+  heading: 'We슐랭',
 };
 
 // ── 공지사항 (/notices) ───────────────────────

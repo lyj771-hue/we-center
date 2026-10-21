@@ -9,6 +9,7 @@ interface PostRow {
   title: string;
   content: string;
   image_url: string | null;
+  location?: string | null;
   created_at: string;
 }
 
@@ -19,6 +20,7 @@ function fromPostRow(row: PostRow): Post {
     title: row.title,
     content: row.content,
     imageUrl: row.image_url ?? undefined,
+    location: row.location ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -44,21 +46,22 @@ export async function getPost(cat: Category, id: string): Promise<Post | null> {
   return data ? fromPostRow(data as PostRow) : null;
 }
 
-export async function addPost(cat: Category, data: Pick<Post, 'title' | 'content' | 'imageUrl'>): Promise<Post> {
+export async function addPost(cat: Category, data: Pick<Post, 'title' | 'content' | 'imageUrl' | 'location'>): Promise<Post> {
   const { data: row, error } = await supabase
     .from('posts')
-    .insert({ category: cat, title: data.title, content: data.content, image_url: data.imageUrl ?? null })
+    .insert({ category: cat, title: data.title, content: data.content, image_url: data.imageUrl ?? null, ...(data.location !== undefined ? { location: data.location.trim() || null } : {}) })
     .select()
     .single();
   if (error) throw error;
   return fromPostRow(row as PostRow);
 }
 
-export async function updatePost(cat: Category, id: string, data: Partial<Pick<Post, 'title' | 'content' | 'imageUrl'>>): Promise<void> {
+export async function updatePost(cat: Category, id: string, data: Partial<Pick<Post, 'title' | 'content' | 'imageUrl' | 'location'>>): Promise<void> {
   const patch: Partial<PostRow> = {};
   if (data.title !== undefined) patch.title = data.title;
   if (data.content !== undefined) patch.content = data.content;
   if (data.imageUrl !== undefined) patch.image_url = data.imageUrl ?? null;
+  if (data.location !== undefined) patch.location = data.location.trim() || null;
   const { error } = await supabase.from('posts').update(patch).eq('category', cat).eq('id', id);
   if (error) throw error;
 }

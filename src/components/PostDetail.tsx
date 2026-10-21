@@ -26,20 +26,21 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
   const { isAdmin } = useAdmin();
   const [post, setPost] = useState<Post | null>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: '', content: '' });
+  const [form, setForm] = useState({ title: '', content: '', location: '' });
+  const isWeslang = category === 'weslang';
 
   useEffect(() => {
     getPost(category, id).then(found => {
       if (found) {
         setPost(found);
-        setForm({ title: found.title, content: found.content });
+        setForm({ title: found.title, content: found.content, location: found.location ?? '' });
       }
     });
   }, [category, id]);
 
   const handleSave = async () => {
     if (!post) return;
-    await updatePost(category, id, { title: form.title, content: form.content });
+    await updatePost(category, id, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location } : {}) });
     setPost(p => p ? { ...p, ...form } : p);
     setEditing(false);
   };
@@ -78,6 +79,10 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             className="w-full border-b border-[#ddd] py-2 text-xl font-medium outline-none focus:border-[#0a0a0a]"
           />
+          {isWeslang && (
+            <input type="text" value={form.location} placeholder="위치" onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+              className="w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a]" />
+          )}
           <RichTextEditor
             initialContent={form.content}
             onChange={html => setForm(f => ({ ...f, content: html }))}
@@ -99,6 +104,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             )}
           </div>
 
+          {post.location && <p className="text-[14px] text-[#52525b] mb-2">📍 {post.location}</p>}
           <p className="text-[11px] text-[#bbb] tracking-widest mb-9">{fmt(post.createdAt)}</p>
 
           {post.imageUrl && (

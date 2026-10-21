@@ -3,7 +3,9 @@ export interface Post {
   title: string;
   content: string;
   imageUrl?: string;
-  category: 'thoughts' | 'notices' | 'etc';
+  category: Category;
+  /** We슐랭 — 가게 위치 */
+  location?: string;
   createdAt: string;
 }
 
@@ -69,4 +71,4 @@ export interface Member extends Profile, MemberExtras {
   lastSignInAt?: string;
 }
 
-export type Category = 'thoughts' | 'notices' | 'etc';
+export type Category = 'thoughts' | 'notices' | 'etc' | 'weslang';
