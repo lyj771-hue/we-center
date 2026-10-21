@@ -32,23 +32,32 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const toggleFit = () => setFit(v => !v);
   const wrapRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-  const [zoom, setZoom] = useState(1);
   useLayoutEffect(() => {
     const wrap = wrapRef.current, table = tableRef.current;
-    if (!fit || !wrap || !table) { setZoom(1); return; }
-    // 폭과 높이 둘 다 — 표 전체(맨 아래 시간 줄까지)가 지금 화면에 들어오게
+    if (!wrap || !table) return;
+    const reset = () => { table.style.transform = ''; table.style.width = ''; wrap.style.height = ''; };
+    if (!fit) { reset(); return; }
+    // 폭과 높이 둘 다 — 표 전체(맨 오른쪽 선생님·맨 아래 시간 줄까지)가 지금 화면에 들어오게.
+    // CSS zoom 은 휴대폰 사파리에서 줄어든 폭을 잘못 재서 오른쪽이 잘려, 원래 크기를 재고 transform 으로 줄인다(자리는 줄인 높이만큼)
     const measure = () => {
-      table.style.zoom = '1';
+      table.style.transform = 'none';
+      table.style.width = 'max-content';
+      const w = table.offsetWidth, h = table.offsetHeight;
       const top = wrap.getBoundingClientRect().top + window.scrollY;
       const availH = window.innerHeight - Math.min(top, window.innerHeight * 0.4) - 12;
-      const z = Math.min(1, wrap.clientWidth / table.scrollWidth, availH / table.scrollHeight);
-      table.style.zoom = String(z);
-      setZoom(z);
+      // 칸 폭과 실제 화면 폭 중 좁은 쪽 — 관리자 띠 등으로 페이지가 화면보다 넓어져도 화면 안에 들어오게
+      const screenW = document.documentElement.clientWidth - Math.max(0, wrap.getBoundingClientRect().left) - 12;
+      const z = Math.min(1, Math.min(wrap.clientWidth, screenW) / w, availH / h);
+      table.style.transformOrigin = 'top left';
+      table.style.transform = z < 1 ? `scale(${z})` : 'none';
+      wrap.style.height = `${Math.ceil(h * z)}px`;
     };
     measure();
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(wrap.parentElement ?? wrap);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [fit, lessons, teachers, day]);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); reset(); };
+  }, [fit, lessons, teachers, day, folded]);
 
   const load = useCallback(async () => {
     try {
@@ -120,7 +129,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
       </div>
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요. ({failed})</p>}
       <div ref={wrapRef} className={`${fit ? 'overflow-hidden' : 'overflow-x-auto'} bg-white`}>
-        <table ref={tableRef} className="border-collapse text-[11px] min-w-full" style={fit ? { zoom } : undefined}>
+        <table ref={tableRef} className="border-collapse text-[11px] min-w-full">
           <thead>
             <tr>
               <th className={`${th} sticky left-0 z-10 bg-white w-12`}>시간</th>
