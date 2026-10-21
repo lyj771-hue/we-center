@@ -22,6 +22,8 @@ export async function claimTeacher(name: string, phone: string): Promise<string>
 export interface TeacherLesson {
   day: string; time: string; teacherId: string; side: 'fixed' | 'open'; source: 'fixed' | 'override' | 'booking';
   status: string; name?: string; number?: number; absent: boolean; moved: boolean; note?: string; center: string;
+  /** 결제 — payment = 칸의 결제 글자(기본), payMethod·payNote = 고른/확정한 결제 (teacher-lessons-payment.sql 전엔 없음) */
+  payment?: string; payMethod?: string; payNote?: string; payConfirmed?: boolean;
 }
 
 /** 시간표 보기 — 그 기간 두 센터 수업 (선생님·관리자만) */
@@ -34,6 +36,8 @@ export async function getTeacherLessons(from: string, to: string): Promise<Teach
     name: (r.name as string | null) ?? undefined, number: (r.child_number as number | null) ?? undefined,
     absent: !!r.absent, moved: !!r.moved, note: (r.note as string | null) ?? undefined,
     center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
+    payment: (r.payment as string | null) ?? undefined, payMethod: (r.pay_method as string | null) ?? undefined,
+    payNote: (r.pay_note as string | null) ?? undefined, payConfirmed: r.pay_confirmed === true,
   }));
 }
 

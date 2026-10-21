@@ -6,7 +6,7 @@ import { useMember } from '@/components/MemberContext';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getHolidayNames, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
 import type { Center } from '@/lib/timetable';
-import { ROW_LABEL, SUNDAY_TEACHERS, rowsForDay, worksAt } from '@/lib/timetable';
+import { PAY_METHODS, ROW_LABEL, SUNDAY_TEACHERS, defaultPayMethod, rowsForDay, worksAt } from '@/lib/timetable';
 import type { TeacherLesson } from '@/lib/teacher';
 import { getTeacherLessons } from '@/lib/teacher';
 
@@ -28,6 +28,8 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const [fit, setFit] = useState(true);
   // 접은 선생님 — 빼 둔 선생님(이원재)은 맨 오른쪽에 처음엔 접혀 있다. 이름을 누르면 펼치기·접기
   const [folded, setFolded] = useState<Set<string>>(() => new Set(HIDDEN_TEACHERS));
+  // 처음 열 때 — 선생님은 내 칸만 펼치고, 관리자는 설영수 선생님만 펼친다(나머지는 접음). 그 뒤엔 누른 대로
+  const foldInit = useRef(false);
   const toggleFold = (name: string) => setFolded(f => { const n = new Set(f); if (n.has(name)) n.delete(name); else n.add(name); return n; });
   const toggleFit = () => setFit(v => !v);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -63,10 +65,15 @@ export default function TeacherTimetable({ center }: { center: Center }) {
     try {
       const [t, l, h] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({}))]);
       setTeachers(t); setLessons(l); setHolidays(h); setFailed('');
+      if (!foldInit.current && t.length) {
+        foldInit.current = true;
+        const open = teacher ? t.find(x => x.id === teacher.teacherId)?.name : '설영수';
+        setFolded(new Set(t.map(x => x.name).filter(n => n !== open)));
+      }
     } catch (e) {
       setFailed((e as Error).message);
     }
-  }, [day]);
+  }, [day, teacher]);
   useEffect(() => { if (can) load(); }, [can, load]);
 
   const label = center === 'uijeongbu' ? '의정부' : '수색';
@@ -94,6 +101,18 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   // 그날 이 센터에 나오는 선생님 — 출근 요일(일요일은 일요일 선생님) 또는 그날 수업이 있는 선생님
   const shown = teachers.filter(t => hasLessons(t.id) || (wd === 0 ? SUNDAY_TEACHERS[center].includes(t.name) && t.centers.includes(center) : worksAt(t, center, wd)));
   const rows = rowsForDay(day, here.map(l => `${l.teacherId}|${l.time}`), center);
+
+  // 결제 칸 — 확정(✓ 빨강) · 고름(파랑) · 기본 결제(회색). 빈타임 아이는 기본 결제가 없다
+  const payText = (l?: TeacherLesson) => {
+    if (!l || (l.status !== 'child' && l.status !== 'cancel_requested') || l.moved || l.absent) return null;
+    const name = (k?: string) => PAY_METHODS.find(m => m.key === k)?.label;
+    if (l.payNote || l.payMethod) {
+      const t = l.payNote || name(l.payMethod) || '';
+      return l.payConfirmed ? <span className="text-[#b91c1c]">✓{t}</span> : <span className="text-[#1d4ed8]">{t}</span>;
+    }
+    const base = l.side === 'fixed' ? name(defaultPayMethod(l.payment)) : undefined;
+    return base ? <span className="text-[#a1a1aa]">{base}</span> : null;
+  };
 
   const text = (l?: TeacherLesson) => {
     if (!l) return null;
@@ -133,14 +152,14 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           <thead>
             <tr>
               <th className={`${th} sticky left-0 z-10 bg-white w-12`}>시간</th>
-              <th className={`${th} text-[13px] ${holiday ? 'text-red-500' : 'text-[#c026d3]'}`} colSpan={Math.max(1, shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : 2), 0))}>
+              <th className={`${th} text-[13px] ${holiday ? 'text-red-500' : 'text-[#c026d3]'}`} colSpan={Math.max(1, shown.reduce((n, t) => n + (folded.has(t.name) ? 1 : 3), 0))}>
                 {DOW[wd]} / {d.getMonth() + 1}월 {d.getDate()}일{holiday && <span className="ml-2 text-[12px]">{holiday} — 고정 수업 없음</span>}
               </th>
             </tr>
             <tr>
               <th className={`${th} sticky left-0 z-10 bg-white`} />
               {shown.map(t => (
-                <th key={t.id} colSpan={folded.has(t.name) ? 1 : 2} className={`${th} text-[13px] ${t.id === teacher?.teacherId ? 'text-[var(--brand)] bg-[#eef5fe]' : 'text-[#16a34a]'}`}>
+                <th key={t.id} colSpan={folded.has(t.name) ? 1 : 3} className={`${th} text-[13px] ${t.id === teacher?.teacherId ? 'text-[var(--brand)] bg-[#eef5fe]' : 'text-[#16a34a]'}`}>
                   <button type="button" onClick={() => toggleFold(t.name)} title={folded.has(t.name) ? '펼치기' : '접기'} className="inline-flex items-center gap-1 hover:opacity-70">
                     {t.name}<span className={`text-[14px] leading-none ${folded.has(t.name) ? '' : 'opacity-60'}`}>{folded.has(t.name) ? '▶' : '◀'}</span>
                   </button>
@@ -153,6 +172,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
                 <FragmentCols key={t.id}>
                   <th className={`${th} text-[10px] text-[#999] min-w-[64px]`}>고정</th>
                   <th className={`${th} text-[10px] text-[#999] min-w-[64px]`}>빈타임</th>
+                  <th className={`${th} text-[10px] text-[#16a34a] min-w-[52px]`}>결제</th>
                 </FragmentCols>
               ))}
             </tr>
@@ -170,6 +190,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
                       {/* 빈타임에 아이가 있으면 그 시간은 빈타임 아이 수업 — 고정 칸은 흐리게 */}
                       <td className={`${td} ${openKid ? 'bg-[#f4f4f5] opacity-60' : ''}`}>{text(f) ?? (ROW_LABEL[time] && <span className="text-[#c4c4cc]">{ROW_LABEL[time]}</span>)}</td>
                       <td className={`${td} bg-[#fcfcfd]`}>{text(o)}</td>
+                      <td className={`${td} bg-[#f9fdfa]`}>{payText(openKid ? o : f)}</td>
                     </FragmentCols>
                   );
                 })}
@@ -179,7 +200,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-[#999] mt-3 leading-[2]">보기만 할 수 있어요. 바꿀 일이 있으면 센터에 말씀해 주세요. · [한눈에 보기] = 표 전체를 화면에 맞춰 줄여요(두 손가락으로 벌려 확대할 수 있어요) · 줄 = 다른 선생님에게 옮김 · ? = 미정 · &quot;신청&quot; = 보호자가 수업스케쥴에서 신청</p>
+      <p className="text-[11px] text-[#999] mt-3 leading-[2]">보기만 할 수 있어요. 바꿀 일이 있으면 센터에 말씀해 주세요. · [한눈에 보기] = 표 전체를 화면에 맞춰 줄여요(두 손가락으로 벌려 확대할 수 있어요) · 줄 = 다른 선생님에게 옮김 · ? = 미정 · &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제: 회색 = 기본, <span className="text-[#1d4ed8]">파랑</span> = 고름, <span className="text-[#b91c1c]">✓빨강</span> = 결제 완료 · 선생님 이름을 누르면 펼치기·접기</p>
     </div>
   );
 }
