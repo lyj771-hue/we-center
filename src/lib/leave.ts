@@ -40,6 +40,36 @@ export async function addOutbox(list: Omit<OutboxMessage, 'id' | 'status' | 'cre
   if (error) throw error;
 }
 
+/** 보낼 알림을 남기고 바로 보낸다(솔라피) — 템플릿 ID가 없는 알림은 남기기만. 결과 건수 */
+export async function addAndSendOutbox(list: Omit<OutboxMessage, 'id' | 'status' | 'createdAt'>[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
+  if (!list.length) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };
+  const { data, error } = await supabase.from('outbox_messages').insert(list.map(m => ({
+    template_id: m.templateId, ref_id: m.refId ?? null, child_id: m.childId ?? null, user_id: m.userId ?? null,
+    child_name: m.childName, phone: m.phone ?? null, vars: m.vars,
+  }))).select('id');
+  if (error) throw error;
+  const { data: s } = await supabase.auth.getSession();
+  const res = await fetch('/api/alimtalk/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(s.session ? { Authorization: `Bearer ${s.session.access_token}` } : {}) },
+    body: JSON.stringify({ ids: (data ?? []).map(r => r.id) }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error ?? `오류 ${res.status}`);
+  return j;
+}
+
+/** 알림 종류 → 솔라피 템플릿 ID */
+export async function getAlimtalkTemplateIds(): Promise<Record<string, string>> {
+  const { data, error } = await supabase.from('alimtalk_templates').select('id, template_id');
+  if (error) throw error;
+  return Object.fromEntries((data ?? []).map(r => [r.id as string, r.template_id as string]));
+}
+export async function saveAlimtalkTemplateId(id: string, templateId: string): Promise<void> {
+  const { error } = await supabase.from('alimtalk_templates').upsert({ id, template_id: templateId.trim(), updated_at: new Date().toISOString() });
+  if (error) throw error;
+}
+
 export async function getOutbox(limit = 200): Promise<OutboxMessage[]> {
   const { data, error } = await supabase.from('outbox_messages').select('*').order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;

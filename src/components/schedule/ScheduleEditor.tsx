@@ -6,7 +6,7 @@ import type { Holiday, Schedule, ScheduleDraft, Teacher, Template, TemplateData 
 import type { CellView } from '@/lib/timetable';
 import { ROW_LABEL, cellOf, childLabel, getChildren, getDayBoard, rowsForDay, worksAt } from '@/lib/timetable';
 import { getMemberCenters, getMembers } from '@/lib/store';
-import { addOutbox } from '@/lib/leave';
+import { addAndSendOutbox, addOutbox } from '@/lib/leave';
 import {
   addDays, addTeacher, approveCancel, cancelSlot, deleteTeacher, deleteTemplate, dowLabel, getKoreanHolidays, getTemplates, parseDateList, parseYmd,
   saveSchedule, saveTemplate, scheduleRange, setScheduleHidden, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
@@ -326,6 +326,27 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
   };
 
   // republish — 내린 글을 [다시 올리기](보이게 + 업데이트 알림). 내린 글을 [저장]하면 숨긴 채로, 알림 없이
+  // 취소된 신청 — 그 보호자에게 '수업 확정·취소 알림'(booking_result, 결과 = 취소) 알림톡을 바로 보낸다
+  const notifyCancelled = async (list: { userId: string; key: string }[]) => {
+    try {
+      const [members, kids] = await Promise.all([getMembers(), getChildren()]);
+      const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+      const res = await addAndSendOutbox(list.map(({ userId, key }) => {
+        const [tid, d, time] = key.split('|');
+        const m = members.find(x => x.userId === userId);
+        const kid = kids.find(k => k.guardianUserId === userId && (k.center ?? 'eunpyeong') === center) ?? kids.find(k => k.guardianUserId === userId);
+        const name = kid?.name ?? m?.nickname ?? '';
+        return {
+          templateId: 'booking_result', childId: kid?.id, userId, childName: kid ? childLabel(kid) : name, phone: m?.phone,
+          vars: { 이름: name, 날짜: d.replace(/-/g, '/'), 요일: DOW[parseYmd(d).getDay()], 시간: time.replace(/^0/, ''), 선생님: teachers.find(t => t.id === tid)?.name ?? '', 신청결과: '취소' },
+        };
+      }));
+      alert(`수업 취소 알림톡 — 보냄 ${res.sent}건${res.failed ? ` · 실패 ${res.failed}건` : ''}${res.skipped ? ` · 번호 없어 못 보냄 ${res.skipped}건` : ''}${res.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${res.waiting}건` : ''}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+    } catch (e) {
+      alert(`스케줄은 저장했지만 수업 취소 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
+    }
+  };
+
   const handleSave = async (republish = false) => {
     if (mode === 'holiday' && !days.length) { alert('공휴일 날짜를 적어 주세요. (예: 2026/10/9, 2026/12/25)'); return; }
     const slots: ScheduleDraft['slots'] = [];
@@ -340,6 +361,9 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     if (!slots.length && !confirm('넣은 시간이 하나도 없어요. 그래도 올릴까요?')) return;
     // 다시 올리기 — 알림이 간다고 먼저 알려 준다
     if (republish && !confirm(`다시 올리면 ${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자(번호 있는 분)에게 '스케줄 수정 알림'이 가요.\n다시 올릴까요?`)) return;
+    // 취소 승인 · 신청 취소 — 그 보호자에게 '수업 취소' 알림톡이 간다고 먼저 알려 준다
+    const cancelCount = [...pending.keys()].filter(k => booked.has(k)).length;
+    if (cancelCount && !confirm(`취소 승인·신청 취소 ${cancelCount}건 — 그 보호자에게 '수업 취소' 알림톡이 가요.\n저장할까요?`)) return;
     setSaving(true);
     // 관리 내역 — 저장하기 전에 이 화면에서 한 일을 모아 둔다
     const tName = (id: string) => teachers.find(t => t.id === id)?.name ?? '선생님';
@@ -373,13 +397,15 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     try {
       // 표시해 둔 취소 승인 · 신청 취소를 먼저 적용
       let failed = 0;
+      const cancelled: { userId: string; key: string }[] = [];   // 취소된 신청 — 알림톡 보낼 곳
       for (const [key, act] of pending) {
         const b = booked.get(key);
         if (!b) continue;
+        const userId = existing?.slots.find(x => x.id === b.id)?.bookedBy;
         try {
           // 취소 승인 — 승인 기록을 남기고 바로 시간을 다시 열어 다른 분이 신청할 수 있게
-          if (act === 'approve') { if ((await approveCancel(b.id)) !== 'ok') failed++; else await cancelSlot(b.id); }
-          else await cancelSlot(b.id);
+          if (act === 'approve') { if ((await approveCancel(b.id)) !== 'ok') failed++; else { await cancelSlot(b.id); if (userId) cancelled.push({ userId, key }); } }
+          else { await cancelSlot(b.id); if (userId) cancelled.push({ userId, key }); }
         } catch { failed++; }
       }
       if (failed) alert(`취소 승인·신청 취소 ${failed}건은 적용하지 못했어요. (보호자가 그 사이 취소 신청을 철회했을 수 있어요)`);
@@ -405,6 +431,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
       await addAdminLog({ center, kind: existing ? 'schedule_edit' : 'schedule_new', title: logTitle, detail: logLines.join('\n') || '바꾼 내용 없음', refId: id });
       // 다시 올릴 때는 묻지 않고 업데이트 알림을 남긴다 / 내린 채로 저장하면 알림 없음
       if (existing && (republish || !existing.hiddenAt)) await notifyUpdated(id, shownTitle.trim() || autoTitle, !republish);
+      if (cancelled.length) await notifyCancelled(cancelled);
       onClose(id);
     } catch {
       alert('저장하지 못했어요. 다시 시도해 주세요.');

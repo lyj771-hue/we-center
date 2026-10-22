@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { supabase } from '@/lib/supabaseClient';
 import { DEFAULT_TEMPLATES, SAMPLE_VARS, fillVars, type MessageSpec } from '@/lib/messages';
+import { getAlimtalkTemplateIds, saveAlimtalkTemplateId } from '@/lib/leave';
 
 // 알림톡 테스트 보내기 (관리자) — 심사 통과한 템플릿을 내 휴대폰으로 한 통 보내 본다.
-// 솔라피 템플릿 ID와 받는 번호는 이 브라우저에 기억해 둔다.
+// 테스트가 잘 가면 그 템플릿 ID를 알림 종류에 저장한다 — 이후 자동 알림이 그 ID로 간다(supabase/alimtalk-templates.sql).
 
 const varsOf = (s: MessageSpec) => {
   const text = [s.title, s.sub, s.body, s.button.url, ...s.items.flatMap(i => [i.name, i.value])].join('\n');
@@ -25,14 +26,16 @@ export default function AlimtalkTestPage() {
   const [to, setTo] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [savedIds, setSavedIds] = useState<Record<string, string>>({});
+  useEffect(() => { getAlimtalkTemplateIds().then(setSavedIds).catch(() => {}); }, []);
 
   useEffect(() => { setTo(load('alimtalk-test-to')); }, []);
   useEffect(() => {
-    setTemplateId(load(`alimtalk-tid-${key}`));
+    setTemplateId(savedIds[key] ?? load(`alimtalk-tid-${key}`));
     const base = { ...SAMPLE_VARS, ...(tpl.samples ?? {}) };
     setVals(Object.fromEntries(names.map(n => [n, base[n] ?? ''])));
     setResult(null);
-  }, [key, tpl, names]);
+  }, [key, tpl, names, savedIds]);
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
@@ -47,7 +50,12 @@ export default function AlimtalkTestPage() {
         body: JSON.stringify({ to, templateId: templateId.trim(), variables: Object.fromEntries(Object.entries(vals).map(([k, v]) => [`#{${k}}`, v])) }),
       });
       const j = await res.json().catch(() => ({}));
-      if (res.ok) setResult({ ok: true, text: `보냈어요. 휴대폰 카카오톡을 확인해 주세요.\n(솔라피 접수 번호 ${j.data?.groupId ?? j.data?.messageId ?? '-'} · 상태 ${j.data?.statusMessage ?? j.data?.statusCode ?? '-'})` });
+      if (res.ok) {
+        // 잘 갔으면 이 알림 종류의 템플릿 ID로 저장 — 자동 알림이 이 ID로 간다
+        const saved = await saveAlimtalkTemplateId(key, templateId).then(() => true).catch(() => false);
+        if (saved) setSavedIds(x => ({ ...x, [key]: templateId.trim() }));
+        setResult({ ok: true, text: `보냈어요. 휴대폰 카카오톡을 확인해 주세요.${saved ? '\n이 템플릿 ID를 저장했어요 — 이제 이 알림은 자동으로 가요.' : '\n(템플릿 ID 저장은 못 했어요 — SQL alimtalk-templates.sql 을 실행해 주세요)'}\n(솔라피 접수 번호 ${j.data?.groupId ?? j.data?.messageId ?? '-'} · 상태 ${j.data?.statusMessage ?? j.data?.statusCode ?? '-'})` });
+      }
       else setResult({ ok: false, text: `보내지 못했어요.\n${j.error ?? j.data?.errorMessage ?? j.data?.message ?? JSON.stringify(j.data ?? j)}` });
     } catch (e) {
       setResult({ ok: false, text: `보내지 못했어요.\n${(e as Error).message}` });
@@ -72,6 +80,7 @@ export default function AlimtalkTestPage() {
           </label>
           <label className="block"><span className="block text-[12px] text-[#888]">솔라피 템플릿 ID</span>
             <input value={templateId} onChange={e => setTemplateId(e.target.value)} placeholder="KA01TP…" className={`${field} font-mono`} />
+            <span className={`block mt-1 text-[11px] ${savedIds[key] ? 'text-[#047857]' : 'text-[#aaa]'}`}>{savedIds[key] ? '저장된 ID — 이 알림은 자동으로 가요' : '아직 저장 안 됨 — 테스트가 잘 가면 저장돼요'}</span>
           </label>
           <label className="block"><span className="block text-[12px] text-[#888]">받는 번호 (내 휴대폰)</span>
             <input value={to} onChange={e => setTo(e.target.value)} inputMode="tel" placeholder="010-0000-0000" className={field} />
