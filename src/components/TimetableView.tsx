@@ -535,11 +535,15 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     // 수업을 없앤 칸이 있으면 — 알림톡이 간다고 먼저 알려 준다 (회원 계정과 이어진 아이만 받는다)
     const linked = (x: { childId: string }) => !!children.find(k => k.id === x.childId)?.guardianUserId;
     const nameOf = (x: { childId: string }) => children.find(k => k.id === x.childId)?.name;
-    const cancels = lessonChangesByOps().filter(linked);
+    const changes = lessonChangesByOps();
+    const cancels = changes.filter(linked);
+    // 회원 계정과 이어지지 않은 아이 — 알림을 못 보낸다는 것도 함께 알려 준다
+    const unlinked = [...new Set(changes.filter(x => !linked(x)).map(x => `${nameOf(x) ?? '이름 없음'}(${x.result})`))];
     const nC = cancels.filter(x => x.result === '취소'), nR = cancels.filter(x => x.result === '확정');
-    if (cancels.length && !(await askConfirm([
+    if (changes.length && !(await askConfirm([
       nC.length ? `수업 취소 ${nC.length}건 — '수업 취소' 알림톡이 가요. (${nC.map(nameOf).join(', ')})` : '',
       nR.length ? `수업 추가 ${nR.length}건 — '수업 확정' 알림톡이 가요. (${nR.map(nameOf).join(', ')})` : '',
+      unlinked.length ? `회원 계정과 이어지지 않아 알림이 안 가요: ${unlinked.join(', ')}` : '',
     ].filter(Boolean).join('\n') + '\n저장할까요?'))) return;
     setSavingSched(true);
     const failedOps: string[] = [];
