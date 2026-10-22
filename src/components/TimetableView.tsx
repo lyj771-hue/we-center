@@ -488,8 +488,19 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
     return out;
   };
-  // 취소된 수업 — 그 보호자에게 '수업 취소' 알림톡(시간표 신청 확정/취소 알림, 결과 = 취소)
-  const notifyCancelled = async (list: { childId: string; teacherId: string; time: string }[]) => {
+  // 다시 살린 수업 — 결석을 풀거나 보호자 취소를 되돌려 같은 아이 수업이 다시 생긴 칸 → '수업 확정' 알림톡
+  const restoredByOps = () => {
+    if (mode !== 'day') return [] as { childId: string; teacherId: string; time: string }[];
+    const out: { childId: string; teacherId: string; time: string }[] = [];
+    for (const o of ops.values()) {
+      if (o.kind !== 'day' || o.input === 'reset' || o.input.status !== 'child' || o.input.absent || o.input.moved || !o.input.childId) continue;
+      const b = cellOf(o.side === 'fixed' ? board.fixed : board.open, o.teacherId, o.time);
+      if (b.status === 'child' && b.childId === o.input.childId && (b.absent || (b.moved && !!b.note?.startsWith('취소')))) out.push({ childId: b.childId, teacherId: o.teacherId, time: o.time });
+    }
+    return out;
+  };
+  // 취소된 수업 — 그 보호자에게 '수업 취소' 알림톡(시간표 신청 확정/취소 알림, 결과 = 취소) / 다시 살린 수업은 '확정'
+  const notifyCancelled = async (list: { childId: string; teacherId: string; time: string; result?: '취소' | '확정' }[]) => {
     try {
       const members = await getMembers();
       const DOWS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -498,10 +509,10 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         const m = kid?.guardianUserId ? members.find(mm => mm.userId === kid.guardianUserId) : undefined;
         return {
           templateId: 'booking_result', childId: x.childId, userId: kid?.guardianUserId, childName: kid ? `${kid.name}${kid.number ?? ''}` : '', phone: m?.phone,
-          vars: { 이름: kid?.name ?? '', 날짜: day.replace(/-/g, '/'), 요일: DOWS[parseYmd(day).getDay()], 시간: x.time.replace(/^0/, ''), 선생님: teachers.find(t => t.id === x.teacherId)?.name ?? '', 신청결과: '취소' },
+          vars: { 이름: kid?.name ?? '', 날짜: day.replace(/-/g, '/'), 요일: DOWS[parseYmd(day).getDay()], 시간: x.time.replace(/^0/, ''), 선생님: teachers.find(t => t.id === x.teacherId)?.name ?? '', 신청결과: x.result ?? '취소' },
         };
       }));
-      showAlert(`수업 취소 알림톡 — 보냄 ${res.sent}건${res.failed ? ` · 실패 ${res.failed}건` : ''}${res.skipped ? ` · 번호 없어 못 보냄 ${res.skipped}건` : ''}${res.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${res.waiting}건` : ''}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+      showAlert(`수업 취소·확정 알림톡 — 보냄 ${res.sent}건${res.failed ? ` · 실패 ${res.failed}건` : ''}${res.skipped ? ` · 번호 없어 못 보냄 ${res.skipped}건` : ''}${res.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${res.waiting}건` : ''}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
     } catch (e) {
       showAlert(`저장했지만 수업 취소 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
     }
@@ -509,8 +520,14 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   const saveSchedule = async () => {
     // 수업을 없앤 칸이 있으면 — 알림톡이 간다고 먼저 알려 준다 (회원 계정과 이어진 아이만 받는다)
-    const cancels = cancelledByOps().filter(x => children.find(k => k.id === x.childId)?.guardianUserId);
-    if (cancels.length && !(await askConfirm(`수업 취소 ${cancels.length}건 — 그 보호자에게 '수업 취소' 알림톡이 가요.\n(${cancels.map(x => children.find(k => k.id === x.childId)?.name).join(', ')})\n저장할까요?`))) return;
+    const linked = (x: { childId: string }) => !!children.find(k => k.id === x.childId)?.guardianUserId;
+    const nameOf = (x: { childId: string }) => children.find(k => k.id === x.childId)?.name;
+    const cancels = [...cancelledByOps().filter(linked).map(x => ({ ...x, result: '취소' as const })), ...restoredByOps().filter(linked).map(x => ({ ...x, result: '확정' as const }))];
+    const nC = cancels.filter(x => x.result === '취소'), nR = cancels.filter(x => x.result === '확정');
+    if (cancels.length && !(await askConfirm([
+      nC.length ? `수업 취소 ${nC.length}건 — '수업 취소' 알림톡이 가요. (${nC.map(nameOf).join(', ')})` : '',
+      nR.length ? `결석·취소를 되돌린 ${nR.length}건 — '수업 확정' 알림톡이 가요. (${nR.map(nameOf).join(', ')})` : '',
+    ].filter(Boolean).join('\n') + '\n저장할까요?'))) return;
     setSavingSched(true);
     const failedOps: string[] = [];
     const failedAssign: string[] = [];
