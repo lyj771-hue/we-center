@@ -471,31 +471,36 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       }
     }
   };
-  // 날짜별 화면에서 아이 수업을 없앤 칸 — 칸 비우기·? 미정·x 수업 안 함·다른 아이로 바꾸기·이 날만 결석 (옮김은 수업이 있으니 빼고)
-  const cancelledByOps = () => {
-    if (mode !== 'day') return [] as { childId: string; teacherId: string; time: string }[];
-    const live = (c?: CellView) => (c && c.status === 'child' && !c.absent && !c.moved ? c.childId ?? null : null);
-    const out: { childId: string; teacherId: string; time: string }[] = [];
+  // 날짜별 화면에서 바뀐 수업 — 칸마다 저장 전(디비)과 후를 비교한다.
+  //  수업이 없어진 아이(비우기·미정·수업 안 함·다른 아이로 바꾸기·결석·옮김·이 날부터 고정 변경·선생님 빼기) → 취소
+  //  수업이 생긴 아이(새로 넣기·다른 아이로 바꾸기·결석 풀기·취소 되돌리기·이 날부터 고정 변경) → 확정
+  const lessonChangesByOps = () => {
+    type Ch = { childId: string; teacherId: string; time: string; result: '취소' | '확정' };
+    if (mode !== 'day') return [] as Ch[];
+    const live = (c?: { status: string; absent?: boolean; moved?: boolean; childId?: string | null } | null) =>
+      (c && c.status === 'child' && !c.absent && !c.moved ? c.childId ?? null : null);
+    const out: Ch[] = [];
+    const diff = (teacherId: string, time: string, before: string | null, after: string | null) => {
+      if (before === after) return;
+      if (before) out.push({ childId: before, teacherId, time, result: '취소' });
+      if (after) out.push({ childId: after, teacherId, time, result: '확정' });
+    };
     for (const o of ops.values()) {
-      if (o.kind !== 'day') continue;
-      const before = live(cellOf(o.side === 'fixed' ? board.fixed : board.open, o.teacherId, o.time));
-      if (!before) continue;
-      const after = o.input === 'reset'
-        ? (o.side === 'fixed' ? live(base.get(`${o.teacherId}|${o.time}`)) : null)
-        : (o.input.status === 'child' && o.input.moved && o.input.childId === before) ? before
-        : (o.input.status === 'child' && !o.input.absent ? o.input.childId ?? null : null);
-      if (after !== before) out.push({ childId: before, teacherId: o.teacherId, time: o.time });
+      if (o.kind === 'fixed') continue;   // 고정 시간표(요일) 화면은 날짜가 없다
+      const side = o.kind === 'from' ? 'fixed' : o.side;
+      const before = live(cellOf(side === 'fixed' ? board.fixed : board.open, o.teacherId, o.time));
+      const after = o.kind === 'from' ? live(o.input)
+        : o.input === 'reset' ? (side === 'fixed' ? live(base.get(`${o.teacherId}|${o.time}`)) : null)
+        : live(o.input);
+      diff(o.teacherId, o.time, before, after);
     }
-    return out;
-  };
-  // 다시 살린 수업 — 결석을 풀거나 보호자 취소를 되돌려 같은 아이 수업이 다시 생긴 칸 → '수업 확정' 알림톡
-  const restoredByOps = () => {
-    if (mode !== 'day') return [] as { childId: string; teacherId: string; time: string }[];
-    const out: { childId: string; teacherId: string; time: string }[] = [];
-    for (const o of ops.values()) {
-      if (o.kind !== 'day' || o.input === 'reset' || o.input.status !== 'child' || o.input.absent || o.input.moved || !o.input.childId) continue;
-      const b = cellOf(o.side === 'fixed' ? board.fixed : board.open, o.teacherId, o.time);
-      if (b.status === 'child' && b.childId === o.input.childId && (b.absent || (b.moved && !!b.note?.startsWith('취소')))) out.push({ childId: b.childId, teacherId: o.teacherId, time: o.time });
+    // 이 날만 선생님 빼기 — 그 선생님 칸의 아이 수업이 모두 없어진다
+    for (const [id, st] of assignDraft) {
+      if (st !== 'off') continue;
+      for (const m of [board.fixed, board.open]) for (const [k, c] of m) {
+        const [tid, time] = k.split('|');
+        if (tid === id && !ops.has(`day|${tid}|${time}|fixed`) && !ops.has(`day|${tid}|${time}|open`)) diff(tid, time, live(c), null);
+      }
     }
     return out;
   };
@@ -522,11 +527,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     // 수업을 없앤 칸이 있으면 — 알림톡이 간다고 먼저 알려 준다 (회원 계정과 이어진 아이만 받는다)
     const linked = (x: { childId: string }) => !!children.find(k => k.id === x.childId)?.guardianUserId;
     const nameOf = (x: { childId: string }) => children.find(k => k.id === x.childId)?.name;
-    const cancels = [...cancelledByOps().filter(linked).map(x => ({ ...x, result: '취소' as const })), ...restoredByOps().filter(linked).map(x => ({ ...x, result: '확정' as const }))];
+    const cancels = lessonChangesByOps().filter(linked);
     const nC = cancels.filter(x => x.result === '취소'), nR = cancels.filter(x => x.result === '확정');
     if (cancels.length && !(await askConfirm([
       nC.length ? `수업 취소 ${nC.length}건 — '수업 취소' 알림톡이 가요. (${nC.map(nameOf).join(', ')})` : '',
-      nR.length ? `결석·취소를 되돌린 ${nR.length}건 — '수업 확정' 알림톡이 가요. (${nR.map(nameOf).join(', ')})` : '',
+      nR.length ? `수업 추가 ${nR.length}건 — '수업 확정' 알림톡이 가요. (${nR.map(nameOf).join(', ')})` : '',
     ].filter(Boolean).join('\n') + '\n저장할까요?'))) return;
     setSavingSched(true);
     const failedOps: string[] = [];
