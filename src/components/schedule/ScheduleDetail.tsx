@@ -12,7 +12,7 @@ import ScheduleEditor from './ScheduleEditor';
 import ScheduleGate from './ScheduleGate';
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import {
-  bookSlot, setScheduleHidden, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, withdrawCancel,
+  bookSlot, notifyBooked, setScheduleHidden, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, withdrawCancel,
 } from '@/lib/schedule';
 import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -80,6 +80,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
     setBusySlot(slot.id);
     try {
       const r = await bookSlot(slot.id);
+      if (r === 'ok') notifyBooked(slot.id);   // '수업 확정' 알림톡
       if (r === 'taken') setPopup('방금 다른 분이 먼저 신청했어요.\n다른 시간을 골라 주세요.');
       if (r === 'not_approved') setPopup('센터 승인 후 신청할 수 있어요.');
       if (r === 'conflict') setPopup('그 시간에는 이미 우리 아이 수업이 있어요.\n다른 시간을 골라 주세요.');

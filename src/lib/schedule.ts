@@ -297,6 +297,13 @@ export async function bookSlot(slotId: string): Promise<'ok' | 'taken' | 'not_ap
   return data;
 }
 
+/** 신청 직후 — 그 보호자에게 '수업 확정' 알림톡 (실패해도 신청은 그대로) */
+export async function notifyBooked(slotId: string): Promise<void> {
+  try {
+    await fetch('/api/alimtalk/booked', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeader()) }, body: JSON.stringify({ slotId }) });
+  } catch { /* 알림이 안 가도 신청은 됐다 */ }
+}
+
 // ── 공휴일 (구글 공개 "대한민국의 휴일" 캘린더를 서버에서 읽는다) ─────────────
 
 async function authHeader(): Promise<Record<string, string>> {
