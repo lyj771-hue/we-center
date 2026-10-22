@@ -316,7 +316,17 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       ? { kind: 'from', teacherId: teacher.id, time, input: input !== 'reset' && input.status === 'child' ? input : null }
       : mode === 'fixed' ? { kind: 'fixed', teacherId: teacher.id, time, input, start: cell.startDate }
       : { kind: 'day', teacherId: teacher.id, time, side, input };
-    putOps([o]);
+    const list: Op[] = [o];
+    // 빈타임에 아이·?·x 를 넣으면 — 그 시간 고정 아이 수업은 취소로 남긴다(줄 + 취소).
+    // 나중에 빈타임을 비워도 고정 아이가 저절로 살아나지 않게 (살리려면 고정 칸에서 [취소 되돌리기])
+    if (mode === 'day' && side === 'open' && input !== 'reset' && input.status !== 'none') {
+      const f = cellOf(view.fixed, teacher.id, time);
+      if (f.status === 'child' && !f.absent && !f.moved) {
+        list.push({ kind: 'day', teacherId: teacher.id, time, side: 'fixed',
+          input: { status: 'child', childId: f.childId ?? null, name: f.name, payment: f.payment, kind: f.kind ?? null, absent: false, moved: true, note: '취소' } });
+      }
+    }
+    putOps(list);
     setEditing(null);
     setPicking(null);
   };
@@ -1133,7 +1143,7 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
   const guardianCancelled = cell.status === 'child' && cell.moved && !!cell.note?.startsWith('취소');
   const restoreBox = guardianCancelled && onRestoreCancel ? (
     <div className="rounded-lg bg-[#fef2f2] px-3 py-2.5 space-y-2">
-      <p className="text-[12px] leading-[1.7] text-[#b91c1c]">보호자가 마이페이지에서 취소한 수업이에요. 되돌린 뒤 [스케줄 변경 완료]를 눌러야 반영돼요. (취소할 때 지워진 '선택' 결제방식은 다시 골라 주세요)</p>
+      <p className="text-[12px] leading-[1.7] text-[#b91c1c]">{cell.note?.includes('보호자') ? '보호자가 마이페이지에서 취소한 수업이에요.' : '취소된 수업이에요(빈타임에 다른 수업을 넣어 취소됨).'} 되돌린 뒤 [스케줄 변경 완료]를 눌러야 반영돼요. (취소할 때 지워진 '선택' 결제방식은 다시 골라 주세요)</p>
       <button onClick={onRestoreCancel} className="text-[13px] px-3 py-1.5 rounded-full border border-[#b91c1c] text-[#b91c1c] bg-white hover:bg-[#fff5f5]">취소 되돌리기 (취소 전으로)</button>
     </div>
   ) : null;
