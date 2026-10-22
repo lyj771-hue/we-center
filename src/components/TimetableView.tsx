@@ -10,7 +10,8 @@ import type { Teacher } from '@/lib/schedule';
 import { addDays, addTeacherWorkDay, getKoreanHolidays, getTeachers, HIDDEN_TEACHERS, parseYmd, removeTeacherWorkDay, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
-import { getDayLeaves, type TeacherLeave } from '@/lib/leave';
+import { addAndSendOutbox, getDayLeaves, type TeacherLeave } from '@/lib/leave';
+import { getMembers } from '@/lib/store';
 import {
   CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
@@ -470,7 +471,46 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       }
     }
   };
+  // 날짜별 화면에서 아이 수업을 없앤 칸 — 칸 비우기·? 미정·x 수업 안 함·다른 아이로 바꾸기·이 날만 결석 (옮김은 수업이 있으니 빼고)
+  const cancelledByOps = () => {
+    if (mode !== 'day') return [] as { childId: string; teacherId: string; time: string }[];
+    const live = (c?: CellView) => (c && c.status === 'child' && !c.absent && !c.moved ? c.childId ?? null : null);
+    const out: { childId: string; teacherId: string; time: string }[] = [];
+    for (const o of ops.values()) {
+      if (o.kind !== 'day') continue;
+      const before = live(cellOf(o.side === 'fixed' ? board.fixed : board.open, o.teacherId, o.time));
+      if (!before) continue;
+      const after = o.input === 'reset'
+        ? (o.side === 'fixed' ? live(base.get(`${o.teacherId}|${o.time}`)) : null)
+        : (o.input.status === 'child' && o.input.moved && o.input.childId === before) ? before
+        : (o.input.status === 'child' && !o.input.absent ? o.input.childId ?? null : null);
+      if (after !== before) out.push({ childId: before, teacherId: o.teacherId, time: o.time });
+    }
+    return out;
+  };
+  // 취소된 수업 — 그 보호자에게 '수업 취소' 알림톡(시간표 신청 확정/취소 알림, 결과 = 취소)
+  const notifyCancelled = async (list: { childId: string; teacherId: string; time: string }[]) => {
+    try {
+      const members = await getMembers();
+      const DOWS = ['일', '월', '화', '수', '목', '금', '토'];
+      const res = await addAndSendOutbox(list.map(x => {
+        const kid = children.find(k => k.id === x.childId);
+        const m = kid?.guardianUserId ? members.find(mm => mm.userId === kid.guardianUserId) : undefined;
+        return {
+          templateId: 'booking_result', childId: x.childId, userId: kid?.guardianUserId, childName: kid ? `${kid.name}${kid.number ?? ''}` : '', phone: m?.phone,
+          vars: { 이름: kid?.name ?? '', 날짜: day.replace(/-/g, '/'), 요일: DOWS[parseYmd(day).getDay()], 시간: x.time.replace(/^0/, ''), 선생님: teachers.find(t => t.id === x.teacherId)?.name ?? '', 신청결과: '취소' },
+        };
+      }));
+      showAlert(`수업 취소 알림톡 — 보냄 ${res.sent}건${res.failed ? ` · 실패 ${res.failed}건` : ''}${res.skipped ? ` · 번호 없어 못 보냄 ${res.skipped}건` : ''}${res.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${res.waiting}건` : ''}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+    } catch (e) {
+      showAlert(`저장했지만 수업 취소 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
+    }
+  };
+
   const saveSchedule = async () => {
+    // 수업을 없앤 칸이 있으면 — 알림톡이 간다고 먼저 알려 준다 (회원 계정과 이어진 아이만 받는다)
+    const cancels = cancelledByOps().filter(x => children.find(k => k.id === x.childId)?.guardianUserId);
+    if (cancels.length && !(await askConfirm(`수업 취소 ${cancels.length}건 — 그 보호자에게 '수업 취소' 알림톡이 가요.\n(${cancels.map(x => children.find(k => k.id === x.childId)?.name).join(', ')})\n저장할까요?`))) return;
     setSavingSched(true);
     const failedOps: string[] = [];
     const failedAssign: string[] = [];
@@ -495,6 +535,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     setSavingSched(false);
     await load();
     if (failedOps.length + failedAssign.length) showAlert(`${failedOps.length + failedAssign.length}건을 저장하지 못했어요. 다시 [스케줄 변경 완료]를 눌러 주세요.`);
+    // 저장된 취소만 알림
+    const okCancels = cancels.filter(x => ![...failedOps].some(k => k.includes(x.teacherId) && k.includes(x.time)));
+    if (okCancels.length) await notifyCancelled(okCancels);
   };
 
   // 수업 후 결제 체크 — 먼저 표에만 표시하고, [결제 완료]에서 한꺼번에 저장한다
