@@ -7,8 +7,8 @@ import { createRoot } from 'react-dom/client';
 // 카카오톡 안의 브라우저(인앱 브라우저)는 기본 창을 막아서, confirm() 이 창 없이 바로 "취소"가 돼 버린다.
 
 // 창 모양 — PC(md 이상)는 글씨를 조금 작게, 자간·줄간·안쪽 여백을 넉넉하게
-const BOX = 'bg-white rounded-2xl shadow-2xl w-full max-w-xs md:max-w-sm p-6 md:px-9 md:py-8 text-center';
-const MSG = 'text-[15px] leading-[1.9] md:text-[13.5px] md:leading-[2.1] md:tracking-[0.03em] text-[#333] whitespace-pre-line break-keep';
+const BOX = 'bg-white rounded-2xl shadow-2xl w-full max-w-xs md:max-w-[400px] p-6 md:px-11 md:py-10 text-center';
+const MSG = 'text-[15px] leading-[1.9] md:text-[12.5px] md:leading-[2.3] md:tracking-[0.05em] text-[#333] whitespace-pre-line break-keep';
 
 interface Opts {
   message: string;
@@ -31,7 +31,7 @@ function open({ message, ok = '확인', cancel = '취소' }: Opts): Promise<bool
         className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/30 px-6"
         onClick={() => close(false)}>
         <div className={BOX} onClick={e => e.stopPropagation()}>
-          <p className={`${MSG} mb-5 md:mb-6`}>{message}</p>
+          <p className={`${MSG} mb-5 md:mb-8`}>{message}</p>
           <div className="flex gap-2">
             {cancel !== null && (
               <button type="button" onClick={() => close(false)}
@@ -60,7 +60,7 @@ export function askChoice(message: string, a: string, b: string): Promise<'a' | 
       <div role="alertdialog" aria-modal="true" aria-label={message}
         className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/30 px-6" onClick={() => close(null)}>
         <div className={BOX} onClick={e => e.stopPropagation()}>
-          <p className={`${MSG} mb-5 md:mb-6`}>{message}</p>
+          <p className={`${MSG} mb-5 md:mb-8`}>{message}</p>
           <div className="flex gap-2">
             <button type="button" onClick={() => close('a')} className="flex-1 border border-[#e5e5e5] text-[#555] text-[14px] py-2.5 rounded-full">{a}</button>
             <button type="button" autoFocus onClick={() => close('b')} className="flex-1 bg-[var(--brand)] text-white text-[14px] py-2.5 rounded-full">{b}</button>
@@ -92,7 +92,7 @@ function PromptBox({ message, initial, onClose }: { message: string; initial: st
       className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/30 px-6" onClick={() => onClose(null)}>
       <form className={BOX} onClick={e => e.stopPropagation()}
         onSubmit={e => { e.preventDefault(); onClose(value); }}>
-        <p className={`${MSG} mb-4 md:mb-5`}>{message}</p>
+        <p className={`${MSG} mb-4 md:mb-6`}>{message}</p>
         <input value={value} onChange={e => setValue(e.target.value)} autoFocus maxLength={20}
           className="w-full border-b border-[#ddd] py-2 mb-5 text-[15px] text-center outline-none focus:border-[var(--brand)]" />
         <div className="flex gap-2">
