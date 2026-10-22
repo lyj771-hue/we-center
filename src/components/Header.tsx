@@ -26,13 +26,13 @@ const NAV = [
   { href: '/we-slang',       label: 'We슐랭' },   // 맛있는 가게 소개 — 메뉴 이름 옆에 아이콘
 ];
 
-/** 메뉴 이름 — We슐랭은 앞에 작은 아이콘 */
+/** 메뉴 이름 — We슐랭은 글씨 뒤에 작은 아이콘 */
 function NavLabel({ href, label }: { href: string; label: string }) {
   if (href !== '/we-slang') return <>{label}</>;
   return (
     <span className="inline-flex items-center gap-1.5">
-      <img src="/weslang/wechelin-icon.png" alt="" aria-hidden="true" className="h-[18px] w-auto rounded-[3px]" />
       {label}
+      <img src="/weslang/wechelin-icon.png" alt="" aria-hidden="true" className="h-[18px] w-auto rounded-[3px]" />
     </span>
   );
 }
@@ -101,6 +101,10 @@ export default function Header() {
     ? [...TEACHER_NAV, ...NAV]   // 관리자도 선생님 시간표를 메인 메뉴 맨 앞에서
     : teacher ? [...TEACHER_NAV, ...NAV]   // 선생님은 시간표를 맨 앞에
     : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : NAV;
+  // 휴대폰 메뉴 — 로그인한 보호자는 마이페이지 다음에 We슐랭 (PC는 그대로)
+  const mobileNav = !isAdmin && !teacher && userId
+    ? [...nav.filter(n => n.href !== '/we-slang'), ...nav.filter(n => n.href === '/we-slang')]
+    : nav;
 
   // /schedule/uijeongbu 는 수업스케쥴(의정부)에만 불이 들어오게
   const isActive = (href: string) => pathname === href || (pathname.startsWith(href + '/') && ![...NAV, ...TEACHER_NAV].some(n => n.href !== href && n.href.startsWith(href + '/') && pathname.startsWith(n.href)));
@@ -255,7 +259,7 @@ export default function Header() {
           )}
           <nav aria-label="모바일 메뉴">
             <ul className="space-y-1">
-              {nav.map(({ href, label }) => (
+              {mobileNav.map(({ href, label }) => (
                 <li key={href}>
                   <Link
                     href={href}
