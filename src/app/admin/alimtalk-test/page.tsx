@@ -27,6 +27,36 @@ export default function AlimtalkTestPage() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const [savedIds, setSavedIds] = useState<Record<string, string>>({});
+  // 템플릿 ID가 없어서 못 보낸(기다리는) 이 알림들
+  const [waiting, setWaiting] = useState<string[]>([]);
+  const loadWaiting = async (k: string) => {
+    const { data } = await supabase.from('outbox_messages').select('id').eq('template_id', k).eq('status', 'pending');
+    setWaiting((data ?? []).map(r => r.id as string));
+  };
+  useEffect(() => { loadWaiting(key); }, [key]);
+  const saveId = async () => {
+    try {
+      await saveAlimtalkTemplateId(key, templateId);
+      setSavedIds(x => ({ ...x, [key]: templateId.trim() }));
+      setResult({ ok: true, text: '템플릿 ID를 저장했어요. 이제 이 알림은 자동으로 가요.' });
+    } catch (e) {
+      setResult({ ok: false, text: `저장하지 못했어요 — SQL(supabase/alimtalk-templates.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}` });
+    }
+  };
+  const sendWaiting = async () => {
+    setBusy(true); setResult(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const res = await fetch('/api/alimtalk/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {}) },
+        body: JSON.stringify({ ids: waiting }),
+      });
+      const j = await res.json().catch(() => ({}));
+      setResult(res.ok ? { ok: true, text: `보냄 ${j.sent}건${j.failed ? ` · 실패 ${j.failed}건` : ''}${j.skipped ? ` · 번호 없음 ${j.skipped}건` : ''}` } : { ok: false, text: j.error ?? `오류 ${res.status}` });
+      await loadWaiting(key);
+    } finally { setBusy(false); }
+  };
   useEffect(() => { getAlimtalkTemplateIds().then(setSavedIds).catch(() => {}); }, []);
 
   useEffect(() => { setTo(load('alimtalk-test-to')); }, []);
@@ -80,8 +110,20 @@ export default function AlimtalkTestPage() {
           </label>
           <label className="block"><span className="block text-[12px] text-[#888]">솔라피 템플릿 ID</span>
             <input value={templateId} onChange={e => setTemplateId(e.target.value)} placeholder="KA01TP…" className={`${field} font-mono`} />
-            <span className={`block mt-1 text-[11px] ${savedIds[key] ? 'text-[#047857]' : 'text-[#aaa]'}`}>{savedIds[key] ? '저장된 ID — 이 알림은 자동으로 가요' : '아직 저장 안 됨 — 테스트가 잘 가면 저장돼요'}</span>
+            <span className="mt-1 flex items-center gap-2">
+              <span className={`text-[11px] ${savedIds[key] && savedIds[key] === templateId.trim() ? 'text-[#047857]' : 'text-[#b45309]'}`}>
+                {savedIds[key] && savedIds[key] === templateId.trim() ? '저장된 ID — 이 알림은 자동으로 가요' : '아직 저장 안 됨 — [ID 저장]을 눌러 주세요'}
+              </span>
+              <button type="button" onClick={saveId} disabled={!templateId.trim() || savedIds[key] === templateId.trim()}
+                className="ml-auto text-[12px] px-3 py-1 rounded-full border border-[var(--brand)] text-[var(--brand)] disabled:opacity-30">ID 저장</button>
+            </span>
           </label>
+          {waiting.length > 0 && (
+            <div className="rounded-xl bg-[#fffbeb] px-4 py-3 text-[12px] text-[#92400e] flex items-center gap-3">
+              <span className="flex-1">템플릿 ID가 없어서 못 보낸 이 알림 {waiting.length}건이 기다리고 있어요.</span>
+              <button type="button" onClick={sendWaiting} disabled={busy || !savedIds[key]} className="px-3 py-1 rounded-full bg-[#92400e] text-white disabled:opacity-40">지금 보내기</button>
+            </div>
+          )}
           <label className="block"><span className="block text-[12px] text-[#888]">받는 번호 (내 휴대폰)</span>
             <input value={to} onChange={e => setTo(e.target.value)} inputMode="tel" placeholder="010-0000-0000" className={field} />
           </label>
