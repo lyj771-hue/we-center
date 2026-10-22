@@ -477,30 +477,28 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const lessonChangesByOps = () => {
     type Ch = { childId: string; teacherId: string; time: string; result: '취소' | '확정' };
     if (mode !== 'day') return [] as Ch[];
-    const live = (c?: { status: string; absent?: boolean; moved?: boolean; childId?: string | null } | null) =>
-      (c && c.status === 'child' && !c.absent && !c.moved ? c.childId ?? null : null);
+    type C = { status: string; absent?: boolean; moved?: boolean; childId?: string | null } | null | undefined;
+    const live = (c: C) => (c && c.status === 'child' && !c.absent && !c.moved ? c.childId ?? null : null);
+    // 그 시간 실제 수업 아이 — 빈타임 칸에 무엇이든(아이·?·x) 있으면 고정 아이는 수업이 없다(빈타임 아이 수업이거나 없음)
+    const lessonOf = (fixed: C, open: C) => (open && open.status !== 'empty' && open.status !== 'none' ? live(open) : live(fixed));
     const out: Ch[] = [];
-    const diff = (teacherId: string, time: string, before: string | null, after: string | null) => {
-      if (before === after) return;
-      if (before) out.push({ childId: before, teacherId, time, result: '취소' });
-      if (after) out.push({ childId: after, teacherId, time, result: '확정' });
-    };
-    for (const o of ops.values()) {
-      if (o.kind === 'fixed') continue;   // 고정 시간표(요일) 화면은 날짜가 없다
-      const side = o.kind === 'from' ? 'fixed' : o.side;
-      const before = live(cellOf(side === 'fixed' ? board.fixed : board.open, o.teacherId, o.time));
-      const after = o.kind === 'from' ? live(o.input)
-        : o.input === 'reset' ? (side === 'fixed' ? live(base.get(`${o.teacherId}|${o.time}`)) : null)
-        : live(o.input);
-      diff(o.teacherId, o.time, before, after);
-    }
-    // 이 날만 선생님 빼기 — 그 선생님 칸의 아이 수업이 모두 없어진다
-    for (const [id, st] of assignDraft) {
-      if (st !== 'off') continue;
-      for (const m of [board.fixed, board.open]) for (const [k, c] of m) {
-        const [tid, time] = k.split('|');
-        if (tid === id && !ops.has(`day|${tid}|${time}|fixed`) && !ops.has(`day|${tid}|${time}|open`)) diff(tid, time, live(c), null);
-      }
+    // 바뀐 칸(선생님|시간)마다 저장 전·후 두 칸(고정·빈타임)을 맞춰 본다
+    const keys = new Set<string>();
+    for (const o of ops.values()) if (o.kind !== 'fixed') keys.add(`${o.teacherId}|${o.time}`);
+    const offTeachers = new Set([...assignDraft].filter(([, st]) => st === 'off').map(([id]) => id));
+    for (const m of [board.fixed, board.open]) for (const k of m.keys()) if (offTeachers.has(k.split('|')[0])) keys.add(k);
+    for (const k of keys) {
+      const [tid, time] = k.split('|');
+      const bf = cellOf(board.fixed, tid, time), bo = cellOf(board.open, tid, time);
+      const before = lessonOf(bf, bo);
+      let af: C = bf, ao: C = bo;
+      const fo = ops.get(`day|${tid}|${time}|fixed`), oo = ops.get(`day|${tid}|${time}|open`);
+      if (fo) af = fo.kind === 'from' ? fo.input : fo.kind === 'day' ? (fo.input === 'reset' ? base.get(k) : fo.input) : af;
+      if (oo && oo.kind === 'day') ao = oo.input === 'reset' ? null : oo.input;
+      const after = offTeachers.has(tid) ? null : lessonOf(af, ao);
+      if (before === after) continue;
+      if (before) out.push({ childId: before, teacherId: tid, time, result: '취소' });
+      if (after) out.push({ childId: after, teacherId: tid, time, result: '확정' });
     }
     return out;
   };
