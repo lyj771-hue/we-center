@@ -37,12 +37,11 @@ function NavLabel({ href, label }: { href: string; label: string }) {
 }
 
 // 선생님(카카오 로그인 후 선생님 인증) — 시간표 보기
-// 메뉴 글씨 색 — 앞에서 뒤로 갈수록 진해지는 그라데이션: 연한 하늘색 → 브랜드 파랑(#087BEA, 가운데) → 진한 남색
-const NAV_LIGHT = [0x9c, 0xcb, 0xf8], NAV_MID = [0x08, 0x7b, 0xea], NAV_DARK = [0x05, 0x3a, 0x75];
+// 메뉴 글씨 색 — 앞에서 뒤로 갈수록: 보라색 → 진한 파랑 그라데이션
+const NAV_FROM = [0x9b, 0x6b, 0xdb], NAV_TO = [0x0b, 0x3b, 0xb8];
 function navColor(i: number, n: number) {
   const t = n > 1 ? i / (n - 1) : 0.5;
-  const [a, b, u] = t <= 0.5 ? [NAV_LIGHT, NAV_MID, t * 2] : [NAV_MID, NAV_DARK, t * 2 - 1];
-  return `rgb(${a.map((v, k) => Math.round(v + (b[k] - v) * u)).join(',')})`;
+  return `rgb(${NAV_FROM.map((v, k) => Math.round(v + (NAV_TO[k] - v) * t)).join(',')})`;
 }
 
 const TEACHER_NAV = [
