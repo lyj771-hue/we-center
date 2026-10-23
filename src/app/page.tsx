@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { HOME } from '@/lib/content';
-import NoticeBar from '@/components/NoticeBar';
 
 export default function HomePage() {
   return (
@@ -31,24 +30,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Values ──────────────────────────────────── */}
-      <section className="max-w-5xl mx-auto px-8 py-24 fade-up">
-        <p className="text-[11px] tracking-[0.3em] text-[#aaa] mb-14">
-          {HOME.valuesSectionLabel}
-        </p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-14 md:gap-8">
-          {HOME.values.map(({ num, title, desc }) => (
-            <div key={num}>
-              <span className="text-[10px] text-[#ccc] tracking-widest block mb-4">{num}</span>
-              <h2 className="font-serif font-bold text-[26px] text-[var(--brand)] tracking-tight mb-3 leading-snug">{title}</h2>
-              <p className="text-[13px] text-[#666] leading-[2]">{desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Notice bar ──────────────────────────────── */}
-      <NoticeBar />
     </div>
   );
 }
