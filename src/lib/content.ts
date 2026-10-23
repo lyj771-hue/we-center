@@ -11,7 +11,7 @@ export const SITE = {
 
 // ── 홈 (/) ────────────────────────────────────
 export const HOME = {
-  eyebrow: 'We 센터',
+  eyebrow: '반가워요!!!',
   headline: ['서로 기대어 서요'],
   // 빈 줄('') = 한 줄 띄우기
   body: [
@@ -20,8 +20,6 @@ export const HOME = {
     '공기에 기대어 서있는거래요',
     '',
     '우리도 서로 기대어 서요',
-    '',
-    '잘 부탁드려요',
   ],
   quickLinks: [
     { href: '/we-center',     label: 'We센터',    sub: '수색·의정부 공간 안내' },

@@ -6,7 +6,8 @@ export default function HomePage() {
   return (
     <div>
       {/* ── Hero ────────────────────────────────────── */}
-      <section className="min-h-[calc(100svh-160px)] flex flex-col justify-center bg-[#f5f5f3] px-8 py-24">
+      {/* 맨 위 작은 글씨 위 여백은 짧게(위에 붙여서 시작) */}
+      <section className="min-h-[calc(100svh-160px)] flex flex-col justify-start bg-[#f5f5f3] px-8 pt-10 pb-24">
         <div className="max-w-5xl mx-auto w-full">
           <p className="text-[11px] tracking-[0.3em] text-[#aaa] mb-8 fade-up">
             {HOME.eyebrow}
