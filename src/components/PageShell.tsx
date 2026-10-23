@@ -121,7 +121,7 @@ export default function PageShell({ page, heading, subtext = '', defaultWidth, w
 interface TitleProps {
   /** 휴대폰에서만 보이는 작은 메뉴 이름 */
   eyebrow?: string;
-  /** 'notice': 가운데 정렬, PC에선 제목을 화면에서 숨김(공지사항 메모 보드) */
+  /** 'notice': 가운데 정렬, 제목은 화면에서 숨김(메모 보드) — 작은 메뉴 이름만 다른 페이지처럼 왼쪽 위 */
   variant?: 'default' | 'notice';
   className?: string;
   /** 제목 오른쪽에 둘 버튼(예: 관리자 + 추가) */
@@ -142,8 +142,8 @@ export function PageTitle({ eyebrow, variant = 'default', className = '', action
   if (variant === 'notice') {
     return (
       <div className={`text-center ${className}`}>
-        {eyebrow && <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] mb-5">{eyebrow}</p>}
-        <h1 className="md:sr-only font-serif font-black text-[32px] leading-[1.2] tracking-[-0.03em] text-[var(--brand)] mb-4">{heading}</h1>
+        {eyebrow && <p className="md:hidden text-left text-[11px] tracking-[0.3em] text-[#aaa] mb-5">{eyebrow}</p>}
+        <h1 className="sr-only">{heading}</h1>
         {subtext && <p className="text-[14px] leading-[2] text-[#555] whitespace-pre-line">{subtext}</p>}
         {editBtn && <div className="mt-4">{editBtn}</div>}
       </div>
