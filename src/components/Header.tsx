@@ -13,7 +13,7 @@ import { ALERTS_CHANGED, getUnreadAlertCount } from '@/lib/alerts';
 const KAKAO_CHANNEL_URL = '';
 
 const NAV = [
-  { href: '/',               label: 'HOME' },
+  { href: '/',               label: '에이치오엠' },
   { href: '/we-concept',     label: 'We컨셉' },
   { href: '/we-center',      label: 'We센터' },
   { href: '/we-subjects',    label: 'We수업과목' },
