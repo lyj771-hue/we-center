@@ -19,7 +19,7 @@ export default function HomePage() {
           </h1>
           {/* 소개 글 + 오른쪽 나무 그림 — 그림 밑을 마지막 줄("우리도 서로 기대어 서요") 글씨 밑에 맞춘다 */}
           <div className="flex items-end gap-3 sm:gap-6 mb-8 fade-up-d2">
-            <p className="text-[15px] sm:text-[17px] text-[#555] leading-[2] max-w-[420px] min-w-0">
+            <p className="text-[14px] sm:text-[17px] text-[#555] leading-[2] max-w-[420px] min-w-0">
               {HOME.body.map((line, i) => (
                 <span key={i}>{bold(line)}{i < HOME.body.length - 1 && <br />}</span>
               ))}
