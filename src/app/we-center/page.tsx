@@ -22,9 +22,24 @@ export default function WeCenterPage() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 메인의 'We 의정부 센터' 칸(/we-center#uijeongbu)으로 오면 의정부 탭부터
-  useEffect(() => { if (window.location.hash === '#uijeongbu') setTab('uijeongbu'); }, []);
-  const refresh = async () => setRooms(await getRooms(tab));
+  // 메인의 'We 수색 센터'·'We 의정부 센터' 칸(/we-center#susaek · #uijeongbu)으로 오면 그 탭부터 (같은 페이지에서 주소 끝만 바뀌어도)
+  useEffect(() => {
+    const fromHash = () => {
+      if (window.location.hash === '#uijeongbu') setTab('uijeongbu');
+      else if (window.location.hash === '#susaek') setTab('susaek');
+    };
+    fromHash();
+    window.addEventListener('hashchange', fromHash);
+    return () => window.removeEventListener('hashchange', fromHash);
+  }, []);
+  // 사진 불러오기 — 탭을 바꾸는 사이 늦게 도착한 앞 탭 사진이 덮어쓰지 않게, 지금 탭 것만 쓴다
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+  const refresh = async () => {
+    const t = tab;
+    const r = await getRooms(t);
+    if (tabRef.current === t) setRooms(r);
+  };
   useEffect(() => { refresh(); }, [tab]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
