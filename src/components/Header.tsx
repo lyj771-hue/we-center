@@ -37,6 +37,14 @@ function NavLabel({ href, label }: { href: string; label: string }) {
 }
 
 // 선생님(카카오 로그인 후 선생님 인증) — 시간표 보기
+// 메뉴 글씨 색 — 앞에서 뒤로 갈수록 진해지는 그라데이션: 연한 하늘색 → 브랜드 파랑(#087BEA, 가운데) → 진한 남색
+const NAV_LIGHT = [0x9c, 0xcb, 0xf8], NAV_MID = [0x08, 0x7b, 0xea], NAV_DARK = [0x05, 0x3a, 0x75];
+function navColor(i: number, n: number) {
+  const t = n > 1 ? i / (n - 1) : 0.5;
+  const [a, b, u] = t <= 0.5 ? [NAV_LIGHT, NAV_MID, t * 2] : [NAV_MID, NAV_DARK, t * 2 - 1];
+  return `rgb(${a.map((v, k) => Math.round(v + (b[k] - v) * u)).join(',')})`;
+}
+
 const TEACHER_NAV = [
   { href: '/teacher/timetable', label: '시간표(수색)' },
   { href: '/teacher/timetable/uijeongbu', label: '시간표(의정부)' },
@@ -193,13 +201,14 @@ export default function Header() {
         {/* Desktop navigation */}
         <nav aria-label="메인 메뉴" className="hidden md:block pb-0">
           <ul className="flex justify-center flex-wrap">
-            {nav.map(({ href, label }) => (
+            {nav.map(({ href, label }, i) => (
               <li key={href}>
                 <Link
                   href={href}
+                  style={{ color: navColor(i, nav.length) }}
                   className={[
                     'relative block px-3 py-3 text-[14px] tracking-wide transition-colors duration-150',
-                    isActive(href) ? 'text-[var(--brand)] font-medium' : 'text-[var(--brand)] hover:opacity-70',
+                    isActive(href) ? 'font-medium' : 'hover:opacity-70',
                   ].join(' ')}
                 >
                   <NavLabel href={href} label={label} />
@@ -258,14 +267,15 @@ export default function Header() {
           )}
           <nav aria-label="모바일 메뉴">
             <ul className="space-y-1">
-              {mobileNav.map(({ href, label }) => (
+              {mobileNav.map(({ href, label }, i) => (
                 <li key={href}>
                   <Link
                     href={href}
                     onClick={() => setMobileOpen(false)}
+                    style={{ color: navColor(i, mobileNav.length) }}
                     className={[
                       'block py-2 text-[13px] tracking-wide transition-colors',
-                      isActive(href) ? 'text-[var(--brand)] font-medium' : 'text-[var(--brand)]',
+                      isActive(href) ? 'font-medium' : '',
                     ].join(' ')}
                   >
                     <NavLabel href={href} label={label} />
