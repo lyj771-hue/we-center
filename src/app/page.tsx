@@ -1,6 +1,9 @@
 import Link from 'next/link';
 import { HOME } from '@/lib/content';
 
+/** **글자** → 굵게 */
+const bold = (line: string) => line.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <b key={i}>{part}</b> : part));
+
 export default function HomePage() {
   return (
     <div>
@@ -14,9 +17,9 @@ export default function HomePage() {
           <h1 className="font-serif font-black text-[var(--brand)] text-[28px] sm:text-[40px] lg:text-[52px] leading-[1.1] tracking-[-0.03em] mb-8 fade-up-d1">
             {HOME.headline.map((line, i) => <span key={i}>{i > 0 && <br />}{line}</span>)}
           </h1>
-          <p className="text-[15px] text-[#555] leading-[2] max-w-[420px] mb-16 fade-up-d2">
+          <p className="text-[17px] text-[#555] leading-[2] max-w-[420px] mb-16 fade-up-d2">
             {HOME.body.map((line, i) => (
-              <span key={i}>{line}{i < HOME.body.length - 1 && <br />}</span>
+              <span key={i}>{bold(line)}{i < HOME.body.length - 1 && <br />}</span>
             ))}
           </p>
           <div className="flex flex-col gap-px bg-[#d8d8d8] max-w-[890px] fade-up-d3">
