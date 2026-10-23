@@ -68,9 +68,24 @@ export async function getMyLessons(from: string, to: string): Promise<MyLesson[]
   }));
 }
 
-/** 보호자 수업 취소 — 수업 시작 전이면 바로 취소 (supabase/lesson-cancel.sql). ok / ok_late(2시간 안 남음) / not_found / too_late / no_login */
+/** 보호자 수업 취소 신청 — 관리자가 승인해야 취소된다 (supabase/lesson-cancel-approval.sql). ok / ok_late(2시간 안 남음) / already / not_found / too_late / no_login */
 export async function cancelMyLesson(l: MyLesson): Promise<string> {
   const { data, error } = await supabase.rpc('cancel_my_lesson', { p_day: l.day, p_time: l.time, p_teacher: l.teacherId, p_side: l.side });
+  if (error) throw error;
+  return data as string;
+}
+
+/** 내 취소 신청(승인 기다리는 것) — 'day|time|teacherId|side' 모음 */
+export const cancelKey = (l: { day: string; time: string; teacherId: string; side: string }) => `${l.day}|${l.time}|${l.teacherId}|${l.side}`;
+export async function getMyCancelRequests(): Promise<Set<string>> {
+  const { data, error } = await supabase.rpc('my_cancel_requests');
+  if (error) return new Set();
+  return new Set((data ?? []).map((r: Record<string, string>) => cancelKey({ day: r.day, time: r.lesson_time, teacherId: r.teacher_id, side: r.side })));
+}
+
+/** 취소 신청 철회 */
+export async function withdrawMyLessonCancel(l: MyLesson): Promise<string> {
+  const { data, error } = await supabase.rpc('withdraw_my_lesson_cancel', { p_day: l.day, p_time: l.time, p_teacher: l.teacherId, p_side: l.side });
   if (error) throw error;
   return data as string;
 }

@@ -23,10 +23,12 @@ export async function POST(request: Request) {
   for (const r of rows ?? []) {
     const templateId = tid.get(r.template_id);
     if (!templateId) { waiting++; await db.from('outbox_messages').update({ error: '솔라피 템플릿 ID가 아직 없어요' }).eq('id', r.id); continue; }
-    if (!r.phone) { skipped++; await db.from('outbox_messages').update({ status: 'skipped', error: '번호 없음' }).eq('id', r.id); continue; }
+    // 관리자에게 가는 알림은 관리자 번호(Vercel 환경 변수 ALIMTALK_ADMIN_PHONE)로
+    const phone = r.phone ?? (r.template_id === 'lesson_cancel_admin' ? process.env.ALIMTALK_ADMIN_PHONE : null);
+    if (!phone) { skipped++; await db.from('outbox_messages').update({ status: 'skipped', error: r.template_id === 'lesson_cancel_admin' ? '관리자 번호 없음 (Vercel 환경 변수 ALIMTALK_ADMIN_PHONE)' : '번호 없음' }).eq('id', r.id); continue; }
     const variables = Object.fromEntries(Object.entries((r.vars ?? {}) as Record<string, string>).map(([k, v]) => [`#{${k}}`, String(v)]));
     try {
-      const res = await sendAlimtalk({ to: r.phone, templateId, variables });
+      const res = await sendAlimtalk({ to: phone, templateId, variables });
       const msg = res.data?.errorMessage ?? res.data?.message;
       if (res.ok) { sent++; await db.from('outbox_messages').update({ status: 'sent', error: null, sent_at: new Date().toISOString() }).eq('id', r.id); }
       else { failed++; await db.from('outbox_messages').update({ status: 'failed', error: String(msg ?? `오류 ${res.status}`).slice(0, 300) }).eq('id', r.id); }

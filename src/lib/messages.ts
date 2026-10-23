@@ -109,15 +109,15 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
       items: [{ name: '일자', value: '#{날짜}(#{요일})' }, { name: '시간', value: '#{시간}' }, { name: '선생님', value: '#{선생님} 선생님' }, { name: '결과', value: '#{신청결과}' }],
       body: '#{이름} 님, 신청하신 수업이 #{신청결과}되었습니다.\n변경이나 취소는 센터로 연락해 주세요.', button: { name: '주간 수업 보기', url: `${SITE}/mypage?d=#{날짜}` } },
     samples: { 날짜: '2026/10/20', 요일: '월' },
-    condition: '보호자가 신청한 수업을 관리자가 확정하거나 취소할 때, 그 보호자에게 한 번.\n#{신청결과} = 확정 / 취소',
+    condition: '보호자가 신청한 수업을 관리자가 확정하거나 취소할 때, 그 보호자에게 한 번.\n마이페이지 수업 취소 신청을 관리자가 승인할 때도 (2시간 넘게 남았을 때 신청한 것 — 아니면 늦은 취소 안내).\n#{신청결과} = 확정 / 취소',
   },
   {
     id: 'lesson_cancel_admin', grp: 'timetable', label: '보호자 수업 취소 알림 (관리자에게)', sort: 20,
     spec: { image: 'logo', title: '수업 취소 알림', sub: 'We 센터 #{센터}',
       items: [{ name: '아이', value: '#{이름}' }, { name: '일자', value: '#{날짜}(#{요일})' }, { name: '시간', value: '#{시간}' }, { name: '선생님', value: '#{선생님} 선생님' }, { name: '남은 시간', value: '#{남은시간}' }],
-      body: '보호자가 마이페이지에서 수업을 취소했어요.\n시간표 관리에서 그 칸을 빈칸으로 바꾸거나 다른 아이를 넣어 주세요.', button: { name: '시간표 관리', url: `${SITE}/admin/timetable` } },
+      body: '보호자가 신청한 수업 취소가 승인되었어요.\n시간표 관리에서 그 칸에 다른 아이를 넣을 수 있어요.', button: { name: '시간표 관리', url: `${SITE}/admin/timetable` } },
     samples: { 날짜: '2026/10/21', 요일: '화', 시간: '15:40' },
-    condition: '보호자가 마이페이지에서 수업을 취소할 때마다 관리자에게 한 번 (받는 번호 = 관리자 번호, 발송 기능 만들 때 정함).\n#{남은시간} = 취소한 때 수업까지 남은 시간',
+    condition: '보호자가 마이페이지에서 신청한 수업 취소를 관리자가 [알림] 화면에서 승인할 때 관리자에게 한 번 (받는 번호 = Vercel 환경 변수 ALIMTALK_ADMIN_PHONE).\n#{남은시간} = 취소 신청한 때 수업까지 남은 시간',
   },
   {
     id: 'lesson_cancel_late', grp: 'timetable', label: '늦은 취소 안내 (보호자에게)', sort: 30,
@@ -125,7 +125,7 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
       items: [{ name: '일자', value: '#{날짜}(#{요일})' }, { name: '시간', value: '#{시간}' }, { name: '선생님', value: '#{선생님} 선생님' }],
       body: '#{이름} 님, 수업 취소가 접수되었습니다.\n다음부터는 수업 시작 최소 2시간 전에 취소해 주세요.', button: { name: '주간 스케줄 보기', url: `${SITE}/mypage?d=#{날짜}` } },
     samples: { 날짜: '2026/10/21', 요일: '화', 시간: '15:40' },
-    condition: '보호자가 마이페이지에서 수업 시작 2시간 전보다 늦게 취소했을 때, 그 보호자에게 한 번 (취소는 그대로 된다).\n마이페이지에도 같은 안내 팝업이 뜬다.',
+    condition: '보호자가 수업 시작 2시간이 안 남았을 때 마이페이지에서 취소를 신청했고, 관리자가 승인할 때 그 보호자에게 한 번 (수업 확정 취소 알림 대신).\n신청할 때 마이페이지에도 같은 안내 팝업이 뜬다.',
   },
   {
     id: 'prepaid_use', grp: 'prepaid', label: '선결제 사용·충전·변경 알림', sort: 10,

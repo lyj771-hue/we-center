@@ -12,7 +12,7 @@ export const ALERT_KINDS: { key: AlertKind; label: string }[] = [
   { key: 'book', label: '수업 신청' },
   { key: 'cancel_request', label: '취소 신청' },
   { key: 'cancel_withdraw', label: '취소 철회' },
-  { key: 'lesson_cancel', label: '수업 취소' },   // 보호자가 마이페이지에서 바로 취소 (lesson-cancel.sql)
+  { key: 'lesson_cancel', label: '수업 취소 신청' },   // 보호자가 마이페이지에서 취소 신청 (lesson-cancel-approval.sql)
 ];
 
 export interface AdminAlert { id: string; kind: AlertKind; center: 'eunpyeong' | 'uijeongbu'; title: string; detail?: string; createdAt: string; readAt?: string }
@@ -47,3 +47,27 @@ export const alertLink = (a: AdminAlert) => {
   if (a.kind === 'signup' || a.kind === 'branch') return uj ? '/members/uijeongbu' : '/members';
   return uj ? '/admin/timetable/uijeongbu' : '/admin/timetable';
 };
+
+// ── 마이페이지 수업 취소 신청 (supabase/lesson-cancel-approval.sql) ─────────────
+
+export interface CancelRequest {
+  id: string; childName: string; day: string; time: string; teacherId: string; center: 'eunpyeong' | 'uijeongbu';
+  minutesBefore: number; late: boolean; createdAt: string;
+}
+
+/** 승인 기다리는 취소 신청 — 수업 날짜 순 */
+export async function getCancelRequests(): Promise<CancelRequest[]> {
+  const { data, error } = await supabase.from('lesson_cancels').select('*').eq('status', 'requested').order('day').order('time');
+  if (error) throw error;
+  return (data ?? []).map(r => ({
+    id: r.id as string, childName: (r.child_name as string) ?? '', day: r.day as string, time: r.time as string, teacherId: r.teacher_id as string,
+    center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong', minutesBefore: (r.minutes_before as number) ?? 0, late: !!r.late, createdAt: r.created_at as string,
+  }));
+}
+
+/** 승인(true) / 거절(false) — 승인하면 보낼 알림 id 들(관리자 · 보호자). result: ok / not_found(수업이 이미 바뀜) / done(이미 처리됨) */
+export async function decideLessonCancel(id: string, approve: boolean): Promise<{ result: 'ok' | 'not_found' | 'done'; ids: string[] }> {
+  const { data, error } = await supabase.rpc('decide_lesson_cancel', { p_id: id, p_approve: approve });
+  if (error) throw error;
+  return data as { result: 'ok' | 'not_found' | 'done'; ids: string[] };
+}

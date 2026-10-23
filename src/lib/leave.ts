@@ -48,11 +48,17 @@ export async function addAndSendOutbox(list: Omit<OutboxMessage, 'id' | 'status'
     child_name: m.childName, phone: m.phone ?? null, vars: m.vars,
   }))).select('id');
   if (error) throw error;
+  return sendOutbox((data ?? []).map(r => r.id as string));
+}
+
+/** 이미 남긴 보낼 알림을 보낸다(솔라피) — 결과 건수 */
+export async function sendOutbox(ids: string[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
+  if (!ids.length) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };
   const { data: s } = await supabase.auth.getSession();
   const res = await fetch('/api/alimtalk/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(s.session ? { Authorization: `Bearer ${s.session.access_token}` } : {}) },
-    body: JSON.stringify({ ids: (data ?? []).map(r => r.id) }),
+    body: JSON.stringify({ ids }),
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(j.error ?? `오류 ${res.status}`);

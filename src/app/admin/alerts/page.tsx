@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdmin } from '@/components/AdminContext';
 import KakaoPreview from '@/components/KakaoPreview';
-import type { AdminAlert, AlertKind } from '@/lib/alerts';
-import { ALERTS_CHANGED, ALERT_KINDS, alertLink, getAdminAlerts, markAlertsRead } from '@/lib/alerts';
+import type { AdminAlert, AlertKind, CancelRequest } from '@/lib/alerts';
+import { ALERTS_CHANGED, ALERT_KINDS, alertLink, decideLessonCancel, getAdminAlerts, getCancelRequests, markAlertsRead } from '@/lib/alerts';
 import type { OutboxMessage, OutboxStatus } from '@/lib/leave';
-import { deleteOutbox, getOutbox } from '@/lib/leave';
+import { deleteOutbox, getOutbox, sendOutbox } from '@/lib/leave';
+import { getTeachers, parseYmd } from '@/lib/schedule';
 import type { MessageRow } from '@/lib/messages';
 import { getMessageTemplates, toRows } from '@/lib/messages';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -53,8 +54,68 @@ export default function AlertsPage() {
         {tabBtn('sent', '보호자 알림 내역')}
         {tabBtn('log', '관리 내역')}
       </div>
+      {tab === 'admin' && <CancelRequests />}
       {tab === 'admin' ? <AdminAlerts /> : tab === 'sent' ? <SentLog /> : <AdminLogs />}
     </div>
+  );
+}
+
+/** 승인 기다리는 수업 취소 — 보호자가 마이페이지에서 신청. 승인하면 시간표에서 취소 + 관리자·보호자에게 알림톡 */
+function CancelRequests() {
+  const [list, setList] = useState<CancelRequest[]>([]);
+  const [teachers, setTeachers] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const load = useCallback(() => { getCancelRequests().then(setList).catch(() => setList([])); }, []);
+  useEffect(() => { load(); getTeachers().then(t => setTeachers(Object.fromEntries(t.map(x => [x.id, x.name])))).catch(() => {}); }, [load]);
+  if (!list.length) return null;
+
+  const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+  const what = (r: CancelRequest) => { const d = parseYmd(r.day); return `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]}) ${r.time.replace(/^0/, '')} ${teachers[r.teacherId] ?? ''} 선생님`; };
+  const before = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`);
+  const decide = async (r: CancelRequest, approve: boolean) => {
+    const msg = approve
+      ? `${r.childName} ${what(r)} 수업 취소를 승인할까요?\n\n시간표에서 그 수업이 "취소 · 보호자"로 바뀌고 알림톡이 가요.\n· 관리자: 보호자 수업 취소 알림\n· 보호자: ${r.late ? '늦은 취소 안내 (수업 2시간 안 남았을 때 신청)' : '수업 취소 알림'}`
+      : `${r.childName} ${what(r)} 수업 취소 신청을 거절할까요?\n수업은 그대로 진행되고, 알림은 가지 않아요.`;
+    if (!(await askConfirm(msg, approve ? '승인' : '거절'))) return;
+    setBusy(r.id);
+    try {
+      const res = await decideLessonCancel(r.id, approve);
+      if (res.result === 'done') await showAlert('이미 처리된 신청이에요.');
+      else if (res.result === 'not_found') await showAlert('시간표에서 그 수업을 찾지 못했어요. 이미 바뀌었을 수 있어요.\n시간표 관리에서 확인한 뒤 거절로 정리해 주세요.');
+      else if (approve) {
+        try {
+          const s = await sendOutbox(res.ids);
+          await showAlert(`승인했어요.\n알림톡 — 보냄 ${s.sent}건${s.failed ? ` · 실패 ${s.failed}건` : ''}${s.skipped ? ` · 번호 없어 못 보냄 ${s.skipped}건` : ''}${s.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${s.waiting}건` : ''}\n(보호자 알림 내역에서 볼 수 있어요)`);
+        } catch (e) {
+          await showAlert(`승인했지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
+        }
+      } else await showAlert('거절했어요.');
+      load();
+    } catch (e) {
+      showAlert(`처리하지 못했어요 — SQL(supabase/lesson-cancel-approval.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section className="mb-6 rounded-xl border border-[#fde68a] bg-[#fffbeb] p-4">
+      <h2 className="text-[14px] text-[#92400e] mb-2">승인 기다리는 수업 취소 {list.length}건</h2>
+      <ul className="divide-y divide-[#fde68a]">
+        {list.map(r => (
+          <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[13px]">
+            <span className="text-[11px] px-1.5 rounded border border-[#e5e5e5] bg-white text-[#666]">{CENTER_LABEL[r.center]}</span>
+            <span className="font-medium text-[#27272a]">{r.childName}</span>
+            <span className="text-[#555]">{what(r)}</span>
+            <span className="text-[12px] text-[#888]">수업 {before(r.minutesBefore)} 전 신청</span>
+            {r.late && <span className="text-[11px] px-1.5 rounded bg-[#fee2e2] text-[#b91c1c]">늦은 취소</span>}
+            <span className="ml-auto flex gap-1.5">
+              <button onClick={() => decide(r, false)} disabled={busy === r.id} className="text-[12px] px-3 h-7 rounded-full border border-[#ddd] bg-white text-[#555] disabled:opacity-40">거절</button>
+              <button onClick={() => decide(r, true)} disabled={busy === r.id} className="text-[12px] px-3 h-7 rounded-full bg-[#e11d48] text-white disabled:opacity-40">{busy === r.id ? '처리 중…' : '승인'}</button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

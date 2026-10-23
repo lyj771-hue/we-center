@@ -1,7 +1,7 @@
 'use client';
 
 import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
-import { canCancel, cancelMyLesson, getMyLessons, isRealLesson } from '@/lib/mypage';
+import { canCancel, cancelKey, cancelMyLesson, getMyCancelRequests, getMyLessons, isRealLesson, withdrawMyLessonCancel } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import UsageCard from '@/components/UsageCard';
 import type { LedgerRow } from '@/lib/prepaid';
@@ -120,19 +120,37 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
     return !t || worksAt(t, l.center, weekday);
   };
 
-  // 수업 취소 — 시작 전이면 바로 취소(관리자 승인 없음). 고정 수업은 줄 + 취소로 남고, 신청한 빈타임은 다시 빈 시간이 된다
+  // 수업 취소 신청 — 센터(관리자)가 승인해야 취소된다(supabase/lesson-cancel-approval.sql). 승인 전에는 [철회]할 수 있다
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [requested, setRequested] = useState<Set<string>>(new Set());
+  const loadRequested = () => { getMyCancelRequests().then(setRequested).catch(() => {}); };
+  useEffect(() => { if (approved) loadRequested(); }, [approved, weekLessons]);
+  const label = (l: MyLesson) => { const dd = parseYmd(l.day); return `${dd.getMonth() + 1}/${dd.getDate()}(${DOW[dd.getDay()]}) ${l.time.replace(/^0/, '')} ${l.teacher} 선생님 수업`; };
   const cancel = async (l: MyLesson) => {
-    const dd = parseYmd(l.day);
-    if (!(await askConfirm(`${dd.getMonth() + 1}/${dd.getDate()}(${DOW[dd.getDay()]}) ${l.time.replace(/^0/, '')} ${l.teacher} 선생님 수업을 취소할까요?\n바로 취소되고, 되돌리려면 센터로 연락해 주세요.`))) return;
-    setCancelling(`${l.day}|${l.time}|${l.teacherId}`);
+    if (!(await askConfirm(`${label(l)} 취소를 신청할까요?\n센터에서 승인하면 취소돼요.`, '취소 신청'))) return;
+    setCancelling(cancelKey(l));
     try {
       const r = await cancelMyLesson(l);
-      if (r === 'ok') { await showAlert('취소했어요.'); onChanged?.(); }
-      else if (r === 'ok_late') { await showAlert('취소했어요.\n\n수업 시작까지 2시간이 남지 않았어요.\n다음부터는 수업 시작 최소 2시간 전에 취소해 주세요.'); onChanged?.(); }
-      else showAlert(r === 'too_late' ? '이미 시작한 수업이라 취소할 수 없어요. 센터로 연락해 주세요.' : '취소할 수 없는 수업이에요. 화면을 새로고침해 주세요.');
+      if (r === 'ok') await showAlert('취소를 신청했어요.\n센터에서 승인하면 알림톡으로 알려 드려요.');
+      else if (r === 'ok_late') await showAlert('취소를 신청했어요.\n\n수업 시작까지 2시간이 남지 않아 늦은 취소로 접수돼요.\n다음부터는 수업 시작 최소 2시간 전에 취소해 주세요.');
+      else if (r === 'already') await showAlert('이미 취소를 신청한 수업이에요.');
+      else await showAlert(r === 'too_late' ? '이미 시작한 수업이라 취소할 수 없어요. 센터로 연락해 주세요.' : '취소할 수 없는 수업이에요. 화면을 새로고침해 주세요.');
+      loadRequested();
     } catch (e) {
-      showAlert(`취소하지 못했어요. 잠시 후 다시 시도해 주세요.\n${(e as Error).message}`);
+      showAlert(`신청하지 못했어요. 잠시 후 다시 시도해 주세요.\n${(e as Error).message}`);
+    } finally {
+      setCancelling(null);
+    }
+  };
+  const withdraw = async (l: MyLesson) => {
+    if (!(await askConfirm(`${label(l)} 취소 신청을 철회할까요?\n수업은 그대로 진행돼요.`, '신청 철회'))) return;
+    setCancelling(cancelKey(l));
+    try {
+      const r = await withdrawMyLessonCancel(l);
+      await showAlert(r === 'ok' ? '취소 신청을 철회했어요.' : '이미 처리된 신청이에요. 화면을 새로고침해 주세요.');
+      loadRequested(); onChanged?.();
+    } catch (e) {
+      showAlert(`철회하지 못했어요.\n${(e as Error).message}`);
     } finally {
       setCancelling(null);
     }
@@ -206,12 +224,18 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                       {l.status === 'cancelled' && <span className="text-[11px] no-underline">취소</span>}
                       {((l.moved && l.note?.startsWith('취소')) || l.absent) && <span className="text-[11px] text-[#e11d48]">취소</span>}
                       {l.moved && l.note?.startsWith('휴무') && <span className="text-[11px] text-[#e11d48]">휴무</span>}
-                      {canCancel(l) && (
-                        <button type="button" onClick={() => cancel(l)} disabled={cancelling === `${l.day}|${l.time}|${l.teacherId}`}
-                          className="ml-auto text-[11px] px-2 py-0.5 rounded-full border border-[#e5e5e5] text-[#888] hover:border-[#e11d48] hover:text-[#e11d48] disabled:opacity-40">
-                          {cancelling === `${l.day}|${l.time}|${l.teacherId}` ? '취소 중…' : '취소'}
+                      {requested.has(cancelKey(l)) && l.status !== 'cancel_requested' && !l.moved && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded">취소 신청 중</span>}
+                      {canCancel(l) && (requested.has(cancelKey(l)) ? (
+                        <button type="button" onClick={() => withdraw(l)} disabled={cancelling === cancelKey(l)}
+                          className="ml-auto text-[11px] px-2 py-0.5 rounded-full border border-[#e5e5e5] text-[#888] hover:border-[#2563eb] hover:text-[#2563eb] disabled:opacity-40">
+                          {cancelling === cancelKey(l) ? '철회 중…' : '신청 철회'}
                         </button>
-                      )}
+                      ) : (
+                        <button type="button" onClick={() => cancel(l)} disabled={cancelling === cancelKey(l)}
+                          className="ml-auto text-[11px] px-2 py-0.5 rounded-full border border-[#e5e5e5] text-[#888] hover:border-[#e11d48] hover:text-[#e11d48] disabled:opacity-40">
+                          {cancelling === cancelKey(l) ? '신청 중…' : '취소'}
+                        </button>
+                      ))}
                     </div>
                     );
                   })}
