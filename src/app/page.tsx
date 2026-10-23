@@ -21,7 +21,7 @@ export default function HomePage() {
           <div className="flex items-end gap-3 sm:gap-6 mb-8 fade-up-d2">
             <p className="text-[14px] sm:text-[17px] text-[#555] leading-[2] max-w-[420px] min-w-0">
               {HOME.body.map((line, i) => (
-                <span key={i}>{bold(line)}{i < HOME.body.length - 1 && <br />}</span>
+                <span key={i} className={i < 3 ? 'text-[12px] sm:text-[17px]' : undefined}>{bold(line)}{i < HOME.body.length - 1 && <br />}</span>
               ))}
             </p>
             <img src="/tree-purple.png" alt="연보라 나무" className="shrink-0 h-[72px] sm:h-[120px] w-auto mb-[3px]" />
