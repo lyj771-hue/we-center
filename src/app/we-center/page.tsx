@@ -22,6 +22,8 @@ export default function WeCenterPage() {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 메인의 'We 의정부 센터' 칸(/we-center#uijeongbu)으로 오면 의정부 탭부터
+  useEffect(() => { if (window.location.hash === '#uijeongbu') setTab('uijeongbu'); }, []);
   const refresh = async () => setRooms(await getRooms(tab));
   useEffect(() => { refresh(); }, [tab]);
 

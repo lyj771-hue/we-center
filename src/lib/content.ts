@@ -21,10 +21,10 @@ export const HOME = {
     '',
     '우리도 서로 기대어 서요',
   ],
+  // 소개 글 아래 두 칸 — 누르면 We센터의 그 센터 탭으로
   quickLinks: [
-    { href: '/we-center',     label: 'We센터',    sub: '수색·의정부 공간 안내' },
-    { href: '/we-subjects',   label: 'We수업과목', sub: '치료 프로그램 소개' },
-    { href: '/location',      label: '오시는길',   sub: '찾아오시는 방법' },
+    { href: '/we-center#susaek',    label: 'We 수색 센터' },
+    { href: '/we-center#uijeongbu', label: 'We 의정부 센터' },
   ],
   valuesSectionLabel: 'We가 추구하는 가치',
   values: [

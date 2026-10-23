@@ -19,11 +19,10 @@ export default function HomePage() {
               <span key={i}>{line}{i < HOME.body.length - 1 && <br />}</span>
             ))}
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-[#d8d8d8] max-w-[580px] fade-up-d3">
-            {HOME.quickLinks.map(({ href, label, sub }) => (
-              <Link key={href} href={href} className="bg-white px-5 py-4 group hover:bg-[#f0f0ee] transition-colors">
-                <p className="text-[13px] font-medium text-[#0a0a0a] mb-1 group-hover:underline underline-offset-2">{label}</p>
-                <p className="text-[10px] text-[#aaa]">{sub}</p>
+          <div className="flex flex-col gap-px bg-[#d8d8d8] max-w-[890px] fade-up-d3">
+            {HOME.quickLinks.map(({ href, label }) => (
+              <Link key={href} href={href} className="bg-white px-5 py-4 text-left group hover:bg-[#f0f0ee] transition-colors">
+                <p className="text-[13px] font-medium text-[#0a0a0a] group-hover:underline underline-offset-2">{label}</p>
               </Link>
             ))}
           </div>
