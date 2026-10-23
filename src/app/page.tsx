@@ -24,7 +24,7 @@ export default function HomePage() {
                 <span key={i} className={i < 3 ? 'text-[12px] sm:text-[17px]' : undefined}>{bold(line)}{i < HOME.body.length - 1 && <br />}</span>
               ))}
             </p>
-            <img src="/tree-purple.png" alt="연보라 나무" className="shrink-0 h-[72px] sm:h-[120px] w-auto mb-[3px]" />
+            <img src="/tree-lavender.png" alt="라벤더 나무" className="shrink-0 h-[72px] sm:h-[120px] w-auto mb-[3px]" />
           </div>
           <div className="flex flex-col gap-px bg-[#d8d8d8] max-w-[890px] fade-up-d3">
             {HOME.quickLinks.map(({ href, label }) => (
