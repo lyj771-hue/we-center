@@ -12,7 +12,7 @@ type Item = { key: string; name: string; spec: MessageSpec };
 type Tpl = {
   templateId: string; name: string; status: string; categoryCode?: string; messageType?: string; emphasizeType?: string;
   imageId?: string | null; header?: string | null; highlight?: { title?: string; description?: string; imageId?: string | null } | null;
-  comments?: { content?: string; dateCreated?: string }[]; dateCreated?: string;
+  comments?: { content?: string; dateCreated?: string }[]; dateCreated?: string; isDeleted?: boolean;
 };
 
 async function guard(request: Request) {
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     if (!next) break;
   }
   return Response.json({
-    templates: list.map(t => ({
+    templates: list.filter(t => !t.isDeleted).map(t => ({
       templateId: t.templateId, name: t.name, status: t.status, dateCreated: t.dateCreated,
       comment: [...(t.comments ?? [])].reverse().find(c => c.content)?.content ?? '',
     })),
