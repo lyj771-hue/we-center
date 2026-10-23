@@ -12,7 +12,7 @@ export default function HomePage() {
             {HOME.eyebrow}
           </p>
           <h1 className="font-serif font-black text-[var(--brand)] text-[28px] sm:text-[40px] lg:text-[52px] leading-[1.1] tracking-[-0.03em] mb-8 fade-up-d1">
-            {HOME.headline[0]}<br />{HOME.headline[1]}
+            {HOME.headline.map((line, i) => <span key={i}>{i > 0 && <br />}{line}</span>)}
           </h1>
           <p className="text-[15px] text-[#555] leading-[2] max-w-[420px] mb-16 fade-up-d2">
             {HOME.body.map((line, i) => (
