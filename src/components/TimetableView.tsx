@@ -968,6 +968,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           onClose={() => setEditing(null)}
           onSave={(input, weekly) => stage(editing, input, weekly)}
           onRestoreCancel={mode === 'day' ? () => restoreCancel(editing) : undefined}
+          openBusy={mode === 'day' && editing.side === 'fixed' && !['empty', 'none'].includes(cellOf(view.open, editing.teacher.id, editing.time).status)}
         /></Portal>
       )}
 
@@ -1129,7 +1130,7 @@ function ChildPicker({ picking, kids, onPick, onSave, onMore, onClose }: {
   );
 }
 
-function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, onRestoreCancel }: {
+function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, onRestoreCancel, openBusy }: {
   editing: Editing;
   /** 이 센터에서 쓰는 결제 (수색 굳센 / 의정부 장맞춤) */
   methods: typeof PAY_METHODS;
@@ -1141,14 +1142,18 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
   onSave: (input: CellInput | 'reset', from?: boolean) => void;
   /** 보호자가 취소한 수업 되돌리기 (날짜별 화면) */
   onRestoreCancel?: () => void;
+  /** 날짜별 고정 칸 — 같은 시간 빈타임에 이미 수업(아이·?·x)이 있으면 고정 아이를 다시 살릴 수 없다 */
+  openBusy?: boolean;
 }) {
+  // 빈타임에 수업이 있는데 고정 아이를 살리려 할 때
+  const blockedByOpen = () => showAlert('같은 시간 빈타임에 다른 수업이 있어서 고정 아이 수업을 살릴 수 없어요.\n먼저 빈타임 칸을 비운 뒤 다시 해 주세요.');
   const { teacher, time, side, cell } = editing;
   // 보호자가 마이페이지에서 취소한 칸 — 줄 + "취소 · 보호자"
   const guardianCancelled = cell.status === 'child' && cell.moved && !!cell.note?.startsWith('취소');
   const restoreBox = guardianCancelled && onRestoreCancel ? (
     <div className="rounded-lg bg-[#fef2f2] px-3 py-2.5 space-y-2">
       <p className="text-[12px] leading-[1.7] text-[#b91c1c]">{cell.note?.includes('보호자') ? '보호자가 마이페이지에서 취소한 수업이에요.' : '취소된 수업이에요(빈타임에 다른 수업을 넣어 취소됨).'} 되돌린 뒤 [스케줄 변경 완료]를 눌러야 반영돼요. (취소할 때 지워진 '선택' 결제방식은 다시 골라 주세요)</p>
-      <button onClick={onRestoreCancel} className="text-[13px] px-3 py-1.5 rounded-full border border-[#b91c1c] text-[#b91c1c] bg-white hover:bg-[#fff5f5]">취소 되돌리기 (취소 전으로)</button>
+      <button onClick={() => (openBusy ? blockedByOpen() : onRestoreCancel?.())} className="text-[13px] px-3 py-1.5 rounded-full border border-[#b91c1c] text-[#b91c1c] bg-white hover:bg-[#fff5f5]">취소 되돌리기 (취소 전으로)</button>
     </div>
   ) : null;
   // 이름 칸은 "이름숫자"(동명이인 구분)로 보여 주고 고른다 — 저장할 땐 이름과 숫자를 나눠 둔 명단 아이로
@@ -1230,7 +1235,7 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
             </button>
             {/* 이 날만 결석 — 고정 수업은 그대로, 그날 칸에만 결석(x) */}
             {mode === 'day' && cell.status === 'child' && !guardianCancelled && (
-              <button onClick={() => onSave({ status: 'child', childId: cell.childId ?? null, name: cell.name, payment: cell.payment, kind: cell.kind ?? null, absent: !cell.absent, moved: cell.moved, note: cell.note })}
+              <button onClick={() => (cell.absent && openBusy ? blockedByOpen() : onSave({ status: 'child', childId: cell.childId ?? null, name: cell.name, payment: cell.payment, kind: cell.kind ?? null, absent: !cell.absent, moved: cell.moved, note: cell.note }))}
                 className={`${chip} ${cell.absent ? 'border-[#ddd] text-[#555]' : 'border-[#a1a1aa] text-[#52525b]'}`}>
                 {cell.absent ? '결석 취소' : '이 날만 결석'}
               </button>

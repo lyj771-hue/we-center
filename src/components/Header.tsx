@@ -53,7 +53,7 @@ export default function Header() {
     { label: '선생님 시간표', items: [{ href: '/teacher/timetable', label: '수색' }, { href: '/teacher/timetable/uijeongbu', label: '의정부' }] },
     // 수업 현황 — 전체 관리자만 (직원 계정엔 안 보인다)
     ...(canSeeStats ? [{ label: '수업 현황', items: [{ href: '/admin/dashboard', label: '수업 현황' }] }] : []),
-    { label: '알림 메시지', items: [{ href: '/admin/messages', label: '메시지 모양' }, { href: '/admin/alimtalk-test', label: '테스트 보내기' }] },
+    { label: '알림 메시지', items: [{ href: '/admin/messages', label: '메시지 모양' }, { href: '/admin/alimtalk-templates', label: '심사 올리기' }, { href: '/admin/alimtalk-test', label: '테스트 보내기' }] },
     { label: '알림', items: [{ href: '/admin/alerts', label: '알림' }] },
   ];
   // 관리자 알림 — 아직 안 본 수(빨간 숫자). 1분마다, 알림 화면에서 확인하면 바로 새로
