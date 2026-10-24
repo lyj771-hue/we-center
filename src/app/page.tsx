@@ -9,8 +9,8 @@ export default function HomePage() {
     <div>
       {/* ── Hero ────────────────────────────────────── */}
       {/* 맨 위 작은 글씨 위 여백은 짧게(위에 붙여서 시작) */}
-      <section className="min-h-[calc(100svh-240px)] flex flex-col justify-start bg-[#f5f5f3] px-8 pt-5 pb-16 overflow-hidden">
-        <div className="max-w-5xl mx-auto w-full">
+      <section className="min-h-[calc(100svh-240px)] flex flex-col justify-start bg-[#f5f5f3] px-8 lg:px-14 pt-5 pb-16 overflow-hidden">
+        <div className="w-full">
           <p className="text-[11px] tracking-[0.3em] text-[#aaa] mb-4 fade-up">
             {HOME.eyebrow}
           </p>
@@ -29,7 +29,7 @@ export default function HomePage() {
               </p>
             </div>
           </div>
-          <div className="flex flex-col gap-px bg-[#d8d8d8] max-w-[890px] fade-up-d3">
+          <div className="flex flex-col gap-px bg-[#d8d8d8] fade-up-d3">
             {HOME.quickLinks.map(({ href, label }) => (
               <Link key={href} href={href} className="bg-white px-5 py-4 text-left group hover:bg-[#f0f0ee] transition-colors">
                 <p className="text-[13px] font-medium text-[#0a0a0a] group-hover:underline underline-offset-2">{label}</p>
