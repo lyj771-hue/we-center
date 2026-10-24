@@ -29,6 +29,10 @@ interface LocationPage {
 
 const DEFAULT_NAMES = ['We 수색 센터', 'We 의정부 센터'];
 
+// 지도 사진은 화면에서 같은 비율(가로 1200 : 세로 686)로 잘라 보인다 — 누르면 크게 볼 때는 사진 전체.
+// 자르는 기준: 수색은 위쪽을 잘라 냄(아래 맞춤), 의정부는 센터 표시가 위쪽이라 아래쪽을 잘라 냄(위 맞춤)
+const MAP_POS = ['50% 100%', '50% 0%'];
+
 // 예전 센터 이름 → 새 이름 (관리자가 다음에 저장하면 새 이름으로 굳는다)
 const RENAMED: Record<string, string> = { '은평구 수색 센터': 'We 수색 센터', '은평구 수색센터': 'We 수색 센터', '의정부 센터': 'We 의정부 센터', '의정부센터': 'We 의정부 센터' };
 
@@ -208,8 +212,8 @@ export default function LocationPageView() {
               </div>
               {s.imageUrl && (
                 <button type="button" onClick={() => setViewing(s.imageUrl)} aria-label={`${s.name} 지도 크게 보기`}
-                  className="block w-full overflow-hidden bg-[#f2f2f2] cursor-zoom-in">
-                  <img src={s.imageUrl} alt={`${s.name} 지도`} className="w-full h-auto block" />
+                  className="block w-full aspect-[1200/686] overflow-hidden bg-[#f2f2f2] cursor-zoom-in">
+                  <img src={s.imageUrl} alt={`${s.name} 지도`} className="w-full h-full block object-cover" style={{ objectPosition: MAP_POS[idx] ?? '50% 50%' }} />
                 </button>
               )}
               {s.mapUrl && (
