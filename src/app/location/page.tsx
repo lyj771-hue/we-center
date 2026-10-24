@@ -122,7 +122,7 @@ export default function LocationPageView() {
   };
 
   return (
-    <PageShell page="location" heading={LOCATION.heading} subtext={LOCATION.subtext} defaultWidth={768}>
+    <PageShell page="location" heading={LOCATION.heading} subtext={LOCATION.subtext} defaultWidth={1024}>
     <div className="max-w-[var(--page-w)] mx-auto px-6 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
       <PageTitle
         eyebrow={LOCATION.eyebrow}
