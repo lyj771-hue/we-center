@@ -201,7 +201,7 @@ export default function LocationPageView() {
           {page.sections.map((s, idx) => idx === tab && (
             <section key={idx}>
               <h2 className="font-serif font-bold text-[24px] md:text-[30px] leading-snug tracking-tight text-[var(--brand)] mb-4">{s.name}</h2>
-              <div className="text-[14px] leading-[2] text-[#444] whitespace-pre-wrap mb-6">
+              <div className="text-[11px] leading-[2] text-[#444] whitespace-pre-wrap mb-6">
                 {s.info || <span className="text-[#ccc]">정보가 없습니다</span>}
               </div>
               {s.imageUrl && (
@@ -212,7 +212,7 @@ export default function LocationPageView() {
               )}
               {s.mapUrl && (
                 <a href={s.mapUrl} target="_blank" rel="noopener noreferrer"
-                  className="mt-4 inline-flex items-center gap-2 bg-[var(--brand)] text-white text-[14px] px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity">
+                  className="mt-4 inline-flex items-center gap-2 brand-gradient text-white text-[14px] px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity">
                   <span className="font-black text-[13px] leading-none bg-white text-[var(--brand)] w-5 h-5 rounded-[4px] flex items-center justify-center" style={{ fontFamily: 'Arial, sans-serif', WebkitTextStroke: 0 }}>N</span>
                   네이버 지도에서 보기
                 </a>

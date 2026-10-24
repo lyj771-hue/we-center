@@ -37,8 +37,8 @@ function NavLabel({ href, label }: { href: string; label: string }) {
 }
 
 // 선생님(카카오 로그인 후 선생님 인증) — 시간표 보기
-// 메뉴 글씨 색 — 앞에서 뒤로 갈수록: 보라색 → 진한 파랑 그라데이션
-const NAV_FROM = [0x9b, 0x6b, 0xdb], NAV_TO = [0x0b, 0x3b, 0xb8];
+// 메뉴 글씨 색 — 앞에서 뒤로 갈수록: 보라색 → 브랜드 파랑(#087BEA) 그라데이션 (네이버 지도 버튼도 같은 색: globals.css .brand-gradient)
+const NAV_FROM = [0x9b, 0x6b, 0xdb], NAV_TO = [0x08, 0x7b, 0xea];
 function navColor(i: number, n: number) {
   const t = n > 1 ? i / (n - 1) : 0.5;
   return `rgb(${NAV_FROM.map((v, k) => Math.round(v + (NAV_TO[k] - v) * t)).join(',')})`;
