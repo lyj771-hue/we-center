@@ -212,7 +212,7 @@ export default function LocationPageView() {
               </div>
               {s.imageUrl && (
                 <button type="button" onClick={() => setViewing(s.imageUrl)} aria-label={`${s.name} 지도 크게 보기`}
-                  className="block w-full aspect-[1200/686] overflow-hidden bg-[#f2f2f2] cursor-zoom-in">
+                  className="block w-full md:w-1/2 aspect-[1200/686] overflow-hidden bg-[#f2f2f2] cursor-zoom-in">
                   <img src={s.imageUrl} alt={`${s.name} 지도`} className="w-full h-full block object-cover" style={{ objectPosition: MAP_POS[idx] ?? '50% 50%' }} />
                 </button>
               )}
