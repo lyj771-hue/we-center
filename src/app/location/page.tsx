@@ -124,7 +124,7 @@ export default function LocationPageView() {
         eyebrow={LOCATION.eyebrow}
         hideHeading
         subtextAsHeading
-        className="mb-14"
+        className="mb-6"
         actions={isAdmin && !editing && (
           <button onClick={() => { setForm(page); setEditing(true); }}
             className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
