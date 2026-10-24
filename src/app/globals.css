@@ -178,13 +178,6 @@ body {
    좌표·크기는 원본 단위로 적고, .scrap-stage를 transform으로 1/3 축소한다.
    (CSS zoom은 아이폰 사파리에서 글자 크기·터치 위치가 어긋나서 쓰지 않는다)
    .scrap-frame이 축소된 뒤의 실제 크기 자리를 잡고, 높이는 컴포넌트가 정한다. */
-.scrapbook-bg {
-  background-color: #f7f7f7;
-  background-image:
-    linear-gradient(#ebebeb 1px, transparent 1px),
-    linear-gradient(90deg, #ebebeb 1px, transparent 1px);
-  background-size: 28px 28px;
-}
 /* 한 칸의 폭은 왼쪽 메모 끝(-690)부터 오른쪽 사진 끝(+600)까지만(원본 1310) — 옆 칸과 촘촘히 붙는다 */
 .scrap-frame {
   width: 436.67px;          /* 1310 ÷ 3 */

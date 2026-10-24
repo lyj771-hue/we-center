@@ -9,12 +9,13 @@ export const metadata: Metadata = { title: 'We슐랭' };
 export default function WeSlangPage() {
   return (
     <>
-      <div className="scrapbook-bg pt-12 pb-10 md:pt-10">
+      <div className="pt-4 pb-10">
         <h1 className="sr-only">{WE_SLANG.heading}</h1>
-        {/* 맨 위 — We슐랭 작은 로고(배너 높이의 1/3) + We슐랭(WECHELIN) 배너 */}
+        {/* 맨 위 — We슐랭 로고 띠(배너 높이의 1/3) + We슐랭(WECHELIN) 배너. 맨 위 여백 = 그림 사이 여백 */}
         <div className="px-4 mb-10 md:mb-14">
-          <div className="w-full max-w-[720px] mx-auto aspect-[16/3] mb-4">
-            <img src="/weslang/wechelin-icon.png" alt="" aria-hidden className="block h-full w-auto mx-auto rounded-md" />
+          {/* 로고는 가운데, 양옆은 로고와 같은 빨강으로 채워 배너 폭에 맞춘다 */}
+          <div className="w-full max-w-[720px] mx-auto aspect-[16/3] mb-4 bg-[#b71f2f] rounded-2xl overflow-hidden">
+            <img src="/weslang/wechelin-icon.png" alt="" aria-hidden className="block h-full w-auto mx-auto" />
           </div>
           <img src="/weslang/wechelin-banner.jpg" alt="We슐랭 — 센터 근처 맛있는 가게" className="block w-full max-w-[720px] mx-auto rounded-2xl shadow-[0_2px_6px_rgba(0,0,0,0.06),0_10px_24px_rgba(0,0,0,0.05)]" />
         </div>
