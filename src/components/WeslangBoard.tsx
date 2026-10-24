@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import PhotoViewer from './PhotoViewer';
+import Portal from './Portal';
 import { Post } from '@/lib/types';
 import { extractImages } from '@/lib/postText';
 import { layoutPhotos, place } from './ThoughtsScrapbook';
@@ -13,10 +14,11 @@ const STAGE_HEIGHT = 30 + 425 + 100;
 const PHOTO_SHIFT = 70;
 
 // We슐랭 — 재활생각 스크랩북 모양을 빌려 쓴다. 가게 하나가 한 줄(가운데 하나씩).
-// 가운데 큰 사진 = 본문 첫 사진(누르면 게시글로), 오른쪽 작은 사진 = 나머지 사진(누르면 크게), 왼쪽 메모 = 가게 이름 · 위치.
+// 가운데 큰 사진 = 본문 첫 사진(누르면 게시글로), 오른쪽 작은 사진 = 나머지 사진(누르면 크게), 왼쪽 메모 = 가게 이름 · 위치(누르면 크게 — 크게 볼 때만 주소 복사).
 
 function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; basePath: string; isAdmin: boolean; onDelete: (id: string) => void }) {
   const [viewing, setViewing] = useState<string | null>(null);
+  const [noteOpen, setNoteOpen] = useState(false);
   const images = extractImages(post.content);
   const main = post.imageUrl ?? images[0];
   const rest = (post.imageUrl ? images : images.slice(1));
@@ -55,18 +57,57 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
         {viewing && <PhotoViewer src={viewing} onClose={() => setViewing(null)} />}
 
         {/* 왼쪽 메모 — 가게 이름 · 위치 */}
-        <div className="scrap-piece scrap-note" style={place(-690, 275, -2, 587)}>
+        <div className="scrap-piece scrap-note cursor-zoom-in" style={place(-690, 275, -2, 587)}
+          role="button" tabIndex={0} aria-label={`${post.title} 메모 크게 보기`}
+          onClick={() => setNoteOpen(true)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setNoteOpen(true); } }}>
           <span aria-hidden="true" className="absolute -top-[28px] left-[56px] text-[38px] select-none">📌</span>
           <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[2.2]">{post.title}</h2>
           <div className="mt-3 flex items-center gap-4">
             {post.location && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">📍 {post.location}</span>}
             {isAdmin && (
-              <button type="button" onClick={() => onDelete(post.id)} className="ml-auto px-3 py-2 text-[33px] text-[#aaa] hover:text-red-400 transition-colors">삭제</button>
+              <button type="button" onClick={e => { e.stopPropagation(); onDelete(post.id); }} className="ml-auto px-3 py-2 text-[33px] text-[#aaa] hover:text-red-400 transition-colors">삭제</button>
             )}
           </div>
         </div>
       </div>
+      {noteOpen && <Portal><NoteViewer title={post.title} location={post.location} onClose={() => setNoteOpen(false)} /></Portal>}
     </article>
+  );
+}
+
+/** 메모 크게 보기 — 가게 이름 · 위치. 위치 옆 복사 아이콘(크게 볼 때만) */
+function NoteViewer({ title, location, onClose }: { title: string; location?: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (!location) return;
+    try { await navigator.clipboard.writeText(location); }
+    catch {
+      // 클립보드를 못 쓰는 브라우저 — 숨은 글 칸으로 복사
+      const t = document.createElement('textarea'); t.value = location; document.body.appendChild(t); t.select();
+      try { document.execCommand('copy'); } finally { t.remove(); }
+    }
+    setCopied(true); setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40 px-5" onClick={onClose}>
+      <div className="relative w-full max-w-[420px] rounded-md bg-[#f2f2f3] px-6 pt-8 pb-6 shadow-2xl -rotate-1" onClick={e => e.stopPropagation()}>
+        <span aria-hidden="true" className="absolute -top-[16px] left-[28px] text-[26px] select-none">📌</span>
+        <button type="button" onClick={onClose} aria-label="닫기" className="absolute top-2 right-3 text-[22px] leading-none text-[#999] hover:text-[#333]">×</button>
+        <h2 className="break-keep text-[var(--brand)] text-[22px] leading-[1.7]">{title}</h2>
+        {location && (
+          <div className="mt-3 flex items-start gap-2 text-[16px] text-[#52525b]">
+            <span className="break-keep leading-[1.7]">📍 {location}</span>
+            <button type="button" onClick={copy} aria-label="주소 복사" title="주소 복사"
+              className="shrink-0 mt-0.5 inline-flex items-center gap-1 rounded-md border border-[#d4d4d8] bg-white px-2 py-1 text-[12px] text-[#52525b] hover:bg-[#fafafa]">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              {copied ? '복사됨' : '복사'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
