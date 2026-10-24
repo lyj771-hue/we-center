@@ -9,7 +9,7 @@ export default function HomePage() {
     <div>
       {/* ── Hero ────────────────────────────────────── */}
       {/* 맨 위 작은 글씨 위 여백은 짧게(위에 붙여서 시작) */}
-      <section className="min-h-[calc(100svh-240px)] flex flex-col justify-start bg-[#f5f5f3] px-8 pt-5 pb-16">
+      <section className="min-h-[calc(100svh-240px)] flex flex-col justify-start bg-[#f5f5f3] px-8 pt-5 pb-16 overflow-hidden">
         <div className="max-w-5xl mx-auto w-full">
           <p className="text-[11px] tracking-[0.3em] text-[#aaa] mb-4 fade-up">
             {HOME.eyebrow}
@@ -21,7 +21,7 @@ export default function HomePage() {
               풀밭 밑을 마지막 줄 글씨 밑에 맞춘다 */}
           <div className="mb-8 fade-up-d2">
             <div className="relative inline-block max-w-[420px]">
-              <img src="/tree-wide-b.png" alt="" aria-hidden className="pointer-events-none select-none absolute left-[calc(100%-6px)] bottom-[3px] h-[58px] sm:h-[120px] w-auto max-w-none" />
+              <img src="/tree-field.png" alt="" aria-hidden className="pointer-events-none select-none absolute left-[calc(100%+4px)] bottom-0 h-[105px] sm:h-[160px] w-auto max-w-none opacity-80" />
               <p className="relative text-[14px] sm:text-[17px] text-[#555] leading-[2]">
                 {HOME.body.map((line, i) => (
                   <span key={i} className={i < 3 ? 'text-[12px] sm:text-[17px]' : undefined}>{bold(line)}{i < HOME.body.length - 1 && <br />}</span>
