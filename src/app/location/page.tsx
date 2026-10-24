@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { getLocation, saveLocation } from '@/lib/store';
 import { uploadImage } from '@/lib/imageUpload';
-import { LOCATION } from '@/lib/content';
+import { LOCATION, WE_CENTER } from '@/lib/content';
 import PageShell, { PageTitle } from '@/components/PageShell';
 import PhotoViewer from '@/components/PhotoViewer';
 
@@ -66,6 +66,17 @@ export default function LocationPageView() {
   const [form, setForm] = useState<LocationPage>(page);
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
+  // 센터 탭 — We센터 페이지처럼 수색(0) / 의정부(1). 주소 끝 #susaek · #uijeongbu 로도 고른다
+  const [tab, setTab] = useState(0);
+  useEffect(() => {
+    const fromHash = () => {
+      if (window.location.hash === '#uijeongbu') setTab(1);
+      else if (window.location.hash === '#susaek') setTab(0);
+    };
+    fromHash();
+    window.addEventListener('hashchange', fromHash);
+    return () => window.removeEventListener('hashchange', fromHash);
+  }, []);
   const fileRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -174,8 +185,20 @@ export default function LocationPageView() {
           </div>
         </div>
       ) : (
-        <div className="space-y-16 md:space-y-20">
-          {page.sections.map((s, idx) => (
+        <div>
+          <div role="tablist" className="flex items-end mb-10 border-b border-[#e5e5e5]">
+            {WE_CENTER.centers.map((c, i) => (
+              <button key={c.id} type="button" role="tab" aria-selected={tab === i} onClick={() => setTab(i)}
+                className={[
+                  'relative pb-3 mr-8 text-[14px] tracking-wide transition-colors',
+                  tab === i ? 'text-[#0a0a0a] font-medium' : 'text-[#aaa] hover:text-[#0a0a0a]',
+                ].join(' ')}>
+                {c.label}
+                {tab === i && <span className="absolute bottom-0 left-0 w-full h-[1.5px] bg-[#0a0a0a]" />}
+              </button>
+            ))}
+          </div>
+          {page.sections.map((s, idx) => idx === tab && (
             <section key={idx}>
               <h2 className="font-serif font-bold text-[24px] md:text-[30px] leading-snug tracking-tight text-[var(--brand)] mb-4">{s.name}</h2>
               <div className="text-[14px] leading-[2] text-[#444] whitespace-pre-wrap mb-6">
