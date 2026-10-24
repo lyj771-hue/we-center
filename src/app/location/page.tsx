@@ -201,8 +201,9 @@ export default function LocationPageView() {
           {page.sections.map((s, idx) => idx === tab && (
             <section key={idx}>
               <h2 className="font-serif font-bold text-[24px] md:text-[30px] leading-snug tracking-tight text-[var(--brand)] mb-4">{s.name}</h2>
-              <div className="text-[11px] leading-[2] text-[#444] whitespace-pre-wrap mb-6">
-                {s.info || <span className="text-[#ccc]">정보가 없습니다</span>}
+              {/* 줄마다 따로 — 도로명·지번 줄 사이를 넉넉히 */}
+              <div className="text-[11px] leading-[2] text-[#444] whitespace-pre-wrap mb-6 space-y-2">
+                {s.info ? s.info.split('\n').map((line, i) => <p key={i}>{line || '\u00a0'}</p>) : <span className="text-[#ccc]">정보가 없습니다</span>}
               </div>
               {s.imageUrl && (
                 <button type="button" onClick={() => setViewing(s.imageUrl)} aria-label={`${s.name} 지도 크게 보기`}
