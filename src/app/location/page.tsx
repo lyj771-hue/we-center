@@ -27,7 +27,10 @@ interface LocationPage {
   sections: CenterSection[];
 }
 
-const DEFAULT_NAMES = ['은평구 수색센터', '의정부센터'];
+const DEFAULT_NAMES = ['We 수색 센터', 'We 의정부 센터'];
+
+// 예전 센터 이름 → 새 이름 (관리자가 다음에 저장하면 새 이름으로 굳는다)
+const RENAMED: Record<string, string> = { '은평구 수색 센터': 'We 수색 센터', '은평구 수색센터': 'We 수색 센터', '의정부 센터': 'We 의정부 센터', '의정부센터': 'We 의정부 센터' };
 
 function parsePage(content: string, imageUrls: string[]): LocationPage {
   try {
@@ -36,7 +39,7 @@ function parsePage(content: string, imageUrls: string[]): LocationPage {
       return {
         heading: parsed.heading ?? LOCATION.heading,
         subtext: parsed.subtext ?? LOCATION.subtext,
-        sections: parsed.sections as CenterSection[],
+        sections: (parsed.sections as CenterSection[]).map(s => ({ ...s, name: RENAMED[s.name] ?? s.name })),
       };
     }
   } catch {
@@ -109,7 +112,7 @@ export default function LocationPageView() {
       <PageTitle
         eyebrow={LOCATION.eyebrow}
         hideHeading
-        className="mb-12 md:mb-14"
+        className="mb-6"
         actions={isAdmin && !editing && (
           <button onClick={() => { setForm(page); setEditing(true); }}
             className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
