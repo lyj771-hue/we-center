@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { ETC } from '@/lib/content';
 import PageShell, { PageTitle } from '@/components/PageShell';
 
-export const metadata: Metadata = { title: '기타' };
+export const metadata: Metadata = { title: 'We당근당근' };
 
 export default function EtcPage() {
   return (
