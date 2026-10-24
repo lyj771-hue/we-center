@@ -63,7 +63,7 @@ function parseLegacySections(content: string, imageUrls: string[]): CenterSectio
   ];
 }
 
-/** 주소 한 줄 복사 — 글 끝(예: "(2층)") 바로 옆에 붙는 아이콘 + 아래 작은 파란 "복사".
+/** 주소 한 줄 복사 — 글 끝(예: "(2층)") 바로 옆에 붙는 아이콘 + 오른쪽 작은 파란 "복사".
     앞의 "(도로명)"·"(지번)" 표시는 빼고 주소만 복사, 누르면 잠깐 "복사됨" */
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -78,11 +78,11 @@ function CopyButton({ text }: { text: string }) {
   };
   return (
     <button type="button" onClick={copy} aria-label="주소 복사"
-      className="ml-1.5 inline-flex flex-col items-center align-middle leading-none text-[#999] hover:text-[#0a0a0a] transition-colors">
+      className="ml-1.5 inline-flex items-center gap-0.5 align-middle leading-none text-[#999] hover:text-[#0a0a0a] transition-colors">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
       </svg>
-      <span className="mt-0.5 text-[9px] text-[var(--brand)] whitespace-nowrap">{copied ? '복사됨' : '복사'}</span>
+      <span className="text-[9px] text-[var(--brand)] whitespace-nowrap">{copied ? '복사됨' : '복사'}</span>
     </button>
   );
 }
