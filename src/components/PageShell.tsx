@@ -130,10 +130,12 @@ interface TitleProps {
   hideHeading?: boolean;
   /** 소개 문구를 파란 큰 제목 모양으로 (오시는길 — 제목은 숨기고 소개 문구가 제목 자리) */
   subtextAsHeading?: boolean;
+  /** 제목 글자 색 (기본은 사이트 파란색) — We당근당근은 주황 */
+  headingColor?: string;
 }
 
 /** 페이지 제목 + 소개 문구. 관리자에게는 "제목·폭 수정" 버튼이 보인다 */
-export function PageTitle({ eyebrow, variant = 'default', className = '', actions, hideHeading = false, subtextAsHeading = false }: TitleProps) {
+export function PageTitle({ eyebrow, variant = 'default', className = '', actions, hideHeading = false, subtextAsHeading = false, headingColor }: TitleProps) {
   const { heading, subtext, openEditor } = useContext(PageCtx);
   const { isAdmin } = useAdmin();
   const editBtn = isAdmin && (
@@ -159,7 +161,7 @@ export function PageTitle({ eyebrow, variant = 'default', className = '', action
       {eyebrow && <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] mb-5">{eyebrow}</p>}
       <div className="flex items-end justify-between gap-6">
         <div className="min-w-0">
-          <h1 className={hideHeading ? 'sr-only' : `display-heading ${subtext ? 'mb-3' : ''}`}>{heading}</h1>
+          <h1 className={hideHeading ? 'sr-only' : `display-heading ${subtext ? 'mb-3' : ''}`} style={headingColor ? { color: headingColor } : undefined}>{heading}</h1>
           {subtext && <p className={subtextAsHeading ? 'display-heading whitespace-pre-line' : 'text-[14px] text-[#666] leading-[2] whitespace-pre-line'}>{subtext}</p>}
         </div>
         {(editBtn || actions) && (

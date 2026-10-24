@@ -9,6 +9,7 @@ import { getAllPosts, addPost, deletePost } from '@/lib/store';
 import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
 import WeslangBoard from './WeslangBoard';
+import CarrotBoard from './CarrotBoard';
 
 const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
   ssr: false,
@@ -18,8 +19,8 @@ const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
 interface Props {
   category: Category;
   basePath: string;
-  /** 'notes': 메모 보드(We재활생각), 'scrapbook': 스크랩북, 'weslang': We슐랭(가운데 사진 하나씩), 'list': 목록(공지사항·기타) */
-  variant?: 'list' | 'notes' | 'scrapbook' | 'weslang';
+  /** 'notes': 메모 보드(We재활생각), 'scrapbook': 스크랩북, 'weslang': We슐랭(가운데 사진 하나씩), 'carrot': We당근당근(당근마켓 목록 모양), 'list': 목록(공지사항) */
+  variant?: 'list' | 'notes' | 'scrapbook' | 'weslang' | 'carrot';
   /** notes 모드에서 맨 앞에 고정할 메모 */
   pinnedNote?: PinnedNote;
 }
@@ -56,7 +57,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
   return (
     <section className="fade-up">
       {/* Header row — 메모 보드·스크랩북에선 관리자일 때만 (작성 버튼) */}
-      {(variant === 'list' || isAdmin) && (
+      {(variant === 'list' || (isAdmin && variant !== 'carrot')) && (
         <div className={`flex items-center mb-10 ${variant === 'list' ? 'justify-between' : 'justify-end'}`}>
           {variant === 'list' && (
             <p className="text-[11px] tracking-[0.2em] text-[#aaa]">
@@ -126,7 +127,9 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       )}
 
       {/* List */}
-      {variant === 'weslang' ? (
+      {variant === 'carrot' ? (
+        <CarrotBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} onWrite={() => setEditing(true)} />
+      ) : variant === 'weslang' ? (
         <WeslangBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
       ) : variant === 'scrapbook' ? (
         <ThoughtsScrapbook posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />

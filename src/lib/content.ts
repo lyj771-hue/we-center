@@ -91,7 +91,7 @@ export const NOTICES = {
 // ── 기타 (/etc) ───────────────────────────────
 export const ETC = {
   eyebrow: 'We당근당근',
-  heading: '그 밖의 이야기들',
+  heading: '재활용품 당근해드려요',
   subtext: '분류가 어렵거나 다양한 내용을 자유롭게 올려두는 공간입니다.',
 };
 
