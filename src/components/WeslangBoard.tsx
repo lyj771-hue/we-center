@@ -59,7 +59,7 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
           <span aria-hidden="true" className="absolute -top-[28px] left-[56px] text-[38px] select-none">📌</span>
           <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[2.2]">{post.title}</h2>
           <div className="mt-3 flex items-center gap-4">
-            {post.location && <span className="text-[#52525b] text-[24px] break-keep">📍 {post.location}</span>}
+            {post.location && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">📍 {post.location}</span>}
             {isAdmin && (
               <button type="button" onClick={() => onDelete(post.id)} className="ml-auto px-3 py-2 text-[33px] text-[#aaa] hover:text-red-400 transition-colors">삭제</button>
             )}

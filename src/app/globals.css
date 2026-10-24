@@ -257,6 +257,10 @@ body {
   .scrap-body { padding-right: 90px; }   /* 안쪽으로 모인 사진이 본문을 가리지 않게 */
   .scrap-note { left: calc(var(--cx) - 440px); width: 360px; }   /* 화면 안에 들어오고 더보기는 덮지 않게 */
   .scrap-note-title { font-size: 22px; }   /* 좁은 메모에 맞게 제목을 작게 */
+  /* We슐랭 — 메모를 더 크게·화면 왼쪽 끝 가까이, 글씨도 조금 크게 */
+  .scrap-lg .scrap-note { left: calc(var(--cx) - 525px); width: 450px; padding: 28px 24px 26px; }
+  .scrap-lg .scrap-note-title { font-size: 30px; line-height: 1.8; }
+  .scrap-lg .scrap-note-loc { font-size: 28px; }
 }
 
 /* Note board — We재활생각 메모 보드 */
