@@ -92,7 +92,7 @@ export const NOTICES = {
 export const ETC = {
   eyebrow: 'We당근당근',
   heading: '재활용품 당근해드려요',
-  subtext: '분류가 어렵거나 다양한 내용을 자유롭게 올려두는 공간입니다.',
+  subtext: '',
 };
 
 // ── 결제정보 (/payment) ───────────────────────
