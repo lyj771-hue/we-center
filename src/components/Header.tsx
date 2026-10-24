@@ -23,19 +23,8 @@ const NAV = [
   { href: '/etc',            label: 'We당근당근' },
   { href: '/schedule',       label: '수업스케쥴(수색)' },
   { href: '/schedule/uijeongbu', label: '수업스케쥴(의정부)' },
-  { href: '/we-slang',       label: 'We슐랭' },   // 맛있는 가게 소개 — 메뉴 이름 옆에 아이콘
+  { href: '/we-slang',       label: 'We슐랭' },   // 맛있는 가게 소개
 ];
-
-/** 메뉴 이름 — We슐랭은 글씨 뒤에 작은 아이콘 */
-function NavLabel({ href, label }: { href: string; label: string }) {
-  if (href !== '/we-slang') return <>{label}</>;
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {label}
-      <img src="/weslang/wechelin-icon.png" alt="" aria-hidden="true" className="h-[18px] w-auto rounded-[3px]" />
-    </span>
-  );
-}
 
 // 선생님(카카오 로그인 후 선생님 인증) — 시간표 보기
 // 메뉴 글씨 색 — 앞에서 뒤로 갈수록: 보라색 → 브랜드 파랑(#087BEA) 그라데이션 (네이버 지도 버튼도 같은 색: globals.css .brand-gradient)
@@ -211,7 +200,7 @@ export default function Header() {
                     isActive(href) ? 'font-medium' : 'hover:opacity-70',
                   ].join(' ')}
                 >
-                  <NavLabel href={href} label={label} />
+                  {label}
                   {isActive(href) && (
                     <span className="absolute bottom-0 left-0 w-full h-[3px] bg-[var(--brand)] rounded-full" />
                   )}
@@ -278,7 +267,7 @@ export default function Header() {
                       isActive(href) ? 'font-medium' : '',
                     ].join(' ')}
                   >
-                    <NavLabel href={href} label={label} />
+                    {label}
                   </Link>
                 </li>
               ))}
