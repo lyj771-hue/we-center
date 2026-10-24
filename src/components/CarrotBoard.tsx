@@ -36,8 +36,8 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
   const go = (p: number) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const writeBtn = (cls: string) => (
     <button type="button" onClick={() => (isAdmin ? onWrite() : showAlert('올리는건 저희가 해요^^'))} style={{ background: CARROT }}
-      className={`inline-flex items-center gap-1.5 rounded-full text-white font-semibold shadow-[0_6px_16px_rgba(255,111,15,0.35)] hover:brightness-95 transition ${cls}`}>
-      <span aria-hidden="true" className="text-[1.25em] leading-none">+</span> 센터에게
+      className={`inline-flex items-center gap-1 rounded-full text-white font-semibold shadow-[0_3px_8px_rgba(255,111,15,0.35)] hover:brightness-95 transition ${cls}`}>
+      <span aria-hidden="true" className="text-[1.2em] leading-none">+</span>센터에게
     </button>
   );
 
@@ -59,9 +59,10 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
                       : <div className="w-full h-full flex items-center justify-center text-[30px]" aria-hidden="true">🥕</div>}
                   </div>
                   <div className="min-w-0 flex-1 pr-7 pt-0.5">
-                    <p className="text-[16px] md:text-[18px] leading-[1.4] text-[#18181b] font-medium line-clamp-2 break-keep">{post.title}</p>
-                    <p className="mt-1 text-[13px] text-[#9ca3af]">We센터 · {ago(post.createdAt)}</p>
-                    {text && <p className="mt-1.5 text-[13px] md:text-[14px] text-[#52525b] line-clamp-2">{text}</p>}
+                    {/* 회색(센터 · 언제) → 제목 → 본문 */}
+                    <p className="text-[11px] md:text-[12px] text-[#9ca3af]">We센터 · {ago(post.createdAt)}</p>
+                    <p className="mt-0.5 text-[13px] md:text-[15px] leading-[1.4] text-[#18181b] font-medium line-clamp-2 break-keep">{post.title}</p>
+                    {text && <p className="mt-1 text-[11px] md:text-[12px] text-[#52525b] line-clamp-2">{text}</p>}
                   </div>
                 </Link>
                 {isAdmin && (
@@ -100,7 +101,7 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
       {/* 화면 오른쪽 아래에 떠 있는 버튼 — 폰·PC 모두. 페이지의 fade-up(transform) 밖(body)에 그려야 화면 기준으로 고정된다 */}
       <Portal>
         <div className="fixed right-4 md:right-8 z-[150]" style={{ bottom: 'calc(20px + env(safe-area-inset-bottom, 0px))' }}>
-          {writeBtn('px-6 py-3.5 text-[17px]')}
+          {writeBtn('px-3 py-1.5 text-[12px]')}
         </div>
       </Portal>
       <div className="h-20" aria-hidden="true" />{/* 마지막 글이 버튼에 가리지 않게 */}
