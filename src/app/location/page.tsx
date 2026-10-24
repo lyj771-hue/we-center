@@ -63,6 +63,29 @@ function parseLegacySections(content: string, imageUrls: string[]): CenterSectio
   ];
 }
 
+/** 주소 한 줄 복사 — 앞의 "(도로명)"·"(지번)" 표시는 빼고 주소만 복사, 잠깐 "복사됨" 표시 */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      alert('복사하지 못했어요. 주소를 길게 눌러 복사해 주세요.');
+    }
+  };
+  return (
+    <button type="button" onClick={copy} aria-label="주소 복사"
+      className="shrink-0 inline-flex items-center gap-1 text-[#999] hover:text-[#0a0a0a] transition-colors p-1 -m-1">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      </svg>
+      {copied && <span className="text-[10px] text-[var(--brand)]">복사됨</span>}
+    </button>
+  );
+}
+
 export default function LocationPageView() {
   const { isAdmin } = useAdmin();
   const [page, setPage] = useState<LocationPage>({ heading: LOCATION.heading, subtext: LOCATION.subtext, sections: [] });
@@ -208,11 +231,16 @@ export default function LocationPageView() {
               <h2 className="text-[12px] text-[#aaa] mb-4">{s.name}</h2>
               {/* 줄마다 따로 — 도로명·지번 줄 사이를 넉넉히 */}
               <div className="text-[11px] leading-[2] text-[#444] whitespace-pre-wrap mb-6 space-y-2">
-                {s.info ? s.info.split('\n').map((line, i) => <p key={i}>{line || '\u00a0'}</p>) : <span className="text-[#ccc]">정보가 없습니다</span>}
+                {s.info ? s.info.split('\n').map((line, i) => (
+                  <p key={i} className="flex items-center gap-1.5">
+                    <span>{line || '\u00a0'}</span>
+                    {line.trim() && <CopyButton text={line.replace(/^\s*\([^)]*\)\s*/, '')} />}
+                  </p>
+                )) : <span className="text-[#ccc]">정보가 없습니다</span>}
               </div>
               {s.imageUrl && (
                 <button type="button" onClick={() => setViewing(s.imageUrl)} aria-label={`${s.name} 지도 크게 보기`}
-                  className="block w-[70%] md:w-1/2 aspect-[1200/686] overflow-hidden bg-[#f2f2f2] cursor-zoom-in">
+                  className="block w-full md:w-1/2 aspect-[1200/686] overflow-hidden bg-[#f2f2f2] cursor-zoom-in">
                   <img src={s.imageUrl} alt={`${s.name} 지도`} className="w-full h-full block object-cover" style={{ objectPosition: MAP_POS[idx] ?? '50% 50%' }} />
                 </button>
               )}
