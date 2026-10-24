@@ -128,10 +128,12 @@ interface TitleProps {
   actions?: React.ReactNode;
   /** 파란 큰 제목을 화면에서 숨김(읽기 프로그램용으로만 남김) */
   hideHeading?: boolean;
+  /** 소개 문구를 파란 큰 제목 모양으로 (오시는길 — 제목은 숨기고 소개 문구가 제목 자리) */
+  subtextAsHeading?: boolean;
 }
 
 /** 페이지 제목 + 소개 문구. 관리자에게는 "제목·폭 수정" 버튼이 보인다 */
-export function PageTitle({ eyebrow, variant = 'default', className = '', actions, hideHeading = false }: TitleProps) {
+export function PageTitle({ eyebrow, variant = 'default', className = '', actions, hideHeading = false, subtextAsHeading = false }: TitleProps) {
   const { heading, subtext, openEditor } = useContext(PageCtx);
   const { isAdmin } = useAdmin();
   const editBtn = isAdmin && (
@@ -158,7 +160,7 @@ export function PageTitle({ eyebrow, variant = 'default', className = '', action
       <div className="flex items-end justify-between gap-6">
         <div className="min-w-0">
           <h1 className={hideHeading ? 'sr-only' : `display-heading ${subtext ? 'mb-3' : ''}`}>{heading}</h1>
-          {subtext && <p className="text-[14px] text-[#666] leading-[2] whitespace-pre-line">{subtext}</p>}
+          {subtext && <p className={subtextAsHeading ? 'display-heading whitespace-pre-line' : 'text-[14px] text-[#666] leading-[2] whitespace-pre-line'}>{subtext}</p>}
         </div>
         {(editBtn || actions) && (
           <div className="flex flex-wrap justify-end gap-2 shrink-0">

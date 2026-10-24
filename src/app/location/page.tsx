@@ -123,7 +123,8 @@ export default function LocationPageView() {
       <PageTitle
         eyebrow={LOCATION.eyebrow}
         hideHeading
-        className="mb-6"
+        subtextAsHeading
+        className="mb-14"
         actions={isAdmin && !editing && (
           <button onClick={() => { setForm(page); setEditing(true); }}
             className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
@@ -200,7 +201,7 @@ export default function LocationPageView() {
           </div>
           {page.sections.map((s, idx) => idx === tab && (
             <section key={idx}>
-              <h2 className="font-serif font-bold text-[24px] md:text-[30px] leading-snug tracking-tight text-[var(--brand)] mb-4">{s.name}</h2>
+              <h2 className="text-[12px] text-[#aaa] mb-4">{s.name}</h2>
               {/* 줄마다 따로 — 도로명·지번 줄 사이를 넉넉히 */}
               <div className="text-[11px] leading-[2] text-[#444] whitespace-pre-wrap mb-6 space-y-2">
                 {s.info ? s.info.split('\n').map((line, i) => <p key={i}>{line || '\u00a0'}</p>) : <span className="text-[#ccc]">정보가 없습니다</span>}
