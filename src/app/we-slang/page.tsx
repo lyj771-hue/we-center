@@ -17,7 +17,7 @@ export default function WeSlangPage() {
           <div className="w-full max-w-[720px] mx-auto aspect-[16/3] mb-4 bg-[#b71f2f] rounded-2xl overflow-hidden">
             <img src="/weslang/wechelin-icon.png" alt="" aria-hidden className="block h-full w-auto mx-auto" />
           </div>
-          <img src="/weslang/wechelin-bib.jpg" alt="WECHELIN BIB GOURMAND — 센터 근처 맛있는 가게" className="block w-full max-w-[720px] mx-auto rounded-2xl shadow-[0_2px_6px_rgba(0,0,0,0.06),0_10px_24px_rgba(0,0,0,0.05)]" />
+          <img src="/weslang/wechelin-bib2.jpg" alt="WECHELIN BIB GOURMAND — 센터 근처 맛있는 가게" className="block w-full max-w-[720px] mx-auto rounded-2xl shadow-[0_2px_6px_rgba(0,0,0,0.06),0_10px_24px_rgba(0,0,0,0.05)]" />
         </div>
         <div className="px-4">
           <PostBoard category="weslang" basePath="/we-slang" variant="weslang" />
