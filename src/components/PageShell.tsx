@@ -126,10 +126,12 @@ interface TitleProps {
   className?: string;
   /** 제목 오른쪽에 둘 버튼(예: 관리자 + 추가) */
   actions?: React.ReactNode;
+  /** 파란 큰 제목을 화면에서 숨김(읽기 프로그램용으로만 남김) */
+  hideHeading?: boolean;
 }
 
 /** 페이지 제목 + 소개 문구. 관리자에게는 "제목·폭 수정" 버튼이 보인다 */
-export function PageTitle({ eyebrow, variant = 'default', className = '', actions }: TitleProps) {
+export function PageTitle({ eyebrow, variant = 'default', className = '', actions, hideHeading = false }: TitleProps) {
   const { heading, subtext, openEditor } = useContext(PageCtx);
   const { isAdmin } = useAdmin();
   const editBtn = isAdmin && (
@@ -155,7 +157,7 @@ export function PageTitle({ eyebrow, variant = 'default', className = '', action
       {eyebrow && <p className="md:hidden text-[11px] tracking-[0.3em] text-[#aaa] mb-5">{eyebrow}</p>}
       <div className="flex items-end justify-between gap-6">
         <div className="min-w-0">
-          <h1 className={`display-heading ${subtext ? 'mb-3' : ''}`}>{heading}</h1>
+          <h1 className={hideHeading ? 'sr-only' : `display-heading ${subtext ? 'mb-3' : ''}`}>{heading}</h1>
           {subtext && <p className="text-[14px] text-[#666] leading-[2] whitespace-pre-line">{subtext}</p>}
         </div>
         {(editBtn || actions) && (

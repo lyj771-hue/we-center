@@ -108,6 +108,7 @@ export default function LocationPageView() {
     <div className="max-w-[var(--page-w)] mx-auto px-6 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
       <PageTitle
         eyebrow={LOCATION.eyebrow}
+        hideHeading
         className="mb-12 md:mb-14"
         actions={isAdmin && !editing && (
           <button onClick={() => { setForm(page); setEditing(true); }}

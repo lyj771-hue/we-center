@@ -110,5 +110,5 @@ export const PAYMENT = {
 export const LOCATION = {
   eyebrow: '오시는길',
   heading: '찾아오시는 방법',
-  subtext: '수색과 의정부 두 곳에서 만나뵐 수 있습니다.',
+  subtext: '수색과 의정부 두 곳에서 만나뵐 수 있어요^^',
 };
