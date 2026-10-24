@@ -64,7 +64,7 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
   };
 
   return (
-    <div className="max-w-[768px] mx-auto px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
+    <div className="max-w-[1024px] mx-auto px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
       <h1 className="display-heading mb-10 md:mb-12">수업스케쥴 <span className="text-[0.7em] text-[#888]">({center === 'uijeongbu' ? '의정부' : '수색'})</span></h1>
 
       <ScheduleGate center={center}>
