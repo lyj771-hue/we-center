@@ -187,7 +187,7 @@ export default function LocationPageView() {
         </div>
       ) : (
         <div>
-          <div role="tablist" className="flex items-end mb-10 border-b border-[#e5e5e5]">
+          <div role="tablist" className="flex items-end mb-5 border-b border-[#e5e5e5]">
             {WE_CENTER.centers.map((c, i) => (
               <button key={c.id} type="button" role="tab" aria-selected={tab === i} onClick={() => setTab(i)}
                 className={[
@@ -214,7 +214,7 @@ export default function LocationPageView() {
               )}
               {s.mapUrl && (
                 <a href={s.mapUrl} target="_blank" rel="noopener noreferrer"
-                  className="mt-4 inline-flex items-center gap-2 brand-gradient text-white text-[14px] px-5 py-2.5 rounded-full hover:opacity-90 transition-opacity">
+                  className="mt-4 inline-flex items-center gap-2 bg-[#f0f0f0] text-[#0a0a0a] text-[14px] px-5 py-2.5 rounded-full hover:bg-[#e6e6e6] transition-colors">
                   <span className="font-black text-[13px] leading-none bg-white text-[var(--brand)] w-5 h-5 rounded-[4px] flex items-center justify-center" style={{ fontFamily: 'Arial, sans-serif', WebkitTextStroke: 0 }}>N</span>
                   네이버 지도에서 보기
                 </a>
