@@ -98,7 +98,7 @@ function NoteViewer({ title, location, onClose }: { title: string; location?: st
           <div className="mt-3 flex items-start gap-2 text-[16px] text-[#52525b]">
             <span className="break-keep leading-[1.7]">📍 {location}</span>
             <button type="button" onClick={copy} aria-label="주소 복사" title="주소 복사"
-              className="shrink-0 mt-0.5 inline-flex items-center gap-1 rounded-md border border-[#d4d4d8] bg-white px-2 py-1 text-[12px] text-[#52525b] hover:bg-[#fafafa]">
+              className="shrink-0 mt-0.5 inline-flex items-center gap-1 rounded-md border border-[#d4d4d8] bg-white px-2 py-1 text-[12px] text-[var(--brand)] hover:bg-[#fafafa]">
               <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
               </svg>
