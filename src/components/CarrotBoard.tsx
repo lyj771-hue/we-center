@@ -5,7 +5,6 @@ import { useState } from 'react';
 import type { Post } from '@/lib/types';
 import { excerpt, extractImages, toText } from '@/lib/postText';
 import { showAlert } from '@/lib/dialog';
-import Portal from './Portal';
 
 // We당근당근 — 당근마켓 목록 모양. 왼쪽 네모 사진(본문 첫 사진) · 오른쪽 제목(두 줄) · 회색 한 줄(센터 · 언제) · 본문 앞부분.
 // 주황 [+ 센터에게] — 누구나 보인다(휴대폰에선 오른쪽 아래에 떠 있다). 관리자는 새 글, 그 밖엔 "올리는건 저희가 해요^^" 팝업. 관리자: 오른쪽 위 ⋮ → 삭제
@@ -98,13 +97,11 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
         </nav>
       )}
 
-      {/* 화면 오른쪽 아래에 떠 있는 버튼 — 폰·PC 모두. 페이지의 fade-up(transform) 밖(body)에 그려야 화면 기준으로 고정된다 */}
-      <Portal>
-        <div className="fixed right-4 md:right-8 z-[150]" style={{ bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))' }}>
-          {writeBtn('px-3 py-1.5 text-[12px]')}
-        </div>
-      </Portal>
-      <div className="h-20" aria-hidden="true" />{/* 마지막 글이 버튼에 가리지 않게 */}
+      {/* 화면 오른쪽 아래에 떠 있는 버튼 — 목록을 내리는 동안 따라오다가, 쪽 넘기기 줄(없으면 목록 끝)에 닿으면 거기 멈춘다(sticky) */}
+      <div className={`sticky z-[150] flex justify-end pointer-events-none ${pages > 1 ? '-mt-7' : 'mt-4'}`}
+        style={{ bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))' }}>
+        <span className="pointer-events-auto">{writeBtn('px-3 py-1.5 text-[12px]')}</span>
+      </div>
     </div>
   );
 }
