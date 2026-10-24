@@ -110,10 +110,10 @@ export default function WeCenterPage() {
   return (
     <PageShell page="we-center" heading={WE_CENTER.heading} defaultWidth={1024}>
     <div className="max-w-[var(--page-w)] mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
-      <PageTitle eyebrow={WE_CENTER.eyebrow} className="mb-14" />
+      <PageTitle eyebrow={WE_CENTER.eyebrow} className="mb-7" />
 
       {/* Center tabs */}
-      <div className="flex items-end gap-0 mb-10 border-b border-[#e5e5e5]">
+      <div className="flex items-end gap-0 mb-4 border-b border-[#e5e5e5]">
         {CENTERS.map(c => (
           <button
             key={c.id}
