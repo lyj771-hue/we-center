@@ -8,7 +8,8 @@ import { extractImages } from '@/lib/postText';
 import { layoutPhotos, place } from './ThoughtsScrapbook';
 
 // 가운데 사진이 재활생각 카드보다 커서(680) 칸 높이·오른쪽 사진·메모 자리를 그만큼 옮긴다
-const STAGE_HEIGHT = 30 + 850 + 100;
+// 가운데 사진 680 × 425 (가로 8 : 세로 5 — 예전 4:5의 세로 절반)
+const STAGE_HEIGHT = 30 + 425 + 100;
 const PHOTO_SHIFT = 70;
 
 // We슐랭 — 재활생각 스크랩북 모양을 빌려 쓴다. 가게 하나가 한 줄(가운데 하나씩).
@@ -29,7 +30,7 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
       <div className="scrap-stage" style={{ height: `${height}px` }}>
         {/* 가운데 — 대표 사진. 누르면 게시글로 */}
         <Link href={`${basePath}/${post.id}`} className="scrap-card block group" aria-label={`${post.title} 게시글 보기`}>
-          <div className="aspect-[4/5] bg-[#e4e4e7] overflow-hidden">
+          <div className="aspect-[8/5] bg-[#e4e4e7] overflow-hidden">
             {main
               ? <img src={main} alt={post.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
               : <div className="w-full h-full flex items-center justify-center text-[40px] text-[#a1a1aa]">{post.title}</div>}
@@ -54,7 +55,7 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
         {viewing && <PhotoViewer src={viewing} onClose={() => setViewing(null)} />}
 
         {/* 왼쪽 메모 — 가게 이름 · 위치 */}
-        <div className="scrap-piece scrap-note" style={place(-690, 700, -2, 587)}>
+        <div className="scrap-piece scrap-note" style={place(-690, 275, -2, 587)}>
           <span aria-hidden="true" className="absolute -top-[28px] left-[56px] text-[38px] select-none">📌</span>
           <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[2.2]">{post.title}</h2>
           <div className="mt-3 flex items-center gap-4">
