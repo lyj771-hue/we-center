@@ -55,7 +55,7 @@ export const HOME = {
 
 // ── We센터 (/we-center) ───────────────────────
 export const WE_CENTER = {
-  eyebrow: 'We 센터',
+  eyebrow: 'We공간',
   heading: 'We 공간을 소개합니다',
   centers: [
     { id: 'susaek'     as const, label: '수색 센터',   addr: '서울특별시 은평구' },

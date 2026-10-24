@@ -3,9 +3,11 @@
 interface Props {
   cols: 1 | 2;
   onChange: (cols: 1 | 2) => void;
+  /** 감싸는 칸 모양 — 기본은 오른쪽 정렬 + 아래 여백 */
+  className?: string;
 }
 
-export default function ViewToggle({ cols, onChange }: Props) {
+export default function ViewToggle({ cols, onChange, className = 'flex justify-end gap-1.5 mb-4' }: Props) {
   const btnCls = (active: boolean) =>
     [
       'w-8 h-8 flex items-center justify-center border transition-colors',
@@ -13,7 +15,7 @@ export default function ViewToggle({ cols, onChange }: Props) {
     ].join(' ');
 
   return (
-    <div className="sm:hidden flex justify-end gap-1.5 mb-4">
+    <div className={`sm:hidden ${className}`}>
       <button type="button" aria-label="2열 보기" onClick={() => onChange(2)} className={btnCls(cols === 2)}>
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
           <rect x="1" y="1" width="6" height="6" rx="1" />

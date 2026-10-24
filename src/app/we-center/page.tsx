@@ -126,23 +126,25 @@ export default function WeCenterPage() {
             {tab === c.id && <span className="absolute bottom-0 left-0 w-full h-[1.5px] bg-[#0a0a0a]" />}
           </button>
         ))}
-        {isAdmin && (
-          <button
-            onClick={() => { setAdding(true); setForm({ name: '', description: '', imageUrl: '' }); }}
-            className="ml-auto mb-3 text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors"
-          >
-            + 공간 추가
-          </button>
-        )}
+        {/* 오른쪽 끝 — 보기 아이콘(휴대폰)·공간 추가(관리자), 구분선 바로 위 */}
+        <div className="ml-auto flex items-center gap-2 pb-2">
+          <ViewToggle cols={viewCols} onChange={setViewCols} className="flex gap-1.5" />
+          {isAdmin && (
+            <button
+              onClick={() => { setAdding(true); setForm({ name: '', description: '', imageUrl: '' }); }}
+              className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors"
+            >
+              + 공간 추가
+            </button>
+          )}
+        </div>
       </div>
-
-      <ViewToggle cols={viewCols} onChange={setViewCols} />
 
       {/* Room grid */}
       {rooms.length === 0 ? (
         <div className="py-24 text-center text-sm text-[#ccc]">등록된 공간이 없습니다</div>
       ) : (
-        <div className={`grid ${viewCols === 1 ? 'grid-cols-1' : 'grid-cols-2'} sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10`}>
+        <div className={`mt-6 grid ${viewCols === 1 ? 'grid-cols-1' : 'grid-cols-2'} sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10`}>
           {rooms.map((room, index) => (
             <div key={room.id} className="group">
               <div className="aspect-[4/3] overflow-hidden bg-[#f0f0f0] mb-4 relative">
