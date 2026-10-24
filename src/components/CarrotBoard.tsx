@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useState } from 'react';
 import type { Post } from '@/lib/types';
 import { excerpt, extractImages, toText } from '@/lib/postText';
+import { showAlert } from '@/lib/dialog';
 
 // We당근당근 — 당근마켓 목록 모양. 왼쪽 네모 사진(본문 첫 사진) · 오른쪽 제목(두 줄) · 회색 한 줄(센터 · 언제) · 본문 앞부분.
-// 관리자: 오른쪽 위 ⋮ → 삭제, 주황 [+ 센터에게] = 새 글 (휴대폰에선 오른쪽 아래에 떠 있다)
+// 주황 [+ 센터에게] — 누구나 보인다(휴대폰에선 오른쪽 아래에 떠 있다). 관리자는 새 글, 그 밖엔 "올리는건 저희가 해요^^" 팝업. 관리자: 오른쪽 위 ⋮ → 삭제
 
 const CARROT = '#ff6f0f';
 
@@ -26,7 +27,7 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
 }) {
   const [menu, setMenu] = useState<string | null>(null);
   const writeBtn = (cls: string) => (
-    <button type="button" onClick={onWrite} style={{ background: CARROT }}
+    <button type="button" onClick={() => (isAdmin ? onWrite() : showAlert('올리는건 저희가 해요^^'))} style={{ background: CARROT }}
       className={`inline-flex items-center gap-1.5 rounded-full text-white font-semibold shadow-[0_6px_16px_rgba(255,111,15,0.35)] hover:brightness-95 transition ${cls}`}>
       <span aria-hidden="true" className="text-[1.25em] leading-none">+</span> 센터에게
     </button>
@@ -35,7 +36,7 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
   return (
     <div>
       {/* PC — 목록 위 오른쪽 */}
-      {isAdmin && <div className="hidden md:flex justify-end mb-4">{writeBtn('px-6 py-3 text-[15px]')}</div>}
+      <div className="hidden md:flex justify-end mb-4">{writeBtn('px-6 py-3 text-[15px]')}</div>
 
       {posts.length === 0 ? (
         <div className="py-24 text-center text-sm text-[#ccc] tracking-widest">등록된 게시물이 없습니다</div>
@@ -77,11 +78,9 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
       )}
 
       {/* 휴대폰 — 오른쪽 아래에 떠 있는 버튼 */}
-      {isAdmin && (
-        <div className="md:hidden fixed right-4 z-[150]" style={{ bottom: 'calc(20px + env(safe-area-inset-bottom, 0px))' }}>
-          {writeBtn('px-6 py-3.5 text-[17px]')}
-        </div>
-      )}
+      <div className="md:hidden fixed right-4 z-[150]" style={{ bottom: 'calc(20px + env(safe-area-inset-bottom, 0px))' }}>
+        {writeBtn('px-6 py-3.5 text-[17px]')}
+      </div>
     </div>
   );
 }
