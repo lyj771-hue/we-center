@@ -59,9 +59,9 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
                   </div>
                   <div className="min-w-0 flex-1 pr-7 pt-0.5">
                     {/* 회색(센터 · 언제) → 제목 → 본문 */}
-                    <p className="text-[11px] md:text-[12px] text-[#9ca3af]">We센터 · {ago(post.createdAt)}</p>
-                    <p className="mt-1.5 text-[13px] md:text-[15px] leading-[1.5] font-medium line-clamp-2 break-keep" style={{ color: CARROT }}>{post.title}</p>
-                    {text && <p className="mt-1.5 text-[11px] md:text-[12px] leading-[1.6] text-[#52525b] line-clamp-2">{text}</p>}
+                    <p className="text-[11px] md:text-[12px] leading-[1.8] text-[#9ca3af]">We센터 · {ago(post.createdAt)}</p>
+                    <p className="mt-2.5 text-[13px] md:text-[15px] leading-[1.8] font-medium line-clamp-2 break-keep" style={{ color: CARROT }}>{post.title}</p>
+                    {text && <p className="mt-2.5 text-[11px] md:text-[12px] leading-[2] text-[#52525b] line-clamp-2">{text}</p>}
                   </div>
                 </Link>
                 {isAdmin && (
