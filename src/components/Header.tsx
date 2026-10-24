@@ -20,7 +20,7 @@ const NAV = [
   { href: '/payment',        label: '결제정보' },
   { href: '/location',       label: '오시는길' },
   { href: '/notices',        label: '공지사항' },
-  { href: '/etc',            label: '기타' },
+  { href: '/etc',            label: 'We당근당근' },
   { href: '/schedule',       label: '수업스케쥴(수색)' },
   { href: '/schedule/uijeongbu', label: '수업스케쥴(의정부)' },
   { href: '/we-slang',       label: 'We슐랭' },   // 맛있는 가게 소개 — 메뉴 이름 옆에 아이콘

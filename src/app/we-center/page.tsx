@@ -105,7 +105,6 @@ export default function WeCenterPage() {
   };
 
   const isModal = adding || editTarget !== null;
-  const activeCenter = CENTERS.find(c => c.id === tab)!;
 
   return (
     <PageShell page="we-center" heading={WE_CENTER.heading} defaultWidth={1024}>
@@ -113,7 +112,7 @@ export default function WeCenterPage() {
       <PageTitle eyebrow={WE_CENTER.eyebrow} className="mb-7" />
 
       {/* Center tabs */}
-      <div className="flex items-end gap-0 mb-4 border-b border-[#e5e5e5]">
+      <div className="flex items-end gap-0 border-b border-[#e5e5e5]">
         {CENTERS.map(c => (
           <button
             key={c.id}
@@ -136,9 +135,6 @@ export default function WeCenterPage() {
           </button>
         )}
       </div>
-
-      {/* Center sub-label */}
-      <p className="text-[12px] text-[#aaa] mb-8">{activeCenter.addr}</p>
 
       <ViewToggle cols={viewCols} onChange={setViewCols} />
 
