@@ -14,6 +14,7 @@ const KAKAO_CHANNEL_URL = '';
 
 const NAV = [
   { href: '/',               label: '에이치오엠이' },
+  { href: '/we-center',      label: 'We공간' },   // 센터 공간(수색·의정부) 사진 — 페이지 제목은 We센터
   { href: '/we-subjects',    label: 'We수업과목' },
   { href: '/we-thoughts',    label: 'We재활생각' },
   { href: '/payment',        label: '결제정보' },
