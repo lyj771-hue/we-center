@@ -26,10 +26,8 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const can = isAdmin || !!teacher;
   // 한눈에 보기 — 열 때마다 늘 이걸로 시작: 표 전체(폭·높이)가 화면에 들어오게 줄인다 ([크게 보기] = 원래 크기, 옆으로 밀어 보기)
   const [fit, setFit] = useState(true);
-  // 접은 선생님 — 빼 둔 선생님(이원재)은 맨 오른쪽에 처음엔 접혀 있다. 이름을 누르면 펼치기·접기
+  // 접은 선생님 — 처음엔 모두 펼친다(빼 둔 선생님 이원재만 맨 오른쪽에 접혀 있다). 이름을 누르면 펼치기·접기
   const [folded, setFolded] = useState<Set<string>>(() => new Set(HIDDEN_TEACHERS));
-  // 처음 열 때 — 선생님은 내 칸만 펼치고, 관리자는 설영수 선생님만 펼친다(나머지는 접음). 그 뒤엔 누른 대로
-  const foldInit = useRef(false);
   const toggleFold = (name: string) => setFolded(f => { const n = new Set(f); if (n.has(name)) n.delete(name); else n.add(name); return n; });
   const toggleFit = () => setFit(v => !v);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -65,11 +63,6 @@ export default function TeacherTimetable({ center }: { center: Center }) {
     try {
       const [t, l, h] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({}))]);
       setTeachers(t); setLessons(l); setHolidays(h); setFailed('');
-      if (!foldInit.current && t.length) {
-        foldInit.current = true;
-        const open = teacher ? t.find(x => x.id === teacher.teacherId)?.name : '설영수';
-        setFolded(new Set(t.map(x => x.name).filter(n => n !== open)));
-      }
     } catch (e) {
       setFailed((e as Error).message);
     }
