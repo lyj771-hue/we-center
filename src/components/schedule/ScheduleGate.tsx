@@ -3,16 +3,16 @@
 import { useAdmin } from '@/components/AdminContext';
 import { useMember } from '@/components/MemberContext';
 
-// 수업스케쥴은 관리자와 승인된 보호자만 본다. 그 밖엔 로그인·승인 안내를 보여 준다.
+// 수업스케쥴은 관리자·선생님(두 지점 모두)과 승인된 보호자만 본다. 그 밖엔 로그인·승인 안내를 보여 준다.
 
 const card = 'bg-white rounded-[18px] shadow-[0_2px_6px_rgba(0,0,0,0.05),0_10px_24px_rgba(0,0,0,0.05)] px-6 py-12 text-center space-y-4';
 
 /** center 를 주면 그 지점에 가입·승인된 보호자만 (없으면 처음 가입한 지점 승인 기준) */
 export default function ScheduleGate({ children, center }: { children: React.ReactNode; center?: 'eunpyeong' | 'uijeongbu' }) {
   const { isAdmin } = useAdmin();
-  const { userId, profile, loading, login, branches, canUse } = useMember();
+  const { userId, profile, loading, login, branches, canUse, teacher } = useMember();
 
-  if (isAdmin || (userId && (center ? canUse(center) : profile?.approvedAt))) return <>{children}</>;
+  if (isAdmin || teacher || (userId && (center ? canUse(center) : profile?.approvedAt))) return <>{children}</>;
   const st = center ? branches.find(b => b.key === center)?.status : undefined;
   const branchName = center === 'uijeongbu' ? '의정부점' : '수색점';
 
