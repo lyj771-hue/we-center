@@ -901,7 +901,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                             const b = e.currentTarget.getBoundingClientRect();
                             setPicking({ teacher: t, time, side: 'open', cell: right, rect: { left: b.left, top: b.top, bottom: b.bottom } });
                           }}>
-                            <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} nonMember={isNonMember(right)} requested={!!reqOf('open', t.id, time)} />
+                            <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} nonMember={isNonMember(right)} requested={!!reqOf('open', t.id, time)} posted={mode === 'day' && postedOpen.has(`${t.id}|${time}`)} />
                           </td>}
                           {kindTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
@@ -1010,7 +1010,9 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
 }
 
 /** 칸 글자 — 3김채현 처럼 (숫자 + 이름) */
-function CellText({ cell, label, muted, nonMember, requested }: { cell: CellView; label?: string; muted?: boolean; nonMember?: boolean; requested?: boolean }) {
+function CellText({ cell, label, muted, nonMember, requested, posted }: { cell: CellView; label?: string; muted?: boolean; nonMember?: boolean; requested?: boolean; posted?: boolean }) {
+  // 수업스케쥴 게시글에 올라가 있고 아직 신청 없는 빈타임 — 선생님 시간표 보기와 똑같이 "게시 중"
+  if (posted && (cell.status === 'empty' || cell.status === 'none' || cell.status === 'off')) return <span className="text-[10px] px-1 rounded bg-[#ecfdf5] text-[#047857]">게시 중</span>;
   if (cell.status === 'empty' || cell.status === 'none') {
     return label ? <span className="text-[#c4c4cc]">{label}</span> : null;
   }

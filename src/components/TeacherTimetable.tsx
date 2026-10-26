@@ -184,7 +184,9 @@ export default function TeacherTimetable({ center }: { center: Center }) {
                     <FragmentCols key={t.id}>
                       {/* 빈타임에 아이가 있으면 그 시간은 빈타임 아이 수업 — 고정 칸은 흐리게 */}
                       <td className={`${td} ${openKid ? 'bg-[#f4f4f5] opacity-60' : ''}`}>{text(f) ?? (ROW_LABEL[time] && !postedOpen.has(`${t.id}|${time}`) && <span className="text-[#c4c4cc]">{ROW_LABEL[time]}</span>)}</td>
-                      <td className={`${td} bg-[#fcfcfd]`}>{text(o)}</td>
+                      <td className={`${td} bg-[#fcfcfd]`}>{(!o || o.status === 'off') && postedOpen.has(`${t.id}|${time}`)
+                        ? <span className="text-[10px] px-1 rounded bg-[#ecfdf5] text-[#047857]">게시 중</span>
+                        : text(o)}</td>
                       <td className={`${td} bg-[#f9fdfa]`}>{payText(openKid ? o : f)}</td>
                     </FragmentCols>
                   );
