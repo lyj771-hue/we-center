@@ -5,10 +5,13 @@ import { notifyScheduleChanged } from './sync';
 
 export interface MyTeacher { teacherId: string; name: string; memberCode?: string; centers: string[] }
 
-/** 이 카카오 계정과 이어진 선생님 — 없으면 null */
+/** 이 카카오 계정과 이어진 선생님 — 없으면 null. 확인 자체가 실패하면(세션이 막 붙는 중 등) 던진다 — 선생님 아님으로 착각하지 않게 */
 export async function getMyTeacher(): Promise<MyTeacher | null> {
   const { data, error } = await supabase.rpc('my_teacher');
-  if (error) return null;   // SQL 전이면 선생님 없음으로
+  if (error) {
+    if (error.code === 'PGRST202' || error.code === '42883') return null;   // SQL 전(함수 없음)이면 선생님 없음으로
+    throw error;
+  }
   const r = (data ?? [])[0];
   return r ? { teacherId: r.teacher_id, name: r.name, memberCode: r.member_code ?? undefined, centers: (r.centers as string[] | null) ?? ['eunpyeong'] } : null;
 }

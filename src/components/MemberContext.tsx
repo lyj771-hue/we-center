@@ -43,6 +43,8 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<MyBranch[]>([]);
   const [teacher, setTeacher] = useState<MyTeacher | null>(null);
+  // 로그인 확인이 끝까지 안 됐을 때 — 가입 창을 띄우지 않는다(선생님·회원을 새로 가입시키지 않게)
+  const [unsure, setUnsure] = useState(false);
   // 카카오계정 전화번호 — 로그인 직후 한 번 카카오에서 읽는다(접근 토큰은 그때만 있다). 새로고침해도 가입 창에 쓰게 탭에 잠깐 둔다
   const [kakaoPhone, setKakaoPhone] = useState<string | null>(() => {
     try { return typeof window !== 'undefined' ? sessionStorage.getItem('kakaoPhone') : null; } catch { return null; }
@@ -57,16 +59,29 @@ export function MemberProvider({ children }: { children: ReactNode }) {
     // 로그인 직후엔 apply 가 여러 번(첫 세션·로그인·토큰 갱신) 거의 동시에 불린다.
     // 늦게 끝난 예전 확인 결과가 새 결과를 덮어쓰면, 이미 이어진 선생님·가입한 보호자에게도 가입 창이 뜬다 → 마지막 요청 결과만 쓴다.
     // 둘 다 없다고 나오면(세션이 막 붙는 중일 수 있어) 잠깐 뒤 한 번 더 확인하고 나서 가입 창을 띄운다.
+    // 확인이 실패하면(세션이 아직 안 붙어 요청이 막힌 경우 등) "없음"으로 치지 않고 다시 확인한다 — 이어진 선생님에게 가입 창이 뜨지 않게.
+    // 끝까지 확인이 안 되면 가입 창은 띄우지 않는다(unsure).
     let seq = 0;
-    const check = (id: string) => Promise.all([getMyProfile(id).catch(() => null), getMyTeacher()]);
+    const once = async (id: string) => {
+      const [p, t] = await Promise.allSettled([getMyProfile(id), getMyTeacher()]);
+      return { ok: p.status === 'fulfilled' && t.status === 'fulfilled', p: p.status === 'fulfilled' ? p.value : null, t: t.status === 'fulfilled' ? t.value : null };
+    };
+    const check = async (id: string, my: number) => {
+      let r = await once(id);
+      for (const wait of [700, 1500, 3000]) {
+        if (my !== seq || (r.ok && (r.p || r.t)) || r.p || r.t) break;
+        await new Promise(res => setTimeout(res, wait));
+        r = await once(id);
+      }
+      return r;
+    };
     const apply = (id: string | null) => {
       const my = ++seq;
       setUserId(id);
-      if (!id) { setProfile(null); setTeacher(null); setLoading(false); return; }
+      if (!id) { setProfile(null); setTeacher(null); setUnsure(false); setLoading(false); return; }
       setLoading(true);
-      check(id)
-        .then(async ([p, t]) => (p || t ? [p, t] as const : (await new Promise(r => setTimeout(r, 700)), check(id))))
-        .then(([p, t]) => { if (my !== seq) return; setProfile(p); setTeacher(t); })
+      check(id, my)
+        .then(r => { if (my !== seq) return; setProfile(r.p); setTeacher(r.t); setUnsure(!r.ok && !r.p && !r.t); })
         .finally(() => { if (my === seq) setLoading(false); });
     };
     // 카카오 로그인이 실패해서 돌아오면 주소에 error_description 이 붙는다 — 알려 주고 주소를 깨끗이
@@ -108,7 +123,7 @@ export function MemberProvider({ children }: { children: ReactNode }) {
     const st = branches.find(x => x.key === b)?.status ?? (b === (profile?.center ?? 'eunpyeong') ? 'primary' : 'none');
     return st === 'primary' ? !!profile?.approvedAt : st === 'approved';
   }, [branches, profile]);
-  const needsNickname = !!memberId && !loading && !profile && !teacher;
+  const needsNickname = !!memberId && !loading && !profile && !teacher && !unsure;
 
   return (
     <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse, teacher: memberId ? teacher : null }}>
