@@ -55,10 +55,16 @@ export function selectionToTags(sel: NoticeSelection, kind: MessageRow | undefin
     ...(needsHoliday(kind) && sel.holiday.trim() ? [`holiday:${sel.holiday.trim()}`] : []),
   ];
 }
-export function tagsToSelection(tags?: string[]): NoticeSelection {
+/** 글의 tags → 고른 것. 예전 글은 종류 이름·명절이 그대로 들어 있어서(kind:/holiday: 없이) kinds 로 이름을 맞춰 읽는다 */
+export function tagsToSelection(tags: string[] | undefined, kinds: MessageRow[] = []): NoticeSelection {
   const t = tags ?? [];
+  const centers = Object.values(CENTER_LABEL);
   const center = (Object.keys(CENTER_LABEL) as NoticeCenter[]).find(c => t.includes(CENTER_LABEL[c])) ?? null;
-  return { kind: t.find(x => x.startsWith('kind:'))?.slice(5) ?? '', center, holiday: t.find(x => x.startsWith('holiday:'))?.slice(8) ?? '' };
+  const byLabel = kinds.find(k => t.includes(k.label));
+  const kind = t.find(x => x.startsWith('kind:'))?.slice(5) ?? byLabel?.id ?? '';
+  const holiday = t.find(x => x.startsWith('holiday:'))?.slice(8)
+    ?? (byLabel ? t.find(x => x !== byLabel.label && !centers.includes(x) && !x.includes(':')) : undefined) ?? '';
+  return { kind, center, holiday };
 }
 /** 꼭 채울 칸이 비었으면 알릴 말, 아니면 null */
 export function selectionProblem(sel: NoticeSelection, kind: MessageRow | undefined): string | null {

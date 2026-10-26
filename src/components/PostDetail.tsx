@@ -38,6 +38,8 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
   const [kinds, setKinds] = useState<MessageRow[]>([]);
   const [notice, setNotice] = useState<NoticeSelection>(EMPTY_SELECTION);
   useEffect(() => { if (isNotice && isAdmin && editing && !kinds.length) getNoticeKinds().then(setKinds).catch(() => {}); }, [isNotice, isAdmin, editing, kinds.length]);
+  // 종류 목록이 오면 글의 tags 를 다시 읽는다 (예전 글은 종류 이름으로 저장돼 있어서 목록이 있어야 맞출 수 있다)
+  useEffect(() => { if (kinds.length && post) setNotice(tagsToSelection(post.tags, kinds)); }, [kinds, post?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     getPost(category, id).then(found => {
