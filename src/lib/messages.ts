@@ -129,8 +129,8 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
   },
   {
     id: 'prepaid_use', grp: 'prepaid', label: '선결제 사용·충전·변경 알림', sort: 10,
-    // 그림 = 통과한 로고형처럼 #F9F9F9 바탕 가운데 600×150 칸에 검은 선결제 카드만 (public/alimtalk/card.png)
-    spec: { image: 'card', title: '#{이름} 님 선결제 #{구분}', sub: 'We 센터',
+    // 그림 = 이미 통과한 We 로고 (카드 그림은 카카오 로고형 기준 ③ '로고 안 배경색 없이'에 걸려 반려됨)
+    spec: { image: 'logo', title: '#{이름} 님 선결제 #{구분}', sub: 'We 센터',
       items: [{ name: '일자', value: '#{날짜}' }, { name: '기존 횟수', value: '#{기존횟수}회' }, { name: '변동', value: '#{변동}' }, { name: '남은 횟수', value: '#{남은횟수}회' }],
       body: '#{이름} 님, 선결제 #{구분} 내역을 안내드립니다.\n전체 내역은 아래 버튼에서 볼 수 있어요.', button: { name: '선결제 카드 보기', url: `${SITE}/mypage` } },
     samples: { 날짜: '2026/10/15' },
