@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { HOME } from '@/lib/content';
+import SeasonEffect from '@/components/SeasonEffect';
 
 /** **글자** → 굵게 */
 const bold = (line: string) => line.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <b key={i}>{part}</b> : part));
@@ -7,6 +8,8 @@ const bold = (line: string) => line.split(/\*\*(.+?)\*\*/g).map((part, i) => (i 
 export default function HomePage() {
   return (
     <div>
+      {/* 계절 효과 — 홈 화면에서만 (봄바람·햇살·낙엽·함박눈) */}
+      <SeasonEffect />
       {/* ── Hero ────────────────────────────────────── */}
       {/* 맨 위 작은 글씨 위 여백은 짧게(위에 붙여서 시작) */}
       <section className="min-h-[calc(100svh-240px)] flex flex-col justify-start bg-[#f5f5f3] px-8 pt-5 pb-16 overflow-hidden">
