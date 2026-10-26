@@ -10,6 +10,7 @@ interface PostRow {
   content: string;
   image_url: string | null;
   location?: string | null;
+  tags?: string[] | null;
   created_at: string;
 }
 
@@ -21,6 +22,7 @@ function fromPostRow(row: PostRow): Post {
     content: row.content,
     imageUrl: row.image_url ?? undefined,
     location: row.location ?? undefined,
+    tags: row.tags?.length ? row.tags : undefined,
     createdAt: row.created_at,
   };
 }
@@ -46,14 +48,13 @@ export async function getPost(cat: Category, id: string): Promise<Post | null> {
   return data ? fromPostRow(data as PostRow) : null;
 }
 
-export async function addPost(cat: Category, data: Pick<Post, 'title' | 'content' | 'imageUrl' | 'location'>): Promise<Post> {
-  const { data: row, error } = await supabase
-    .from('posts')
-    .insert({ category: cat, title: data.title, content: data.content, image_url: data.imageUrl ?? null, ...(data.location !== undefined ? { location: data.location.trim() || null } : {}) })
-    .select()
-    .single();
-  if (error) throw error;
-  return fromPostRow(row as PostRow);
+export async function addPost(cat: Category, data: Pick<Post, 'title' | 'content' | 'imageUrl' | 'location' | 'tags'>): Promise<Post> {
+  const base = { category: cat, title: data.title, content: data.content, image_url: data.imageUrl ?? null, ...(data.location !== undefined ? { location: data.location.trim() || null } : {}) };
+  let r = await supabase.from('posts').insert({ ...base, ...(data.tags?.length ? { tags: data.tags } : {}) }).select().single();
+  // tags 칸이 아직 없으면(SQL 전) 표시 없이 올린다
+  if (r.error && data.tags?.length && (r.error.code === '42703' || r.error.code === 'PGRST204')) r = await supabase.from('posts').insert(base).select().single();
+  if (r.error) throw r.error;
+  return fromPostRow(r.data as PostRow);
 }
 
 export async function updatePost(cat: Category, id: string, data: Partial<Pick<Post, 'title' | 'content' | 'imageUrl' | 'location'>>): Promise<void> {

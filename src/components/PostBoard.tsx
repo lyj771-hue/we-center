@@ -10,6 +10,7 @@ import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
 import WeslangBoard from './WeslangBoard';
 import CarrotBoard from './CarrotBoard';
+import PostTags from './PostTags';
 import type { MessageRow } from '@/lib/messages';
 import { CENTER_LABEL, getNoticeKinds, needsCenter, needsHoliday, noticeRecipients, sendNotice, type NoticeCenter } from '@/lib/noticeAlimtalk';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -59,7 +60,9 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       const where = wantCenter && notice.center ? `${CENTER_LABEL[notice.center]} ` : '';
       if (!(await askConfirm(`글을 올리고 "${kind.label}" 알림톡을 보낼까요?\n\n받는 사람: ${where}승인된 보호자 ${who.list.length}명${who.noPhone ? `\n(전화번호 없는 ${who.noPhone}명은 빠져요)` : ''}`, '올리고 보내기'))) return;
     }
-    const post = await addPost(category, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location } : {}) });
+    // 고른 공지 메시지 종류·센터·명절 — 게시글 제목 앞에 표시
+    const tags = kind ? [kind.label, ...(wantCenter && notice.center ? [CENTER_LABEL[notice.center]] : []), ...(wantHoliday && notice.holiday.trim() ? [notice.holiday.trim()] : [])] : undefined;
+    const post = await addPost(category, { title: form.title, content: form.content, tags, ...(isWeslang ? { location: form.location } : {}) });
     if (kind && who) {
       try {
         const r = await sendNotice(kind, post.id, wantCenter ? notice.center : null, wantHoliday ? notice.holiday : '', who.list);
@@ -217,7 +220,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
                   href={`${basePath}/${post.id}`}
                   className="text-[14px] hover:underline underline-offset-2 block truncate"
                 >
-                  {post.title}
+                  <PostTags tags={post.tags} className="mr-1.5" />{post.title}
                 </Link>
               </div>
               <span className="text-[11px] text-[#bbb] shrink-0">{fmt(post.createdAt)}</span>

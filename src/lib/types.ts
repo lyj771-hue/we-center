@@ -6,6 +6,8 @@ export interface Post {
   category: Category;
   /** We슐랭 — 가게 위치 */
   location?: string;
+  /** 공지사항 — 글을 올릴 때 고른 공지 메시지 종류·센터·명절. 제목 앞에 작은 표시로 (supabase/post-tags.sql) */
+  tags?: string[];
   createdAt: string;
 }
 
