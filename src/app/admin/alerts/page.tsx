@@ -194,6 +194,14 @@ function SentLog() {
   const shown = (list ?? []).filter(m => (status === 'all' || m.status === status) && (kind === 'all' || m.templateId === kind)
     && (!month || (m.sentAt ?? m.createdAt).slice(0, 7) === month)
     && (!q.trim() || `${m.childName} ${m.phone ?? ''}`.includes(q.trim())));
+  // 단체 알림(같은 batchId)은 한 줄로 — 맨 오른쪽에 몇 명, [명단]을 누르면 누구에게 갔는지
+  type Item = { key: string; first: OutboxMessage; members: OutboxMessage[] };
+  const items: Item[] = [];
+  for (const m of shown) {
+    const g = m.batchId ? items.find(x => x.key === `b:${m.batchId}`) : undefined;
+    if (g) g.members.push(m);
+    else items.push({ key: m.batchId ? `b:${m.batchId}` : m.id, first: m, members: [m] });
+  }
   const remove = async (m: OutboxMessage) => {
     if (!(await askConfirm(`${m.childName} 알림을 지울까요? (보내지 않아요)`))) return;
     try { await deleteOutbox(m.id); load(); } catch (e) { showAlert(`지우지 못했어요.\n${(e as Error).message}`); }
@@ -214,7 +222,7 @@ function SentLog() {
         </select>
         <input type="month" value={month} onChange={e => setMonth(e.target.value)} className={sel} aria-label="달" />
         {month && <button onClick={() => setMonth('')} className="text-[11px] text-[#888] underline underline-offset-2">달 지우기</button>}
-        <span className="ml-auto text-[12px] text-[#999]">{shown.length}건</span>
+        <span className="ml-auto text-[12px] text-[#999]">{items.length}건{items.length !== shown.length ? ` (보호자 ${shown.length}명)` : ''}</span>
       </div>
       <p className="text-[11px] text-[#aaa] mb-3">알림톡(솔라피)을 연결하기 전이라 지금은 '보낼 것'으로 쌓이기만 해요. 연결하면 보낸 시각·실패 사유가 여기 남아요.</p>
       {failed && <p className="text-[13px] text-[#b45309] mb-3">불러오지 못했어요 — SQL(supabase/teacher-leave.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
@@ -224,25 +232,50 @@ function SentLog() {
           <table className="w-full text-[12px] text-[#333] border-collapse">
             <thead>
               <tr className="border-b border-[#e5e5e5] text-[#999] text-left">
-                {['만든 시각', '아이', '받는 번호', '알림', '내용', '상태', '보낸 시각 / 사유', ''].map((h, i) => <th key={i} className="font-normal px-3 py-2.5 whitespace-nowrap">{h}</th>)}
+                {['만든 시각', '아이', '받는 번호', '알림', '내용', '상태', '보낸 시각 / 사유', '받는 사람', ''].map((h, i) => <th key={i} className="font-normal px-3 py-2.5 whitespace-nowrap">{h}</th>)}
               </tr>
             </thead>
             <tbody>
-              {shown.map(m => {
+              {items.map(({ key, first: m, members }) => {
                 const t = rows.find(r => r.id === m.templateId);
+                const group = members.length > 1 || !!m.batchId;
+                const cnt = (st: OutboxStatus) => members.filter(x => x.status === st).length;
+                const isOpen = open === key;
                 return (
-                  <FragmentRow key={m.id} cols={8} open={open === m.id && !!t}
-                    preview={t ? <div className="max-w-[300px]"><KakaoPreview spec={t.spec} vars={{ ...t.samples, ...m.vars }} /></div> : null}>
+                  <FragmentRow key={key} cols={9} open={isOpen && (group || !!t)}
+                    preview={group ? (
+                      <div className="flex flex-wrap gap-6">
+                        {t && <div className="max-w-[300px]"><KakaoPreview spec={t.spec} vars={{ ...t.samples, ...m.vars }} /></div>}
+                        <table className="text-[12px] border-collapse self-start">
+                          <thead><tr className="text-[#999] text-left">{['아이', '받는 번호', '상태', '보낸 시각 / 사유'].map(h => <th key={h} className="font-normal px-2 py-1">{h}</th>)}</tr></thead>
+                          <tbody>
+                            {members.map(x => (
+                              <tr key={x.id} className="border-t border-[#eee]">
+                                <td className="px-2 py-1 whitespace-nowrap">{x.childName}</td>
+                                <td className="px-2 py-1 whitespace-nowrap tabular-nums text-[#888]">{x.phone ?? <span className="text-[#e11d48]">번호 없음</span>}</td>
+                                <td className="px-2 py-1 whitespace-nowrap"><span className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[x.status]}`}>{STATUS[x.status]}</span></td>
+                                <td className="px-2 py-1 text-[#888]">{x.sentAt ? fmt(x.sentAt) : ''}{x.error ? <span className="block text-[#b91c1c]">{x.error}</span> : null}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : t ? <div className="max-w-[300px]"><KakaoPreview spec={t.spec} vars={{ ...t.samples, ...m.vars }} /></div> : null}>
                     <td className="px-3 py-2 whitespace-nowrap tabular-nums text-[#999]">{fmt(m.createdAt)}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{m.childName}</td>
-                    <td className="px-3 py-2 whitespace-nowrap tabular-nums text-[#888]">{m.phone ?? <span className="text-[#e11d48]">번호 없음</span>}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{group ? <span className="text-[#555]">단체</span> : m.childName}</td>
+                    <td className="px-3 py-2 whitespace-nowrap tabular-nums text-[#888]">{group ? '—' : m.phone ?? <span className="text-[#e11d48]">번호 없음</span>}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{labelOf(m.templateId)}</td>
-                    <td className="px-3 py-2 text-[#666]">{[m.vars['날짜'], m.vars['시간'], m.vars['구분'], m.vars['사유'], m.vars['신청결과']].filter(Boolean).join(' · ')}</td>
-                    <td className="px-3 py-2 whitespace-nowrap"><span className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[m.status]}`}>{STATUS[m.status]}</span></td>
-                    <td className="px-3 py-2 text-[#888]">{m.sentAt ? fmt(m.sentAt) : ''}{m.error ? <span className="block text-[#b91c1c]">{m.error}</span> : null}</td>
+                    <td className="px-3 py-2 text-[#666]">{[m.vars['날짜'], m.vars['시간'], m.vars['구분'], m.vars['사유'], m.vars['신청결과'], m.vars['센터'], m.vars['명절'], group ? m.vars['제목'] : undefined].filter(Boolean).join(' · ')}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {group
+                        ? <span className="flex flex-wrap gap-1">{(Object.keys(STATUS) as OutboxStatus[]).filter(st => cnt(st)).map(st => <span key={st} className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[st]}`}>{STATUS[st]} {cnt(st)}</span>)}</span>
+                        : <span className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[m.status]}`}>{STATUS[m.status]}</span>}
+                    </td>
+                    <td className="px-3 py-2 text-[#888]">{group ? (members.find(x => x.sentAt)?.sentAt ? fmt(members.find(x => x.sentAt)!.sentAt) : '') : <>{m.sentAt ? fmt(m.sentAt) : ''}{m.error ? <span className="block text-[#b91c1c]">{m.error}</span> : null}</>}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{group ? <span className="font-medium text-[#333]">{members.length}명</span> : <span className="text-[#bbb]">1명</span>}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right">
-                      {t && <button onClick={() => setOpen(o => (o === m.id ? null : m.id))} className="text-[11px] text-[#888] underline underline-offset-2 mr-2">{open === m.id ? '접기' : '미리보기'}</button>}
-                      {m.status === 'pending' && <button onClick={() => remove(m)} className="text-[11px] text-[#aaa] underline underline-offset-2 hover:text-red-500">지우기</button>}
+                      {(group || t) && <button onClick={() => setOpen(o => (o === key ? null : key))} className="text-[11px] text-[#888] underline underline-offset-2 mr-2">{isOpen ? '접기' : group ? '명단 보기' : '미리보기'}</button>}
+                      {!group && m.status === 'pending' && <button onClick={() => remove(m)} className="text-[11px] text-[#aaa] underline underline-offset-2 hover:text-red-500">지우기</button>}
                     </td>
                   </FragmentRow>
                 );

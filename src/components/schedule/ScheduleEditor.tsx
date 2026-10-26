@@ -6,7 +6,7 @@ import type { Holiday, Schedule, ScheduleDraft, Teacher, Template, TemplateData 
 import type { CellView } from '@/lib/timetable';
 import { ROW_LABEL, cellOf, childLabel, getChildren, getDayBoard, rowsForDay, worksAt } from '@/lib/timetable';
 import { getMemberCenters, getMembers } from '@/lib/store';
-import { addAndSendOutbox, addOutbox } from '@/lib/leave';
+import { addAndSendOutbox, addOutbox, newBatchId } from '@/lib/leave';
 import {
   addDays, addTeacher, approveCancel, cancelSlot, deleteTeacher, deleteTemplate, dowLabel, getKoreanHolidays, getTemplates, parseDateList, parseYmd,
   saveSchedule, saveTemplate, scheduleRange, setScheduleHidden, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
@@ -311,11 +311,12 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
       if (ask && !confirm(`보호자에게 "${scheduleTitle}" 업데이트 알림을 남길까요?\n(${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자 ${withPhone.length}명${approved.length > withPhone.length ? ` · 번호 없는 ${approved.length - withPhone.length}명은 빼요` : ''})`)) return;
       const now = new Date();
       const day = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+      const batchId = newBatchId();
       await addOutbox(withPhone.map(m => {
         const kid = kids.find(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') === center);
         const name = kid ? childLabel(kid) : m.nickname;
         return {
-          templateId: 'schedule_updated', refId: scheduleId, childId: kid?.id, userId: m.userId, childName: name, phone: m.phone,
+          templateId: 'schedule_updated', refId: scheduleId, childId: kid?.id, userId: m.userId, childName: name, phone: m.phone, batchId,
           vars: { 이름: kid?.name ?? m.nickname, 제목: scheduleTitle, 날짜: day, 센터: center === 'uijeongbu' ? '의정부점' : '은평점' },
         };
       }));

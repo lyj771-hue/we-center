@@ -85,7 +85,9 @@ export async function POST(request: Request) {
         messageType: base.messageType ?? 'BA',
         emphasizeType: 'ITEM_LIST',
         ...(base.header ? { header: s.title } : { highlight: { title: s.title, description: s.sub } }),
-        item: { list: s.items.filter(i => i.name.trim() && i.value.trim()).map(i => ({ title: i.name, description: i.value })) },
+        ...(s.items.some(i => i.name.trim() && i.value.trim())
+          ? { item: { list: s.items.filter(i => i.name.trim() && i.value.trim()).map(i => ({ title: i.name, description: i.value })) } }
+          : {}),
         ...(imageId ? { imageId } : {}),
         buttons: s.button.name.trim() ? [{ buttonType: 'WL', buttonName: s.button.name, linkMo: s.button.url, linkPc: s.button.url }] : [],
       };

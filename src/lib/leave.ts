@@ -29,26 +29,34 @@ export type OutboxStatus = 'pending' | 'sent' | 'failed' | 'skipped';
 export interface OutboxMessage {
   id: string; templateId: string; refId?: string; childId?: string; userId?: string; childName: string; phone?: string;
   vars: Record<string, string>; status: OutboxStatus; error?: string; createdAt: string; sentAt?: string;
+  /** 단체 알림(공지·스케줄 수정 등 여러 명에게 한 번에) — 같은 값끼리 알림 내역에서 한 줄로 묶는다 (supabase/outbox-batch.sql) */
+  batchId?: string;
 }
 
-export async function addOutbox(list: Omit<OutboxMessage, 'id' | 'status' | 'createdAt'>[]): Promise<void> {
+type NewOutbox = Omit<OutboxMessage, 'id' | 'status' | 'createdAt'>;
+const toRow = (m: NewOutbox, withBatch: boolean) => ({
+  template_id: m.templateId, ref_id: m.refId ?? null, child_id: m.childId ?? null, user_id: m.userId ?? null,
+  child_name: m.childName, phone: m.phone ?? null, vars: m.vars, ...(withBatch && m.batchId ? { batch_id: m.batchId } : {}),
+});
+/** 보낼 알림 넣기 — batch_id 칸이 아직 없으면(SQL 전) 그 칸만 빼고 다시 */
+async function insertOutbox(list: NewOutbox[]): Promise<string[]> {
+  let r = await supabase.from('outbox_messages').insert(list.map(m => toRow(m, true))).select('id');
+  if (r.error?.code === '42703' || r.error?.code === 'PGRST204') r = await supabase.from('outbox_messages').insert(list.map(m => toRow(m, false))).select('id');
+  if (r.error) throw r.error;
+  return (r.data ?? []).map(x => x.id as string);
+}
+/** 단체 알림 묶음 id */
+export const newBatchId = () => crypto.randomUUID();
+
+export async function addOutbox(list: NewOutbox[]): Promise<void> {
   if (!list.length) return;
-  const { error } = await supabase.from('outbox_messages').insert(list.map(m => ({
-    template_id: m.templateId, ref_id: m.refId ?? null, child_id: m.childId ?? null, user_id: m.userId ?? null,
-    child_name: m.childName, phone: m.phone ?? null, vars: m.vars,
-  })));
-  if (error) throw error;
+  await insertOutbox(list);
 }
 
 /** 보낼 알림을 남기고 바로 보낸다(솔라피) — 템플릿 ID가 없는 알림은 남기기만. 결과 건수 */
-export async function addAndSendOutbox(list: Omit<OutboxMessage, 'id' | 'status' | 'createdAt'>[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
+export async function addAndSendOutbox(list: NewOutbox[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
   if (!list.length) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };
-  const { data, error } = await supabase.from('outbox_messages').insert(list.map(m => ({
-    template_id: m.templateId, ref_id: m.refId ?? null, child_id: m.childId ?? null, user_id: m.userId ?? null,
-    child_name: m.childName, phone: m.phone ?? null, vars: m.vars,
-  }))).select('id');
-  if (error) throw error;
-  return sendOutbox((data ?? []).map(r => r.id as string));
+  return sendOutbox(await insertOutbox(list));
 }
 
 /** 이미 남긴 보낼 알림을 보낸다(솔라피) — 결과 건수 */
@@ -85,6 +93,7 @@ export async function getOutbox(limit = 200): Promise<OutboxMessage[]> {
     childName: (r.child_name as string | null) ?? '', phone: (r.phone as string | null) ?? undefined,
     vars: (r.vars as Record<string, string>) ?? {}, status: r.status as OutboxStatus, error: (r.error as string | null) ?? undefined,
     createdAt: r.created_at as string, sentAt: (r.sent_at as string | null) ?? undefined,
+    batchId: (r.batch_id as string | null) ?? undefined,
   }));
 }
 

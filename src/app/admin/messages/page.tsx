@@ -25,6 +25,9 @@ export default function MessagesPage() {
   const [noTable, setNoTable] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // 탭 — 주소 끝 ?tab=notice 면 공지 메시지부터
+  const [tab, setTab] = useState<'alert' | 'notice'>('alert');
+  useEffect(() => { if (new URLSearchParams(window.location.search).get('tab') === 'notice') setTab('notice'); }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,7 +100,12 @@ export default function MessagesPage() {
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
   const groups = MESSAGE_GROUPS.map(g => ({ ...g, rows: rows.filter(t => (MESSAGE_GROUPS.some(x => x.key === t.grp) ? t.grp : 'etc') === g.key) }))
-    .filter(g => g.rows.length || g.key !== 'etc');
+    .filter(g => g.rows.length || g.key !== 'etc')
+    .filter(g => (tab === 'notice') === (g.key === 'notice_kind'));
+  const tabBtn = (k: 'alert' | 'notice', label: string) => (
+    <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+      className={`text-[13px] px-4 py-2 border transition-colors ${tab === k ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`}>{label}</button>
+  );
 
   return (
     <div className="px-3 md:px-6 pt-6 pb-14 fade-up">
@@ -112,6 +120,12 @@ export default function MessagesPage() {
         {failed && <p className="text-[13px] text-red-400 mb-4">불러오지 못했어요. ({failed})</p>}
         {noTable && <p className="text-[13px] text-[#b45309] bg-[#fffbeb] border border-[#fde68a] rounded-md px-3 py-2 mb-4">적어 볼 수는 있지만 아직 저장은 안 돼요. {SQL_HINT}</p>}
 
+        {/* 탭 — 알림 메시지(수업·시간표·선결제…) / 공지 메시지(공지사항 글을 목적별로 알리는 것) */}
+        <div role="tablist" className="flex gap-1.5 mt-2">
+          {tabBtn('alert', '알림 메시지')}
+          {tabBtn('notice', '공지 메시지')}
+        </div>
+        {tab === 'notice' && <p className="mt-3 text-[12px] text-[#999] leading-[1.8]">공지사항에 글을 올릴 때 목적에 맞는 것을 골라 보내요. 카카오가 &lsquo;공지&rsquo;처럼 넓은 말머리는 승인하지 않아서 목적별로 나눴어요.</p>}
         {groups.map(g => (
           <Fragment key={g.key}>
             <h2 className="mt-8 mb-3 text-[14px] text-[var(--brand)]">{g.label}</h2>

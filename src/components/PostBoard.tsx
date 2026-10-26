@@ -10,6 +10,9 @@ import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
 import WeslangBoard from './WeslangBoard';
 import CarrotBoard from './CarrotBoard';
+import type { MessageRow } from '@/lib/messages';
+import { CENTER_LABEL, getNoticeKinds, needsCenter, needsHoliday, noticeRecipients, sendNotice, type NoticeCenter } from '@/lib/noticeAlimtalk';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
 const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
   ssr: false,
@@ -31,14 +34,41 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', location: '' });
   const isWeslang = category === 'weslang';
+  // 공지사항 — 글을 올리며 공지 메시지(알림톡)를 보낼지. 종류에 #{센터}가 있으면 센터 필수, #{명절}이 있으면 명절 필수
+  const isNotice = category === 'notices';
+  const [kinds, setKinds] = useState<MessageRow[]>([]);
+  const [notice, setNotice] = useState<{ kind: string; center: NoticeCenter | null; holiday: string }>({ kind: '', center: null, holiday: '' });
+  useEffect(() => { if (isNotice && isAdmin && editing && !kinds.length) getNoticeKinds().then(setKinds).catch(() => {}); }, [isNotice, isAdmin, editing, kinds.length]);
+  const kind = kinds.find(k => k.id === notice.kind);
+  const wantCenter = !!kind && needsCenter(kind);
+  const wantHoliday = !!kind && needsHoliday(kind);
 
   const refresh = async () => setPosts(await getAllPosts(category));
   useEffect(() => { refresh(); }, [category]);
 
   const handleAdd = async () => {
     if (!form.title.trim()) return;
-    await addPost(category, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location } : {}) });
+    // 공지 메시지 — 꼭 채울 칸을 비우면 저장하지 않는다
+    if (kind && wantCenter && !notice.center) { await showAlert('이 공지 메시지는 센터를 꼭 골라야 해요.\n수색점 / 의정부점 중 하나를 골라 주세요.'); return; }
+    if (kind && wantHoliday && !notice.holiday.trim()) { await showAlert('이 공지 메시지는 명절 이름을 꼭 적어야 해요.\n(예: 추석, 설)'); return; }
+    let who: Awaited<ReturnType<typeof noticeRecipients>> | null = null;
+    if (kind) {
+      try { who = await noticeRecipients(wantCenter ? notice.center : null); }
+      catch (e) { await showAlert(`받을 보호자를 불러오지 못했어요.\n${(e as Error).message}`); return; }
+      const where = wantCenter && notice.center ? `${CENTER_LABEL[notice.center]} ` : '';
+      if (!(await askConfirm(`글을 올리고 "${kind.label}" 알림톡을 보낼까요?\n\n받는 사람: ${where}승인된 보호자 ${who.list.length}명${who.noPhone ? `\n(전화번호 없는 ${who.noPhone}명은 빠져요)` : ''}`, '올리고 보내기'))) return;
+    }
+    const post = await addPost(category, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location } : {}) });
+    if (kind && who) {
+      try {
+        const r = await sendNotice(kind, post.id, wantCenter ? notice.center : null, wantHoliday ? notice.holiday : '', who.list);
+        await showAlert(`글을 올렸어요.\n알림톡 — 보냄 ${r.sent}건${r.failed ? ` · 실패 ${r.failed}건` : ''}${r.skipped ? ` · 번호 없음 ${r.skipped}건` : ''}${r.waiting ? ` · 템플릿 심사 전이라 남겨만 둠 ${r.waiting}건` : ''}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+      } catch (e) {
+        await showAlert(`글은 올렸지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
+      }
+    }
     setForm({ title: '', content: '', location: '' });
+    setNotice({ kind: '', center: null, holiday: '' });
     setEditing(false);
     refresh();
   };
@@ -101,6 +131,40 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
                   className="mt-3 w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]" />
               )}
               {isWeslang && <p className="mt-2 text-[11px] text-[#aaa]">본문 첫 사진이 목록 가운데 큰 사진, 나머지 사진은 오른쪽 작은 사진이 돼요.</p>}
+              {/* 공지사항 — 공지 메시지(알림톡) 고르기 */}
+              {isNotice && isAdmin && (
+                <div className="mt-4 rounded-lg bg-[#f8fafc] border border-[#e5e7eb] px-4 py-3 space-y-2">
+                  <label className="flex flex-wrap items-center gap-2 text-[13px]">
+                    <span className="text-[#555] shrink-0">알림톡</span>
+                    <select value={notice.kind} onChange={e => setNotice({ kind: e.target.value, center: null, holiday: '' })}
+                      className="flex-1 min-w-[200px] border border-[#ddd] bg-white px-2 h-9 text-[13px]">
+                      <option value="">보내지 않음</option>
+                      {kinds.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}
+                    </select>
+                  </label>
+                  {wantCenter && (
+                    <fieldset className="flex flex-wrap items-center gap-3 text-[13px]">
+                      <legend className="sr-only">센터</legend>
+                      <span className="text-[#555]">센터 <span className="text-[#e11d48]">*</span></span>
+                      {(Object.keys(CENTER_LABEL) as NoticeCenter[]).map(c => (
+                        <label key={c} className="flex items-center gap-1">
+                          <input type="radio" name="notice-center" checked={notice.center === c} onChange={() => setNotice(n => ({ ...n, center: c }))} />
+                          {CENTER_LABEL[c]}
+                        </label>
+                      ))}
+                      <span className="text-[11px] text-[#999]">고른 센터 보호자에게만 가요</span>
+                    </fieldset>
+                  )}
+                  {wantHoliday && (
+                    <label className="flex flex-wrap items-center gap-2 text-[13px]">
+                      <span className="text-[#555]">명절 <span className="text-[#e11d48]">*</span></span>
+                      <input value={notice.holiday} onChange={e => setNotice(n => ({ ...n, holiday: e.target.value }))} placeholder="예: 추석, 설"
+                        className="border border-[#ddd] bg-white px-2 h-9 w-40 text-[13px] outline-none focus:border-[var(--brand)]" />
+                    </label>
+                  )}
+                  {kind && <p className="text-[11px] text-[#999]">저장하면 글을 올리고, 받을 사람 수를 확인한 뒤 알림톡을 보내요. 버튼은 이 공지 글로 가요.</p>}
+                </div>
+              )}
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-8">
               <RichTextEditor

@@ -12,13 +12,15 @@ export const MESSAGE_GROUPS: { key: string; label: string; vars: string[] }[] = 
   { key: 'member',    label: '회원',        vars: ['이름', '날짜', '센터', '결과'] },
   { key: 'fixed',     label: '고정 스케줄', vars: ['이름', '구분', '날짜', '요일', '수업', '선생님', '변동내용'] },
   { key: 'etc',       label: '기타',        vars: ['이름', '날짜', '센터'] },
+  // 공지 메시지 — 메시지 모양 화면의 [공지 메시지] 탭. 공지사항 글을 올릴 때 목적별로 골라 보낸다(버튼 = 그 공지 글)
+  { key: 'notice_kind', label: '공지 메시지', vars: ['이름', '센터', '명절', '글번호'] },
 ];
 
 /** 미리보기용 예시 값 — 알림마다 다른 값은 DEFAULT_TEMPLATES 의 samples 가 덮어쓴다. 날짜는 늘 연도까지 */
 export const SAMPLE_VARS: Record<string, string> = {
   이름: '김유담', 아이이름: '김유담', 날짜: '2026/10/16', 월일: '10/16', 요일: '목', 시간: '15:40', 선생님: '이정길', 센터: '은평점',
   제목: '추석 연휴 휴무 안내', 글번호: '1', 신청결과: '확정', 결과: '승인', 구분: '사용', 기존횟수: '46', 변동: '-2회', 남은횟수: '44',
-  수업: '매주 화 15:40', 변동내용: '화 15:40 → 목 16:20', 사유: '휴무', 남은시간: '1시간 30분',
+  명절: '추석', 수업: '매주 화 15:40', 변동내용: '화 15:40 → 목 16:20', 사유: '휴무', 남은시간: '1시간 30분',
   수업1: '15:40 이정길 선생님', 수업2: '16:20 이정길 선생님', 수업3: '17:00 이정길 선생님', 수업4: '17:40 이정길 선생님',
   수업5: '10:00 이정길 선생님', 수업6: '10:40 이정길 선생님', 수업7: '11:20 이정길 선생님', 수업8: '13:20 이정길 선생님',
 };
@@ -70,14 +72,6 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
       items: [{ name: '일자', value: '#{날짜}(#{요일})' }, { name: '센터', value: '#{센터}' }, { name: '수업 1', value: '#{수업1}' }, { name: '수업 2', value: '#{수업2}' }],
       body: '#{이름} 님, #{월일}(#{요일}) 수업을 안내드립니다.\n변경이나 취소는 센터로 연락해 주세요.', button: { name: '주간 스케줄 보기', url: `${SITE}/mypage?d=#{날짜}` } },
     condition: '관리자가 날짜를 골라 보내면, 그날 수업이 있는 아이마다 한 번 (결석·다른 선생님으로 옮긴 수업은 빼고).\n수업 개수(1~8개)에 맞는 템플릿으로 보낸다 — 1개용~8개용을 따로 심사받는다.',
-  },
-  {
-    id: 'notice', grp: 'lesson', label: '공지 알림', sort: 20,
-    spec: { image: 'logo', title: 'We 센터 공지사항', sub: 'We 센터',
-      items: [{ name: '제목', value: '#{제목}' }, { name: '게시일', value: '#{날짜}' }],
-      body: '#{이름} 님, 새 공지사항을 안내드립니다.\n자세한 내용은 아래 버튼을 눌러 확인해 주세요.', button: { name: '공지 보기', url: `${SITE}/notices/#{글번호}` } },
-    samples: { 날짜: '2026/09/29' },
-    condition: '공지사항에 글을 올릴 때 관리자가 보낼지 고르면, 승인된 보호자 모두에게 한 번.\n휴무·수업 변경 같은 이용 안내만 (행사·할인 홍보는 알림톡으로 못 보낸다).',
   },
   {
     id: 'schedule_notice', grp: 'lesson', label: '스케줄 공지 알림', sort: 30,
@@ -152,10 +146,77 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
     samples: { 날짜: '2026/10/22', 구분: '변동' },
     condition: '관리자가 아이의 고정 수업을 새로 정하거나(확정), 끝내거나(취소), 요일·시간·선생님을 바꿀 때(변동) 그 보호자에게 한 번.\n#{구분} = 확정 / 취소 / 변동',
   },
+  // ── 공지 메시지 (목적별) — 카카오가 '공지' 같은 넓은 말머리를 반려해서 목적마다 나눴다. 여러 명에게 가니 본문 끝에 고지 문장
+  {
+    id: 'notice_schedule_upload', grp: 'notice_kind', label: '수업 스케줄 업로드 일정 안내', sort: 10,
+    spec: { image: 'logo', title: '#{센터} 수업 스케줄 업로드 일정 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\n수업 스케줄 업로드 일정을 안내드려요\n빈 수업은 올라온 뒤 먼저 신청한 순서로 정해져요\n\n※ 이 메시지는 We 센터 수업 스케줄 업로드 일정 안내로, 새 스케줄을 올리기 전에 발송돼요', button: { name: '안내 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_christmas', grp: 'notice_kind', label: '크리스마스 행사 일정 안내', sort: 20,
+    spec: { image: 'logo', title: 'We 센터 크리스마스 행사 일정 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\n크리스마스 행사를 안내드려요\n자세한 일정과 참여 방법은 아래 버튼에서 확인해 주세요\n\n※ 이 메시지는 We 센터 크리스마스 행사 안내로, 행사 일정이 있을 때 발송돼요', button: { name: '행사 안내 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_copay', grp: 'notice_kind', label: '본인 부담금 납부 안내', sort: 30,
+    spec: { image: 'logo', title: '#{센터} 본인 부담금 납부 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\n바우처 본인 부담금 납부를 안내드려요\n이미 납부하셨다면 이 안내는 넘기셔도 돼요\n\n※ 이 메시지는 We 센터 본인 부담금 납부 안내로, 매월 납부 기간에 발송돼요', button: { name: '납부 안내 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_hoppang', grp: 'notice_kind', label: '호빵데이 운영 일정 안내', sort: 40,
+    spec: { image: 'logo', title: '#{센터} 호빵데이 운영 일정 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\n호빵데이 운영 일정을 안내드려요\n자세한 일정과 참여 방법은 아래 버튼에서 확인해 주세요\n\n※ 이 메시지는 We 센터 호빵데이 행사 안내로, 행사 일정이 있을 때 발송돼요', button: { name: '운영 일정 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_writing', grp: 'notice_kind', label: '백일장 투표 참여 안내', sort: 50,
+    spec: { image: 'logo', title: 'We 센터 백일장 투표 참여 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\n센터 백일장 투표 참여를 안내드려요\n자세한 일정과 참여 방법은 아래 버튼에서 확인해 주세요\n\n※ 이 메시지는 We 센터 백일장 참여 안내로, 백일장이 있을 때 발송돼요', button: { name: '백일장 안내 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_marathon', grp: 'notice_kind', label: '마라톤 참여 일정 안내', sort: 60,
+    spec: { image: 'logo', title: 'We 센터 마라톤 참여 일정 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\nWe 센터와 함께하는 마라톤 일정을 안내드려요\n자세한 일정과 참여 방법은 아래 버튼에서 확인해 주세요\n\n※ 이 메시지는 We 센터 마라톤 행사 안내로, 행사 일정이 있을 때 발송돼요', button: { name: '참여 일정 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_no_gift', grp: 'notice_kind', label: '선물 안 주고 안 받기 안내', sort: 70,
+    spec: { image: 'logo', title: 'We 센터 선물 안 주고 안 받기 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\nWe 센터는 선생님께 드리는 선물과 간식을 정중히 사양하고 있어요\n보내 주시는 마음만 감사히 받을게요\n\n※ 이 메시지는 We 센터 선물 안 주고 안 받기 안내로, 센터 운영 방침을 안내할 때 발송돼요', button: { name: '안내 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_lost', grp: 'notice_kind', label: '분실물 보관 안내', sort: 80,
+    spec: { image: 'logo', title: '#{센터} 분실물 보관 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\n센터에서 보관 중인 분실물을 안내드려요\n꼭 확인하시고 센터로 연락 부탁드려요\n\n※ 이 메시지는 We 센터 분실물 보관 안내로, 보관 중인 분실물이 있을 때 발송돼요', button: { name: '분실물 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_facility', grp: 'notice_kind', label: '시설 점검 안내', sort: 90,
+    spec: { image: 'logo', title: '#{센터} 시설 점검 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\n센터 시설 점검 일정을 안내드려요\n점검 시간에는 일부 공간 이용이 제한될 수 있어요\n\n※ 이 메시지는 We 센터 시설 점검 안내로, 점검 일정이 있을 때 발송돼요', button: { name: '안내 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_holiday_lessons', grp: 'notice_kind', label: '명절 연휴 수업 운영 안내', sort: 100,
+    spec: { image: 'logo', title: '#{센터} #{명절} 연휴 수업 운영 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\n#{명절} 연휴 기간 수업 운영 일정을 안내드려요\n연휴 중 수업 여부는 아래 버튼에서 확인해 주세요\n\n※ 이 메시지는 We 센터 명절 연휴 수업 운영 안내로, 명절 연휴 전에 발송돼요', button: { name: '안내 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
+  {
+    id: 'notice_holiday', grp: 'notice_kind', label: '휴일 안내', sort: 110,
+    spec: { image: 'logo', title: 'We 센터 휴일 안내', sub: 'We 센터', items: [],
+      body: '#{이름} 님,\nWe 센터 휴일을 안내드려요\n휴일에는 수업이 변경될 수 있어요\n\n※ 이 메시지는 We 센터 휴일 안내로, 센터 휴일 전에 발송돼요', button: { name: '휴일 안내 보기', url: `${SITE}/notices/#{글번호}` } },
+    condition: '공지사항에 이 목적의 글을 올릴 때 관리자가 골라 보내면, 승인된 보호자 모두에게 한 번. 버튼은 그 공지 글로 간다.',
+  },
 ];
 
 /** 예전 기본 종류 — 선결제 하나로 합쳤다. DB에 남아 있어도 안 보인다 */
-const RETIRED = ['prepaid_charge', 'prepaid_adjust'];
+const RETIRED = ['prepaid_charge', 'prepaid_adjust', 'notice'];   // notice = 예전 '공지 알림' 하나짜리 → 공지 메시지(목적별 11개)로 나눔
 
 /** 알림 한 줄 — 화면에서 쓰는 모양 */
 export type MessageRow = MessageTemplate & { spec: MessageSpec; samples: Record<string, string>; builtIn: boolean; saved: boolean };
