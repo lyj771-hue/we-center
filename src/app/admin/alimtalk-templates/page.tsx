@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { supabase } from '@/lib/supabaseClient';
-import { getMessageTemplates, toRows, type MessageSpec } from '@/lib/messages';
+import { getMessageTemplates, tabOfMessage, toRows, type MessageSpec, type MessageTab } from '@/lib/messages';
 import { getAlimtalkTemplateIds, saveAlimtalkTemplateId } from '@/lib/leave';
 import { askConfirm, showAlert } from '@/lib/dialog';
 
@@ -57,7 +57,7 @@ export default function AlimtalkTemplatesPage() {
   const [savedIds, setSavedIds] = useState<Record<string, string>>({});
   const [picked, setPicked] = useState<Set<string>>(new Set());
   // 탭 — 알림 메시지 / 공지 메시지(메시지 모양의 [공지 메시지] 탭과 같은 묶음)
-  const [tab, setTab] = useState<'alert' | 'notice'>('alert');
+  const [tab, setTab] = useState<MessageTab>('alert');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState('');
@@ -104,7 +104,7 @@ export default function AlimtalkTemplatesPage() {
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
-  const tabRows = rows.filter(r => (tab === 'notice') === (r.grp === 'notice_kind'));
+  const tabRows = rows.filter(r => tabOfMessage(r) === tab);
   const pickable = tabRows.filter(r => canPick(r.key));
   const pickedHere = tabRows.filter(r => picked.has(r.key)).length;
   const using = (key: string) => statusOf[key]?.code === 'USING';
@@ -137,8 +137,8 @@ export default function AlimtalkTemplatesPage() {
         카테고리·We 로고 그림은 이미 통과한 &ldquo;시간표 신청 확정/취소&rdquo; 템플릿과 똑같이 올라가요. 통과하면 이 화면을 열 때 ID가 자동으로 저장돼요.
       </p>
       <div role="tablist" className="flex gap-1.5 mb-4">
-        {([['alert', '알림 메시지'], ['notice', '공지 메시지']] as const).map(([k, label]) => {
-          const n = rows.filter(r => (k === 'notice') === (r.grp === 'notice_kind') && picked.has(r.key)).length;
+        {([['alert', '알림 메시지'], ['admin', '관리자 알림'], ['notice', '공지 메시지']] as const).map(([k, label]) => {
+          const n = rows.filter(r => tabOfMessage(r) === k && picked.has(r.key)).length;
           return (
             <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
               className={`text-[13px] px-4 py-2 border transition-colors ${tab === k ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`}>

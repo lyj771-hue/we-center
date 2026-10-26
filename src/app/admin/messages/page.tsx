@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import type { MessageRow, MessageSpec, MessageTemplate } from '@/lib/messages';
-import { MESSAGE_GROUPS, MESSAGE_IMAGES, deleteMessageTemplate, getMessageTemplates, isMissingTable, newSpec, saveMessageTemplate, specToBody, toRows } from '@/lib/messages';
+import { MESSAGE_GROUPS, MESSAGE_IMAGES, deleteMessageTemplate, getMessageTemplates, isMissingTable, newSpec, saveMessageTemplate, specToBody, tabOfMessage, toRows, type MessageTab } from '@/lib/messages';
 import { askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import Link from 'next/link';
 import KakaoPreview from '@/components/KakaoPreview';
@@ -26,8 +26,8 @@ export default function MessagesPage() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   // 탭 — 주소 끝 ?tab=notice 면 공지 메시지부터
-  const [tab, setTab] = useState<'alert' | 'notice'>('alert');
-  useEffect(() => { if (new URLSearchParams(window.location.search).get('tab') === 'notice') setTab('notice'); }, []);
+  const [tab, setTab] = useState<MessageTab>('alert');
+  useEffect(() => { const q = new URLSearchParams(window.location.search).get('tab'); if (q === 'notice' || q === 'admin') setTab(q); }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,10 +99,11 @@ export default function MessagesPage() {
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
-  const groups = MESSAGE_GROUPS.map(g => ({ ...g, rows: rows.filter(t => (MESSAGE_GROUPS.some(x => x.key === t.grp) ? t.grp : 'etc') === g.key) }))
-    .filter(g => g.rows.length || g.key !== 'etc')
-    .filter(g => (tab === 'notice') === (g.key === 'notice_kind'));
-  const tabBtn = (k: 'alert' | 'notice', label: string) => (
+  // 이 탭 알림만 — 보호자 알림 / 관리자에게 가는 알림 / 공지 메시지
+  const tabRows = rows.filter(t => tabOfMessage(t) === tab);
+  const groups = MESSAGE_GROUPS.map(g => ({ ...g, rows: tabRows.filter(t => (MESSAGE_GROUPS.some(x => x.key === t.grp) ? t.grp : 'etc') === g.key) }))
+    .filter(g => g.rows.length || (tab === 'alert' && g.key !== 'etc' && g.key !== 'notice_kind') || (tab === 'notice' && g.key === 'notice_kind'));
+  const tabBtn = (k: MessageTab, label: string) => (
     <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
       className={`text-[13px] px-4 py-2 border transition-colors ${tab === k ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`}>{label}</button>
   );
@@ -123,8 +124,10 @@ export default function MessagesPage() {
         {/* 탭 — 알림 메시지(수업·시간표·선결제…) / 공지 메시지(공지사항 글을 목적별로 알리는 것) */}
         <div role="tablist" className="flex gap-1.5 mt-2">
           {tabBtn('alert', '알림 메시지')}
+          {tabBtn('admin', '관리자 알림')}
           {tabBtn('notice', '공지 메시지')}
         </div>
+        {tab === 'admin' && <p className="mt-3 text-[12px] text-[#999] leading-[1.8]">센터 관리자에게 가는 알림이에요 (받는 번호 = Vercel 환경 변수 ALIMTALK_ADMIN_PHONE). 새로 만들 땐 [알림 메시지] 탭에서 추가하고 이름 끝에 &lsquo;(관리자에게)&rsquo;를 붙이면 이 탭으로 와요.</p>}
         {tab === 'notice' && <p className="mt-3 text-[12px] text-[#999] leading-[1.8]">공지사항에 글을 올릴 때 목적에 맞는 것을 골라 보내요. 카카오가 &lsquo;공지&rsquo;처럼 넓은 말머리는 승인하지 않아서 목적별로 나눴어요.</p>}
         {groups.map(g => (
           <Fragment key={g.key}>
@@ -136,7 +139,7 @@ export default function MessagesPage() {
                   onRemove={t.builtIn ? undefined : () => remove(t)} />
               ))}
             </div>
-            <button onClick={() => add(g.key)} className="mt-2 text-[12px] text-[#888] hover:text-[#0a0a0a]">+ 알림 추가</button>
+            {tab !== 'admin' && <button onClick={() => add(g.key)} className="mt-2 text-[12px] text-[#888] hover:text-[#0a0a0a]">+ 알림 추가</button>}
           </Fragment>
         ))}
 

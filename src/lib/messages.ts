@@ -25,7 +25,15 @@ export const SAMPLE_VARS: Record<string, string> = {
   수업5: '10:00 이정길 선생님', 수업6: '10:40 이정길 선생님', 수업7: '11:20 이정길 선생님', 수업8: '13:20 이정길 선생님',
 };
 
-export const fillVars = (body: string, vars: Record<string, string> = SAMPLE_VARS) =>
+/** 메시지 화면·심사 올리기의 탭 — 보호자 알림 / 관리자에게 가는 알림 / 공지 메시지 */
+export type MessageTab = 'alert' | 'admin' | 'notice';
+/** 관리자에게 보내는 알림인지 — id 끝이 _admin(심사 화면은 _admin_2 처럼 개수가 붙을 수 있다) 이거나 이름에 (관리자에게) */
+export const isAdminMessage = (t: { id?: string; key?: string; label?: string }) =>
+  /_admin(_\d+)?$/.test(t.id ?? t.key ?? '') || (t.label ?? '').includes('(관리자에게)');
+export const tabOfMessage = (t: { grp: string; id?: string; key?: string; label?: string }): MessageTab =>
+  t.grp === 'notice_kind' ? 'notice' : isAdminMessage(t) ? 'admin' : 'alert';
+
+export const fillVars =(body: string, vars: Record<string, string> = SAMPLE_VARS) =>
   body.replace(/#\{([^}]+)\}/g, (m, k: string) => vars[k.trim()] ?? m);
 
 /** 알림톡 모양 (아이템리스트형) — 맨 위 그림 · 타이틀 · 설명 · 항목 표 · 안내 글 · 버튼 */
