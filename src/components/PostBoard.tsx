@@ -60,8 +60,8 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       const where = wantCenter && notice.center ? `${CENTER_LABEL[notice.center]} ` : '';
       if (!(await askConfirm(`글을 올리고 "${kind.label}" 알림톡을 보낼까요?\n\n받는 사람: ${where}승인된 보호자 ${who.list.length}명${who.noPhone ? `\n(전화번호 없는 ${who.noPhone}명은 빠져요)` : ''}`, '올리고 보내기'))) return;
     }
-    // 고른 공지 메시지 종류·센터·명절 — 게시글 제목 앞에 표시
-    const tags = kind ? [kind.label, ...(wantCenter && notice.center ? [CENTER_LABEL[notice.center]] : []), ...(wantHoliday && notice.holiday.trim() ? [notice.holiday.trim()] : [])] : undefined;
+    // 고른 센터·명절 — 게시글 제목 앞에 표시 (공지 메시지 종류는 보이지 않게)
+    const tags = kind ? [...(wantCenter && notice.center ? [CENTER_LABEL[notice.center]] : []), ...(wantHoliday && notice.holiday.trim() ? [notice.holiday.trim()] : [])] : undefined;
     const post = await addPost(category, { title: form.title, content: form.content, tags, ...(isWeslang ? { location: form.location } : {}) });
     if (kind && who) {
       try {
