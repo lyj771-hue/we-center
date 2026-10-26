@@ -106,7 +106,7 @@ export default function SeasonEffect() {
       return { ...base, ...p };
     };
     const make = (top: boolean): P => {
-      if (season === 'winter') return spawn({ s: rand(3, small ? 7.5 : 10), vy: rand(0.4, 1.1), vx: rand(-0.15, 0.15) }, top);
+      if (season === 'winter') return spawn({ s: rand(2.5, small ? 6 : 8), vy: rand(0.35, 1.0), vx: rand(-0.15, 0.15) }, top);
       if (season === 'autumn') return spawn({ s: rand(7, small ? 13 : 17), vy: rand(0.55, 1.25), vx: rand(-0.3, 0.3), vr: rand(-0.035, 0.035), color: pick(LEAF_COLORS), kind: Math.random() < 0.55 ? 0 : 1 }, top);
       if (season === 'spring') {
         const p = spawn({ s: rand(4, small ? 7 : 9), vy: rand(0.15, 0.45), vx: rand(0.6, 1.5), color: pick(PETAL_COLORS) }, top);
@@ -116,7 +116,7 @@ export default function SeasonEffect() {
       // 여름 — 반짝이(화면 전체)
       return spawn({ x: rand(0, w), y: rand(0, h), s: rand(1.5, small ? 3.5 : 4.5), phase: rand(0, Math.PI * 2) }, false);
     };
-    const count = season === 'winter' ? (small ? 60 : 120) : season === 'autumn' ? (small ? 16 : 30) : season === 'spring' ? (small ? 40 : 75) : (small ? 18 : 36);
+    const count = season === 'winter' ? (small ? 45 : 90) : season === 'autumn' ? (small ? 16 : 30) : season === 'spring' ? (small ? 40 : 75) : (small ? 18 : 36);
     let ps: P[] = Array.from({ length: count }, () => make(false));
     // 봄 — 바람결 선(하늘색)
     const gusts = Array.from({ length: small ? 6 : 10 }, () => ({ x: rand(-w, w), y: rand(h * 0.05, h * 0.9), len: rand(small ? 140 : 200, small ? 280 : 420), v: rand(1.6, 2.8), a: rand(0.35, 0.6) }));
@@ -190,9 +190,9 @@ export default function SeasonEffect() {
           ctx.save(); ctx.translate(p.x, p.y);
           if (season === 'winter') {
             // 밝은 배경에서도 보이게 — 옅은 회청색 그림자 위에 부드러운 흰 눈송이
-            const sh = ctx.createRadialGradient(0, 1, 0, 0, 1, p.s * 1.7);
-            sh.addColorStop(0, 'rgba(110,135,170,0.45)'); sh.addColorStop(0.6, 'rgba(110,135,170,0.22)'); sh.addColorStop(1, 'rgba(110,135,170,0)');
-            ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(0, 1, p.s * 1.7, 0, Math.PI * 2); ctx.fill();
+            const sh = ctx.createRadialGradient(0, 1, 0, 0, 1, p.s * 1.6);
+            sh.addColorStop(0, 'rgba(120,140,170,0.28)'); sh.addColorStop(1, 'rgba(120,140,170,0)');
+            ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(0, 1, p.s * 1.6, 0, Math.PI * 2); ctx.fill();
             const g = ctx.createRadialGradient(0, 0, 0, 0, 0, p.s);
             g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.65, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
             ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, p.s, 0, Math.PI * 2); ctx.fill();
