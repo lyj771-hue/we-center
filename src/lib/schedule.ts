@@ -495,3 +495,12 @@ export async function deleteTeacher(id: string): Promise<void> {
   const { error } = await supabase.from('teachers').delete().eq('id', id);
   if (error) throw error;
 }
+
+/** 그날 그 센터에 게시 중인(아직 신청 없는) 시간 — "선생님|시간". 시간표에서 쉬는 시간을 연 칸은 빈칸으로 보이게 (관리자·선생님) */
+export async function getPostedOpenSlots(day: string, center: 'eunpyeong' | 'uijeongbu'): Promise<Set<string>> {
+  const { data: scs } = await supabase.from('schedules').select('id').eq('center', center).is('hidden_at', null);
+  const ids = (scs ?? []).map(r => r.id as string);
+  if (!ids.length) return new Set();
+  const { data } = await supabase.from('slots').select('teacher_id, time').eq('day', day).is('booked_by', null).in('schedule_id', ids);
+  return new Set((data ?? []).map(r => `${r.teacher_id}|${r.time}`));
+}

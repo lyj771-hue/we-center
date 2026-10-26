@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAdmin } from '@/components/AdminContext';
 import { useMember } from '@/components/MemberContext';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, getHolidayNames, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
+import { addDays, getHolidayNames, getPostedOpenSlots, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
 import type { Center } from '@/lib/timetable';
 import { PAY_METHODS, ROW_LABEL, SUNDAY_TEACHERS, defaultPayMethod, rowsForDay, worksAt } from '@/lib/timetable';
 import type { TeacherLesson } from '@/lib/teacher';
@@ -23,6 +23,8 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const [lessons, setLessons] = useState<TeacherLesson[]>([]);
   const [holidays, setHolidays] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState('');
+  // 그날 게시 중인 시간("선생님|시간") — 쉬는 시간을 연 칸은 쉬는 시간 글씨 대신 빈칸으로
+  const [postedOpen, setPostedOpen] = useState<Set<string>>(new Set());
   const can = isAdmin || !!teacher;
   // 한눈에 보기 — 열 때마다 늘 이걸로 시작: 표 전체(폭·높이)가 화면에 들어오게 줄인다 ([크게 보기] = 원래 크기, 옆으로 밀어 보기)
   const [fit, setFit] = useState(true);
@@ -61,12 +63,12 @@ export default function TeacherTimetable({ center }: { center: Center }) {
 
   const load = useCallback(async () => {
     try {
-      const [t, l, h] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({}))]);
-      setTeachers(t); setLessons(l); setHolidays(h); setFailed('');
+      const [t, l, h, p] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({})), getPostedOpenSlots(day, center).catch(() => new Set<string>())]);
+      setTeachers(t); setLessons(l); setHolidays(h); setPostedOpen(p); setFailed('');
     } catch (e) {
       setFailed((e as Error).message);
     }
-  }, [day, teacher]);
+  }, [day, center]);
   useEffect(() => { if (can) load(); }, [can, load]);
 
   const label = center === 'uijeongbu' ? '의정부' : '수색';
@@ -181,7 +183,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
                   return (
                     <FragmentCols key={t.id}>
                       {/* 빈타임에 아이가 있으면 그 시간은 빈타임 아이 수업 — 고정 칸은 흐리게 */}
-                      <td className={`${td} ${openKid ? 'bg-[#f4f4f5] opacity-60' : ''}`}>{text(f) ?? (ROW_LABEL[time] && <span className="text-[#c4c4cc]">{ROW_LABEL[time]}</span>)}</td>
+                      <td className={`${td} ${openKid ? 'bg-[#f4f4f5] opacity-60' : ''}`}>{text(f) ?? (ROW_LABEL[time] && !postedOpen.has(`${t.id}|${time}`) && <span className="text-[#c4c4cc]">{ROW_LABEL[time]}</span>)}</td>
                       <td className={`${td} bg-[#fcfcfd]`}>{text(o)}</td>
                       <td className={`${td} bg-[#f9fdfa]`}>{payText(openKid ? o : f)}</td>
                     </FragmentCols>

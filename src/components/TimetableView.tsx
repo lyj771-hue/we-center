@@ -7,7 +7,7 @@ import { downloadCsv, downloadXlsx, type Cell, type Sheet } from '@/lib/exportFi
 import { askChoice, askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import { addAdminLog } from '@/lib/adminLog';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, addTeacherWorkDay, getKoreanHolidays, getTeachers, HIDDEN_TEACHERS, parseYmd, removeTeacherWorkDay, toYmd } from '@/lib/schedule';
+import { addDays, addTeacherWorkDay, getKoreanHolidays, getPostedOpenSlots, getTeachers, HIDDEN_TEACHERS, parseYmd, removeTeacherWorkDay, toYmd } from '@/lib/schedule';
 import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
 import { addAndSendOutbox, getDayLeaves, type TeacherLeave } from '@/lib/leave';
@@ -96,6 +96,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const [failed, setFailed] = useState('');
   // 보호자가 마이페이지에서 한 수업 취소 신청(승인 기다리는 것) — 그날 · 이 센터. 칸에 "취소신청", 칸을 누르면 [승인]/[거절]
   const [cancelReqs, setCancelReqs] = useState<CancelRequest[]>([]);
+  // 그날 게시 중인 시간("선생님|시간") — 쉬는 시간을 연 칸은 쉬는 시간 글씨 대신 빈칸으로
+  const [postedOpen, setPostedOpen] = useState<Set<string>>(new Set());
   const reqOf = (side: Side, teacherId: string, time: string) => cancelReqs.find(r => r.side === side && r.teacherId === teacherId && r.time === time);
 
   const load = useCallback(async () => {
@@ -117,6 +119,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         setAssigns(await getDayAssigns(day, center).catch(() => ({ added: [], removed: [] })));
         setLeaves(await getDayLeaves(day, center).catch(() => []));
         setCancelReqs((await getCancelRequests().catch(() => [] as CancelRequest[])).filter(r => r.day === day && r.center === center));
+        setPostedOpen(await getPostedOpenSlots(day, center).catch(() => new Set<string>()));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
       setFailed('');
@@ -888,7 +891,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                         left={lockL ? lockedTd :
                           <td className={`${td} ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
                             {/* 빈타임에 아이가 채워지면 옆 고정 칸은 회색으로 흐리게 */}
-                            <CellText cell={left} label={ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} requested={mode === 'day' && !!reqOf('fixed', t.id, time)} />
+                            <CellText cell={left} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} requested={mode === 'day' && !!reqOf('fixed', t.id, time)} />
                           </td>
                         }
                         right={mode === 'day' ? (<>
@@ -898,7 +901,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                             const b = e.currentTarget.getBoundingClientRect();
                             setPicking({ teacher: t, time, side: 'open', cell: right, rect: { left: b.left, top: b.top, bottom: b.bottom } });
                           }}>
-                            <CellText cell={right} label={ROW_LABEL[time]} nonMember={isNonMember(right)} requested={!!reqOf('open', t.id, time)} />
+                            <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} nonMember={isNonMember(right)} requested={!!reqOf('open', t.id, time)} />
                           </td>}
                           {kindTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
