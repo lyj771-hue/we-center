@@ -12,6 +12,7 @@ import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry
 import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
 import { addAndSendOutbox, getDayLeaves, type TeacherLeave } from '@/lib/leave';
 import { getMembers } from '@/lib/store';
+import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import { decideCancelWithDialogs, getCancelRequests, minutesLabel, type CancelRequest } from '@/lib/alerts';
 import {
   CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
@@ -125,6 +126,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   }, [mode, day, weekday, center]);
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
+  // 다른 화면(선생님 시간표·수업스케쥴 신청)에서 바뀌면 바로 다시 읽는다 — 저장 안 한 변경은 그대로 남는다
+  useEffect(() => { if (!isAdmin) return; return onScheduleChanged(() => load()); }, [isAdmin, load]);
 
   // 저장 안 한 시간표 변경·결제 체크가 있으면 다른 날·센터로 가기 전에 묻는다
   const unsaved = ops.size + assignDraft.size + draft.size;
@@ -573,6 +576,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     setAssignDraft(m => new Map([...m].filter(([id]) => failedAssign.includes(id))));
     setSavingSched(false);
     await load();
+    notifyScheduleChanged(center);   // 선생님 시간표·수업스케쥴 화면에 바로 알림
     if (failedOps.length + failedAssign.length) showAlert(`${failedOps.length + failedAssign.length}건을 저장하지 못했어요. 다시 [스케줄 변경 완료]를 눌러 주세요.`);
     // 저장된 취소만 알림
     const okCancels = cancels.filter(x => ![...failedOps].some(k => k.includes(x.teacherId) && k.includes(x.time)));

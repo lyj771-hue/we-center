@@ -115,10 +115,10 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
   },
   {
     id: 'teacher_schedule_admin', grp: 'timetable', label: '선생님 빈 수업 변경 알림 (관리자에게)', sort: 25,
-    spec: { image: 'logo', title: '#{선생님} 선생님 빈 수업 #{구분}', sub: 'We 센터 #{센터}', items: [],
-      body: '#{선생님} 선생님이 시간표에서 빈 수업을 바꿨어요 (#{구분})\n#{내용}\n\n※ 이 메시지는 선생님이 빈 수업을 올리거나 x로 바꿀 때 센터 관리자에게 발송돼요', button: { name: '시간표 관리', url: `${SITE}/admin/timetable` } },
-    samples: { 선생님: '이정길', 구분: '올림', 내용: '10/27(화) 15:40, 16:20', 센터: '수색점' },
-    condition: '선생님이 시간표 보기에서 빈 수업을 수업스케쥴에 올리거나, 빈타임 칸을 x(수업 안 함)로 바꾸거나 풀 때 관리자에게 한 번 (받는 번호 = Vercel 환경 변수 ALIMTALK_ADMIN_PHONE).\n#{구분} = 올림 / x(수업 안 함)로 바꿈 / x 풀기',
+    spec: { image: 'logo', title: '#{선생님} 선생님 빈 수업 변경', sub: 'We 센터 #{센터}', items: [],
+      body: '#{선생님} 선생님이 빈 수업을 #{구분}\n#{내용}\n\n※ 이 메시지는 선생님이 빈 수업을 올리거나 내릴 때 센터 관리자에게 발송돼요', button: { name: '시간표 관리', url: `${SITE}/admin/timetable` } },
+    samples: { 선생님: '이정길', 구분: '새로 올렸어요', 내용: '10/27(화) 15:40, 16:20', 센터: '수색점' },
+    condition: '선생님이 시간표 보기에서 빈 수업을 수업스케쥴 새 글로 올리거나(새로 올렸어요), 올라가 있던 시간을 x(수업 안 함)로 바꿔 글에서 빠질 때(내렸어요) 관리자에게 한 번 (받는 번호 = Vercel 환경 변수 ALIMTALK_ADMIN_PHONE).\n#{구분} = 새로 올렸어요 / 내렸어요',
   },
   {
     id: 'lesson_cancel_late', grp: 'timetable', label: '늦은 취소 안내 (보호자에게)', sort: 30,

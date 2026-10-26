@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { notifyScheduleChanged } from './sync';
 
 // 선생님 카카오 로그인 · 시간표 보기 (supabase/teacher-login.sql)
 
@@ -104,15 +105,16 @@ export async function teacherPostSlots(center: string, times: { day: string; tim
   const { data, error } = await supabase.rpc('teacher_post_slots', { p_center: center, p_times: times });
   if (error) throw error;
   const r = data as { result: string; schedule_id?: string; count?: number; ids?: string[] };
+  if (r.result === 'ok') notifyScheduleChanged(center);
   const sent = r.result === 'ok' ? await sendTeacherOutbox(r.ids ?? []).catch(e => ({ error: (e as Error).message })) : null;
   return { ...r, sent };
 }
 
-/** 내 빈타임 칸 x(수업 안 함) / x 풀기 — 관리자 알림톡까지. result: ok / done / busy(이미 수업) / past / not_teacher */
-export async function teacherSetOff(center: string, day: string, time: string, off: boolean) {
-  const { data, error } = await supabase.rpc('teacher_set_open_off', { p_center: center, p_day: day, p_time: time, p_off: off });
+/** 내 빈타임 칸 x(수업 안 함) — 올라가 있던 시간이면 글에서 빠지고 관리자 알림톡(내렸어요). result: ok / done / busy(이미 수업) / past / not_teacher */
+export async function teacherSetOff(center: string, day: string, time: string) {
+  const { data, error } = await supabase.rpc('teacher_set_open_off', { p_center: center, p_day: day, p_time: time, p_off: true });
   if (error) throw error;
   const r = data as { result: string; removed?: number; ids?: string[] };
-  if (r.result === 'ok') await sendTeacherOutbox(r.ids ?? []).catch(() => {});
+  if (r.result === 'ok') { notifyScheduleChanged(center); await sendTeacherOutbox(r.ids ?? []).catch(() => {}); }
   return r;
 }

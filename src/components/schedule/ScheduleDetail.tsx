@@ -11,6 +11,7 @@ import ScheduleBoard from './ScheduleBoard';
 import ScheduleEditor from './ScheduleEditor';
 import ScheduleGate from './ScheduleGate';
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
+import { onScheduleChanged } from '@/lib/sync';
 import {
   bookSlot, notifyBooked, setScheduleHidden, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, withdrawCancel,
 } from '@/lib/schedule';
@@ -60,13 +61,14 @@ export default function ScheduleDetail({ id }: { id: string }) {
   }, [id, isAdmin, teacher, userId]);
 
   useEffect(() => { if (canView) load(); }, [canView, load]);
-  // 실시간 보강 — 선생님이 시간표에서 x로 바꿔 칸이 빠지는 것(지우기 알림은 필터에 안 걸릴 수 있다)까지, 20초마다·화면으로 돌아올 때 다시 읽는다
+  // 실시간 보강 — 다른 화면(선생님 시간표·시간표 관리)에서 바뀌면 신호로 바로, 놓친 것은 1분마다·화면으로 돌아올 때 다시 읽는다
   useEffect(() => {
     if (!canView) return;
-    const t = setInterval(load, 20000);
+    const off = onScheduleChanged(() => load());
+    const t = setInterval(load, 60000);
     const onShow = () => { if (document.visibilityState === 'visible') load(); };
     document.addEventListener('visibilitychange', onShow);
-    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
+    return () => { off(); clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
   }, [canView, load]);
 
   // 실시간: 이 스케쥴의 칸·신청 기록이 바뀌면 잠깐 모았다가 다시 불러온다

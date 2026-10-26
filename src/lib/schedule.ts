@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { notifyScheduleChanged } from './sync';
 
 // 수업스케쥴 — 표 구조는 supabase/schedule.sql 참고.
 // 날짜는 시간대 문제를 피하려고 'YYYY-MM-DD' 문자열로만 다룬다.
@@ -294,6 +295,7 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
 export async function bookSlot(slotId: string): Promise<'ok' | 'taken' | 'not_approved' | 'conflict'> {
   const { data, error } = await supabase.rpc('book_slot', { p_slot: slotId });
   if (error) throw error;
+  if (data === 'ok') notifyScheduleChanged();
   return data;
 }
 
@@ -350,6 +352,7 @@ export function getHolidayNames(year: string): Promise<Record<string, string>> {
 async function slotRpc(fn: 'request_cancel' | 'withdraw_cancel' | 'approve_cancel', slotId: string): Promise<string> {
   const { data, error } = await supabase.rpc(fn, { p_slot: slotId });
   if (error) throw error;
+  notifyScheduleChanged();
   return data;
 }
 export const requestCancel = (slotId: string) => slotRpc('request_cancel', slotId);
@@ -361,6 +364,7 @@ export async function cancelSlot(slotId: string): Promise<void> {
   const { data, error } = await supabase.rpc('cancel_slot', { p_slot: slotId });
   if (error) throw error;
   if (data !== 'ok') throw new Error(data);
+  notifyScheduleChanged();
 }
 
 // ── 관리자: 스케쥴 올리기 · 고치기 · 지우기 ─────────────────────────────
@@ -412,6 +416,7 @@ export async function saveSchedule(draft: ScheduleDraft, existing?: Schedule): P
     const { error } = await supabase.from('slots').insert(add.map(s => ({ schedule_id: id, teacher_id: s.teacherId, day: s.day, time: s.time })));
     if (error) throw error;
   }
+  notifyScheduleChanged();
   return id!;
 }
 

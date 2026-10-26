@@ -2,9 +2,9 @@
 -- 실행 방법: Supabase 대시보드 → SQL Editor → New query → 붙여넣고 Run. 여러 번 실행해도 괜찮다.
 -- outbox-batch.sql · admin-alerts.sql · teacher-login.sql 을 먼저 돌린 뒤에.
 --
--- 1) teacher_post_slots — 선생님이 내 빈타임(비어 있는 칸) 여러 개를 골라 수업스케쥴 새 글로 올린다.
+-- 1) teacher_post_slots — 선생님이 내 빈타임(비어 있는 칸 또는 x 칸, ?는 안 됨) 여러 개를 골라 수업스케쥴 새 글로 올린다. x 칸은 x가 풀리며 올라간다.
 --    그 센터에 승인된 보호자에게 '스케줄 공지 알림'(schedule_notice), 관리자에게 '선생님 빈 수업 변경 알림'(teacher_schedule_admin).
--- 2) teacher_set_open_off — 내 빈타임 칸을 x(수업 안 함)로 / x 풀기. x로 바꾸면 아직 아무도 신청 안 한 게시 시간은 글에서 바로 빠진다.
+-- 2) teacher_set_open_off — 내 빈타임 칸을 x(수업 안 함)로. 아직 아무도 신청 안 한 게시 시간은 글에서 바로 빠진다(관리자 알림 = 내렸어요). x를 다시 열려면 1)로 새 글을 올린다.
 -- 3) 트리거 — 시간표(관리자·선생님 누구든) 빈타임 칸에 x · ? · 아이가 들어가면, 같은 선생님·날짜·시간의 신청 안 된 게시 시간을 글에서 뺀다.
 -- 4) teacher_posted_slots — 시간표 보기에서 "게시 중" 표시용 (선생님은 내 것, 관리자는 전부).
 -- 5) teacher_outbox_rows · teacher_mark_outbox — 선생님이 만든 보낼 알림을 /api/alimtalk/teacher-send 가 보내고 결과를 적는다.
@@ -18,7 +18,7 @@ as $$ select teacher_id from teacher_logins where user_id = auth.uid() limit 1 $
 revoke all on function public.my_teacher_id() from public, anon;
 grant execute on function public.my_teacher_id() to authenticated;
 
--- 빈타임 칸이 비어 있는지 (고정 칸에 살아 있는 수업도 없어야 한다 — 빈타임에 아이가 들어가면 고정 아이가 밀리니까)
+-- 빈타임 칸을 올릴 수 있는지 — 비어 있거나 x (?·아이는 안 됨), 고정 칸에 살아 있는 수업도 없어야 한다(빈타임에 아이가 들어가면 고정 아이가 밀리니까)
 create or replace function public.open_cell_free(p_teacher uuid, p_day date, p_time text, p_center text)
 returns boolean language sql stable security definer set search_path = public
 as $$
@@ -26,7 +26,7 @@ as $$
     select 1 from public.lessons_between(p_day, p_day) l
     where l.teacher_id = p_teacher and l.lesson_time = p_time and l.center = p_center
       and (
-        (l.side = 'open' and l.status in ('child', 'cancel_requested', 'undecided', 'off'))
+        (l.side = 'open' and l.status in ('child', 'cancel_requested', 'undecided'))
         or (l.side = 'fixed' and l.status = 'child' and not l.moved and not l.absent)
       )
   );
@@ -108,6 +108,9 @@ begin
   insert into schedules (week_start, days, title, notice, holidays, center)
   values (v_days[1]::date, to_jsonb(v_days), v_title, '', '[]'::jsonb, p_center)
   returning id into v_sid;
+  -- x 칸은 x를 풀고 올린다
+  delete from board_cells b using jsonb_array_elements(v_ok) e
+  where b.center = p_center and b.teacher_id = v_tid and b.day = (e->>'day')::date and b.time = e->>'time' and b.side = 'open' and b.status in ('off', 'none');
   insert into slots (schedule_id, teacher_id, day, time)
   select v_sid, v_tid, (e->>'day')::date, e->>'time' from jsonb_array_elements(v_ok) e;
 
@@ -124,7 +127,7 @@ begin
          or exists (select 1 from member_centers mc where mc.user_id = p.user_id and mc.center = p_center and mc.approved_at is not null));
   select coalesce(array_agg(id), '{}') into v_ids from outbox_messages where batch_id = v_batch;
 
-  v_out := public.teacher_admin_notice(p_center, v_name, '올림', v_detail);
+  v_out := public.teacher_admin_notice(p_center, v_name, '새로 올렸어요', v_detail);
   v_ids := v_ids || v_out;
 
   return jsonb_build_object('result', 'ok', 'schedule_id', v_sid, 'count', jsonb_array_length(v_ok), 'ids', to_jsonb(v_ids));
@@ -133,7 +136,7 @@ $$;
 revoke all on function public.teacher_post_slots(text, jsonb) from public, anon;
 grant execute on function public.teacher_post_slots(text, jsonb) to authenticated;
 
--- 2) 내 빈타임 칸 x(수업 안 함) / x 풀기
+-- 2) 내 빈타임 칸 x(수업 안 함) — 풀기는 없다(다시 열 땐 새 글로 올린다)
 create or replace function public.teacher_set_open_off(p_center text, p_day date, p_time text, p_off boolean)
 returns jsonb language plpgsql security definer set search_path = public
 as $$
@@ -141,38 +144,34 @@ declare
   v_tid uuid := public.my_teacher_id();
   v_name text;
   v_removed int := 0;
-  v_out uuid;
+  v_ids uuid[] := '{}';
   v_dow text[] := array['일', '월', '화', '수', '목', '금', '토'];
   v_when text := to_char(p_day, 'FMMM/FMDD') || '(' || v_dow[extract(dow from p_day)::int + 1] || ') ' || regexp_replace(p_time, '^0', '');
 begin
   if v_tid is null then return jsonb_build_object('result', 'not_teacher'); end if;
+  if not p_off then return jsonb_build_object('result', 'no_unoff'); end if;
   if p_day < (now() at time zone 'Asia/Seoul')::date then return jsonb_build_object('result', 'past'); end if;
   select name into v_name from teachers where id = v_tid;
-
-  if p_off then
-    if exists (select 1 from board_cells where center = p_center and day = p_day and teacher_id = v_tid and time = p_time and side = 'open' and status = 'off') then
-      return jsonb_build_object('result', 'done');
-    end if;
-    if exists (select 1 from public.lessons_between(p_day, p_day) l
-               where l.teacher_id = v_tid and l.lesson_time = p_time and l.center = p_center and l.side = 'open'
-                 and l.status in ('child', 'cancel_requested', 'undecided')) then
-      return jsonb_build_object('result', 'busy');
-    end if;
-    -- 게시 중인 시간 — 트리거가 빼기 전에 몇 개인지
-    select count(*) into v_removed from slots s join schedules sc on sc.id = s.schedule_id
-    where s.teacher_id = v_tid and s.day = p_day and s.time = p_time and s.booked_by is null and sc.center = p_center;
-    insert into board_cells (center, day, teacher_id, time, side, status, child_id, name, payment, oral, absent, moved, note, updated_at)
-    values (p_center, p_day, v_tid, p_time, 'open', 'off', null, null, '', false, false, false, null, now())
-    on conflict (center, day, teacher_id, time, side) do update
-      set status = 'off', child_id = null, name = null, absent = false, moved = false, updated_at = now();
-    v_out := public.teacher_admin_notice(p_center, v_name, 'x(수업 안 함)로 바꿈',
-      v_when || case when v_removed > 0 then ' · 수업스케쥴 글에서 뺐어요' else '' end);
-  else
-    delete from board_cells where center = p_center and day = p_day and teacher_id = v_tid and time = p_time and side = 'open' and status = 'off';
-    if not found then return jsonb_build_object('result', 'done'); end if;
-    v_out := public.teacher_admin_notice(p_center, v_name, 'x 풀기', v_when);
+  if exists (select 1 from board_cells where center = p_center and day = p_day and teacher_id = v_tid and time = p_time and side = 'open' and status = 'off') then
+    return jsonb_build_object('result', 'done');
   end if;
-  return jsonb_build_object('result', 'ok', 'removed', v_removed, 'ids', jsonb_build_array(v_out));
+  if exists (select 1 from public.lessons_between(p_day, p_day) l
+             where l.teacher_id = v_tid and l.lesson_time = p_time and l.center = p_center and l.side = 'open'
+               and l.status in ('child', 'cancel_requested', 'undecided')) then
+    return jsonb_build_object('result', 'busy');
+  end if;
+  -- 게시 중인 시간 — 트리거가 글에서 빼기 전에 몇 개인지
+  select count(*) into v_removed from slots s join schedules sc on sc.id = s.schedule_id
+  where s.teacher_id = v_tid and s.day = p_day and s.time = p_time and s.booked_by is null and sc.center = p_center;
+  insert into board_cells (center, day, teacher_id, time, side, status, child_id, name, payment, oral, absent, moved, note, updated_at)
+  values (p_center, p_day, v_tid, p_time, 'open', 'off', null, null, '', false, false, false, null, now())
+  on conflict (center, day, teacher_id, time, side) do update
+    set status = 'off', child_id = null, name = null, absent = false, moved = false, updated_at = now();
+  -- 올라가 있던 시간을 내렸을 때만 관리자에게
+  if v_removed > 0 then
+    v_ids := v_ids || public.teacher_admin_notice(p_center, v_name, '내렸어요', v_when);
+  end if;
+  return jsonb_build_object('result', 'ok', 'removed', v_removed, 'ids', to_jsonb(v_ids));
 end;
 $$;
 revoke all on function public.teacher_set_open_off(text, date, text, boolean) from public, anon;

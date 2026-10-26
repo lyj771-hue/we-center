@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { askConfirm, showAlert } from './dialog';
 import { sendOutbox } from './leave';
+import { notifyScheduleChanged } from './sync';
 
 // 관리자 알림 (supabase/admin-alerts.sql) — 보호자가 가입·수업 신청 등을 하면 DB 트리거가 쌓는다. 관리자만
 
@@ -92,6 +93,7 @@ export async function decideCancelWithDialogs(r: CancelRequest, approve: boolean
   if (!(await askConfirm(msg, approve ? '승인' : '거절'))) return false;
   try {
     const res = await decideLessonCancel(r.id, approve);
+    if (res.result === 'ok' && approve) notifyScheduleChanged(r.center);
     if (res.result === 'done') { await showAlert('이미 처리된 신청이에요.'); return true; }
     if (res.result === 'not_found') { await showAlert('시간표에서 그 수업을 찾지 못했어요. 이미 바뀌었을 수 있어요.\n확인한 뒤 거절로 정리해 주세요.'); return false; }
     if (!approve) { await showAlert('거절했어요.'); return true; }
