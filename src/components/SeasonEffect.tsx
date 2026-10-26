@@ -113,13 +113,26 @@ export default function SeasonEffect() {
         if (top) { p.x = rand(-80, -10); p.y = rand(-40, h * 0.8); }
         return p;
       }
-      // 여름 — 반짝이(화면 전체)
-      return spawn({ x: rand(0, w), y: rand(0, h), s: rand(1.5, small ? 3.5 : 4.5), phase: rand(0, Math.PI * 2) }, false);
+      // 여름 — 반짝이(오른쪽 위 근처)
+      return spawn({ x: w - rand(20, Math.min(w * 0.6, 420)), y: rand(10, Math.min(h * 0.45, 320)), s: rand(1.5, 3.5), phase: rand(0, Math.PI * 2) }, false);
     };
-    const count = season === 'winter' ? (small ? 45 : 90) : season === 'autumn' ? (small ? 16 : 30) : season === 'spring' ? (small ? 40 : 75) : (small ? 18 : 36);
+    const count = season === 'winter' ? (small ? 45 : 90) : season === 'autumn' ? (small ? 16 : 30) : season === 'spring' ? (small ? 40 : 75) : (small ? 10 : 16);
     let ps: P[] = Array.from({ length: count }, () => make(false));
-    // 봄 — 바람결 선(하늘색)
-    const gusts = Array.from({ length: small ? 6 : 10 }, () => ({ x: rand(-w, w), y: rand(h * 0.05, h * 0.9), len: rand(small ? 140 : 200, small ? 280 : 420), v: rand(1.6, 2.8), a: rand(0.35, 0.6) }));
+    // 봄 — 바람결 선(하늘색). 줄마다 높이를 나눠 맡아서 같은 줄에 몰려 나오지 않게 하고, 다시 나올 땐 다른 바람과 떨어진 높이에서
+    const nG = small ? 6 : 10;
+    const gusts = Array.from({ length: nG }, (_, i) => ({
+      x: rand(-w, w), y: h * (0.05 + 0.85 * (i + rand(0.15, 0.85)) / nG),
+      len: rand(small ? 140 : 200, small ? 280 : 420), v: rand(1.4, 2.4), a: rand(0.35, 0.6),
+    }));
+    const freeY = (self: { y: number }) => {
+      let best = rand(h * 0.05, h * 0.9), bestGap = -1;
+      for (let k = 0; k < 8; k++) {   // 여러 번 뽑아 다른 바람과 가장 멀리 떨어진 높이
+        const y = rand(h * 0.05, h * 0.9);
+        const gap = Math.min(...gusts.filter(o => o !== self).map(o => Math.abs(o.y - y)));
+        if (gap > bestGap) { best = y; bestGap = gap; }
+      }
+      return best;
+    };
 
     const draw = (now: number) => {
       const dt = Math.min(3, (now - last) / 16.67);
@@ -127,26 +140,22 @@ export default function SeasonEffect() {
       ctx.clearRect(0, 0, w, h);
 
       if (season === 'summer') {
-        // 오른쪽 위 해 — 큰 빛무리(PC는 훨씬 크게) + 화면 전체로 뻗는 빛살(천천히 돌며 일렁임) + 반짝이
-        const cx = w - (small ? 20 : 60), cy = small ? 10 : 40;
-        const R = small ? w * 0.8 : Math.max(w, h) * 0.75;
-        const pulse = 0.9 + Math.sin(t * 0.02) * 0.1;
+        // 오른쪽 위 햇살 — 둥근 빛 + 천천히 도는 빛줄기 + 반짝이
+        const cx = w - 30, cy = 20, R = Math.min(w, 900) * (small ? 0.55 : 0.42);
+        const pulse = 0.85 + Math.sin(t * 0.02) * 0.15;
         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * pulse);
-        g.addColorStop(0, 'rgba(255,230,130,0.9)');
-        g.addColorStop(0.18, 'rgba(255,214,100,0.5)');
-        g.addColorStop(0.5, 'rgba(255,214,102,0.18)');
+        g.addColorStop(0, 'rgba(255,226,120,0.85)');
+        g.addColorStop(0.3, 'rgba(255,206,90,0.38)');
         g.addColorStop(1, 'rgba(255,214,102,0)');
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-        const L = Math.hypot(w, h) * 1.15;   // 빛살 길이 — 화면 반대편 끝까지
-        ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 0.002);
-        for (let i = 0; i < 16; i++) {
-          ctx.rotate((Math.PI * 2) / 16);
-          const a = 0.13 + 0.07 * Math.sin(t * 0.03 + i * 1.7);
-          const lg = ctx.createLinearGradient(0, 0, L, 0);
-          lg.addColorStop(0, `rgba(255,214,110,${a})`); lg.addColorStop(0.55, `rgba(255,222,130,${a * 0.55})`); lg.addColorStop(1, 'rgba(255,222,130,0)');
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 0.0025);
+        for (let i = 0; i < 12; i++) {
+          ctx.rotate((Math.PI * 2) / 12);
+          const a = 0.12 + 0.07 * Math.sin(t * 0.03 + i);
+          const lg = ctx.createLinearGradient(0, 0, R * 1.3, 0);
+          lg.addColorStop(0, `rgba(255,220,120,${a})`); lg.addColorStop(1, 'rgba(255,220,120,0)');
           ctx.fillStyle = lg;
-          const half = L * (i % 2 ? 0.035 : 0.055);
-          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L, -half); ctx.lineTo(L, half); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(R * 1.3, -R * 0.06); ctx.lineTo(R * 1.3, R * 0.06); ctx.closePath(); ctx.fill();
         }
         ctx.restore();
         for (const p of ps) {
@@ -163,8 +172,8 @@ export default function SeasonEffect() {
         if (season === 'spring') {
           ctx.lineCap = 'round';
           for (const g of gusts) {
-            g.x += g.v * dt * 2.2;
-            if (g.x > w + 50) { g.x = rand(-w * 0.8, -g.len); g.y = rand(h * 0.1, h * 0.85); }
+            g.x += g.v * dt * 1.6;
+            if (g.x > w + 50) { g.x = rand(-w * 0.8, -g.len); g.y = freeY(g); }
             // 하늘색 바람결 두 가닥 — 끝으로 갈수록 옅게
             for (const [dy, k2, lw] of [[0, 1, 2.2], [7, 0.5, 1.4]] as const) {
               const lg = ctx.createLinearGradient(g.x, 0, g.x + g.len, 0);
