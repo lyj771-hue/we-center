@@ -5,7 +5,7 @@
 -- schedule_slot_owners — 선생님도 관리자처럼 칸마다 누가 신청했는지 본다(아이 이름, 없으면 닉네임).
 -- teacher_remove_slots — 게시글에서 내 시간 여러 개 내리기(시간표 빈타임 칸은 x가 된다, 쉬는 시간은 다시 쉬는 시간). 그 사이 신청된 시간이 하나라도 있으면 하나도 안 내리고 그 시간들을 돌려준다.
 --                        보호자 알림 없음, 관리자에게 '선생님 빈 수업 변경 알림'(내렸어요).
--- teacher_add_slots    — 게시글 기간의 그날, 내 빈타임이 비어 있거나 x인 시간을 게시글에 더한다(x는 풀림). 수업 시작까지 1시간 넘게 남은 시간만.
+-- teacher_add_slots    — 게시글 기간의 그날, 내 빈타임이 비어 있거나 x인 시간을 게시글에 더한다(x는 풀림). 수업 시작까지 1시간 넘게 남은 시간만, 20분짜리 쉬는 시간은 빼고.
 --                        보호자에게 '스케줄 수정 알림'(schedule_updated, 한 묶음), 관리자에게 '선생님 빈 수업 변경 알림'(추가했어요).
 -- teacher_outbox_rows · teacher_mark_outbox — 선생님이 만든 보낼 알림을 /api/alimtalk/teacher-send 가 보내고 결과를 적는다.
 
@@ -139,6 +139,9 @@ begin
 
   for x in select distinct (e->>'day')::date as day, e->>'time' as time from jsonb_array_elements(p_times) e order by 1, 2 loop
     if not public.schedule_covers(sc.days, sc.week_start, x.day) then continue; end if;
+    -- 20분짜리 쉬는 시간은 게시 안 함 — 평일 16:30, 토요일(의정부 일요일도 토요일 줄) 13:10
+    if (extract(dow from x.day) between 1 and 5 and x.time = '16:30')
+       or ((extract(dow from x.day) = 6 or (extract(dow from x.day) = 0 and sc.center = 'uijeongbu')) and x.time = '13:10') then continue; end if;
     if (x.day + x.time::time) < (now() at time zone 'Asia/Seoul') + interval '1 hour' then continue; end if;
     if not public.open_cell_free(v_tid, x.day, x.time, sc.center) then continue; end if;
     if exists (select 1 from slots s where s.schedule_id = p_schedule and s.teacher_id = v_tid and s.day = x.day and s.time = x.time) then continue; end if;

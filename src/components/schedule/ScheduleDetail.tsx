@@ -158,7 +158,11 @@ export default function ScheduleDetail({ id }: { id: string }) {
       const times = rowsForDay(day, lessons.map(l => `${l.teacherId}|${l.time}`), schedule.center);
       const have = new Set(schedule.slots.filter(x => x.teacherId === myTeacherId && x.day === day).map(x => x.time));
       const pending = new Set(adds[day] ?? []);
+      // 20분짜리 쉬는 시간(다음 줄까지 40분이 안 되는 줄 — 평일 16:30, 토요일 13:10)은 게시 안 함
+      const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+      const shortBreak = new Set(times.filter((t, i) => i + 1 < times.length && mins(times[i + 1]) - mins(t) < 40));
       const options = times.filter(time => {
+        if (shortBreak.has(time)) return false;
         const o = mine.find(l => l.side === 'open' && l.time === time);
         const f = mine.find(l => l.side === 'fixed' && l.time === time);
         if (o && o.status !== 'off') return false;                                   // 빈칸이나 x 만
