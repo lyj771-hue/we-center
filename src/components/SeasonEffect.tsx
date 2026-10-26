@@ -106,20 +106,20 @@ export default function SeasonEffect() {
       return { ...base, ...p };
     };
     const make = (top: boolean): P => {
-      if (season === 'winter') return spawn({ s: rand(2.5, small ? 6 : 8), vy: rand(0.35, 1.0), vx: rand(-0.15, 0.15) }, top);
+      if (season === 'winter') return spawn({ s: rand(3, small ? 7.5 : 10), vy: rand(0.4, 1.1), vx: rand(-0.15, 0.15) }, top);
       if (season === 'autumn') return spawn({ s: rand(7, small ? 13 : 17), vy: rand(0.55, 1.25), vx: rand(-0.3, 0.3), vr: rand(-0.035, 0.035), color: pick(LEAF_COLORS), kind: Math.random() < 0.55 ? 0 : 1 }, top);
       if (season === 'spring') {
         const p = spawn({ s: rand(4, small ? 7 : 9), vy: rand(0.15, 0.45), vx: rand(0.6, 1.5), color: pick(PETAL_COLORS) }, top);
         if (top) { p.x = rand(-80, -10); p.y = rand(-40, h * 0.8); }
         return p;
       }
-      // 여름 — 반짝이(오른쪽 위 근처)
-      return spawn({ x: w - rand(20, Math.min(w * 0.6, 420)), y: rand(10, Math.min(h * 0.45, 320)), s: rand(1.5, 3.5), phase: rand(0, Math.PI * 2) }, false);
+      // 여름 — 반짝이(화면 전체)
+      return spawn({ x: rand(0, w), y: rand(0, h), s: rand(1.5, small ? 3.5 : 4.5), phase: rand(0, Math.PI * 2) }, false);
     };
-    const count = season === 'winter' ? (small ? 45 : 90) : season === 'autumn' ? (small ? 16 : 30) : season === 'spring' ? (small ? 16 : 30) : (small ? 10 : 16);
+    const count = season === 'winter' ? (small ? 60 : 120) : season === 'autumn' ? (small ? 16 : 30) : season === 'spring' ? (small ? 40 : 75) : (small ? 18 : 36);
     let ps: P[] = Array.from({ length: count }, () => make(false));
-    // 봄 — 바람결 선
-    const gusts = Array.from({ length: small ? 2 : 4 }, () => ({ x: rand(-w, 0), y: rand(h * 0.1, h * 0.85), len: rand(120, 260), v: rand(1.6, 2.6), a: rand(0.12, 0.22) }));
+    // 봄 — 바람결 선(하늘색)
+    const gusts = Array.from({ length: small ? 6 : 10 }, () => ({ x: rand(-w, w), y: rand(h * 0.05, h * 0.9), len: rand(small ? 140 : 200, small ? 280 : 420), v: rand(1.6, 2.8), a: rand(0.35, 0.6) }));
 
     const draw = (now: number) => {
       const dt = Math.min(3, (now - last) / 16.67);
@@ -127,22 +127,26 @@ export default function SeasonEffect() {
       ctx.clearRect(0, 0, w, h);
 
       if (season === 'summer') {
-        // 오른쪽 위 햇살 — 둥근 빛 + 천천히 도는 빛줄기 + 반짝이
-        const cx = w - 30, cy = 20, R = Math.min(w, 900) * (small ? 0.55 : 0.42);
-        const pulse = 0.85 + Math.sin(t * 0.02) * 0.15;
+        // 오른쪽 위 해 — 큰 빛무리(PC는 훨씬 크게) + 화면 전체로 뻗는 빛살(천천히 돌며 일렁임) + 반짝이
+        const cx = w - (small ? 20 : 60), cy = small ? 10 : 40;
+        const R = small ? w * 0.8 : Math.max(w, h) * 0.75;
+        const pulse = 0.9 + Math.sin(t * 0.02) * 0.1;
         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * pulse);
-        g.addColorStop(0, 'rgba(255,226,120,0.85)');
-        g.addColorStop(0.3, 'rgba(255,206,90,0.38)');
+        g.addColorStop(0, 'rgba(255,230,130,0.9)');
+        g.addColorStop(0.18, 'rgba(255,214,100,0.5)');
+        g.addColorStop(0.5, 'rgba(255,214,102,0.18)');
         g.addColorStop(1, 'rgba(255,214,102,0)');
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-        ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 0.0025);
-        for (let i = 0; i < 12; i++) {
-          ctx.rotate((Math.PI * 2) / 12);
-          const a = 0.12 + 0.07 * Math.sin(t * 0.03 + i);
-          const lg = ctx.createLinearGradient(0, 0, R * 1.3, 0);
-          lg.addColorStop(0, `rgba(255,220,120,${a})`); lg.addColorStop(1, 'rgba(255,220,120,0)');
+        const L = Math.hypot(w, h) * 1.15;   // 빛살 길이 — 화면 반대편 끝까지
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * 0.002);
+        for (let i = 0; i < 16; i++) {
+          ctx.rotate((Math.PI * 2) / 16);
+          const a = 0.13 + 0.07 * Math.sin(t * 0.03 + i * 1.7);
+          const lg = ctx.createLinearGradient(0, 0, L, 0);
+          lg.addColorStop(0, `rgba(255,214,110,${a})`); lg.addColorStop(0.55, `rgba(255,222,130,${a * 0.55})`); lg.addColorStop(1, 'rgba(255,222,130,0)');
           ctx.fillStyle = lg;
-          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(R * 1.3, -R * 0.06); ctx.lineTo(R * 1.3, R * 0.06); ctx.closePath(); ctx.fill();
+          const half = L * (i % 2 ? 0.035 : 0.055);
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L, -half); ctx.lineTo(L, half); ctx.closePath(); ctx.fill();
         }
         ctx.restore();
         for (const p of ps) {
@@ -161,13 +165,19 @@ export default function SeasonEffect() {
           for (const g of gusts) {
             g.x += g.v * dt * 2.2;
             if (g.x > w + 50) { g.x = rand(-w * 0.8, -g.len); g.y = rand(h * 0.1, h * 0.85); }
-            ctx.strokeStyle = `rgba(150,190,170,${g.a})`; ctx.lineWidth = 1.4;
-            ctx.beginPath();
-            for (let k = 0; k <= 20; k++) {
-              const x = g.x + (k / 20) * g.len, y = g.y + Math.sin((x + t * 2) * 0.02) * 8;
-              if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            // 하늘색 바람결 두 가닥 — 끝으로 갈수록 옅게
+            for (const [dy, k2, lw] of [[0, 1, 2.2], [7, 0.5, 1.4]] as const) {
+              const lg = ctx.createLinearGradient(g.x, 0, g.x + g.len, 0);
+              lg.addColorStop(0, 'rgba(110,185,240,0)'); lg.addColorStop(0.35, `rgba(110,185,240,${g.a * k2})`);
+              lg.addColorStop(0.75, `rgba(110,185,240,${g.a * k2})`); lg.addColorStop(1, 'rgba(110,185,240,0)');
+              ctx.strokeStyle = lg; ctx.lineWidth = lw;
+              ctx.beginPath();
+              for (let k = 0; k <= 24; k++) {
+                const x = g.x + (k / 24) * g.len, y = g.y + dy + Math.sin((x + t * 2) * 0.018) * 10;
+                if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+              }
+              ctx.stroke();
             }
-            ctx.stroke();
           }
         }
         for (let i = 0; i < ps.length; i++) {
@@ -180,9 +190,9 @@ export default function SeasonEffect() {
           ctx.save(); ctx.translate(p.x, p.y);
           if (season === 'winter') {
             // 밝은 배경에서도 보이게 — 옅은 회청색 그림자 위에 부드러운 흰 눈송이
-            const sh = ctx.createRadialGradient(0, 1, 0, 0, 1, p.s * 1.6);
-            sh.addColorStop(0, 'rgba(120,140,170,0.28)'); sh.addColorStop(1, 'rgba(120,140,170,0)');
-            ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(0, 1, p.s * 1.6, 0, Math.PI * 2); ctx.fill();
+            const sh = ctx.createRadialGradient(0, 1, 0, 0, 1, p.s * 1.7);
+            sh.addColorStop(0, 'rgba(110,135,170,0.45)'); sh.addColorStop(0.6, 'rgba(110,135,170,0.22)'); sh.addColorStop(1, 'rgba(110,135,170,0)');
+            ctx.fillStyle = sh; ctx.beginPath(); ctx.arc(0, 1, p.s * 1.7, 0, Math.PI * 2); ctx.fill();
             const g = ctx.createRadialGradient(0, 0, 0, 0, 0, p.s);
             g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.65, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
             ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, p.s, 0, Math.PI * 2); ctx.fill();
