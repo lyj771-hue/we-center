@@ -19,12 +19,12 @@ const fmt = (iso: string) => {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 };
 
-/** 수업스케쥴 — 지점(수색/의정부)마다 메뉴가 따로. 보호자는 가입·승인된 지점만 */
+/** 수업스케쥴 — 지점(수색/의정부)마다 메뉴가 따로. 보호자는 가입·승인된 지점만, 선생님은 두 지점 모두 */
 export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'uijeongbu' }) {
   const router = useRouter();
   const { isAdmin } = useAdmin();
-  const { canUse } = useMember();
-  const canView = isAdmin || canUse(center);
+  const { canUse, teacher } = useMember();
+  const canView = isAdmin || !!teacher || canUse(center);
   const [items, setItems] = useState<ScheduleSummary[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loaded, setLoaded] = useState(false);
