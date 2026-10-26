@@ -11,7 +11,7 @@ import { askConfirm, showAlert } from '@/lib/dialog';
 // 솔라피 템플릿 이름 끝의 [알림 종류] 로 사이트 알림과 짝을 짓는다. 통과(APPROVED)하면 템플릿 ID를 자동 저장 → 바로 보낼 수 있다.
 // 수업 일정 알림은 수업 개수(1~8개)마다 따로 — lesson_tomorrow_1 ~ lesson_tomorrow_8.
 
-type Row = { key: string; label: string; spec: MessageSpec };
+type Row = { key: string; label: string; spec: MessageSpec; grp: string };
 type Remote = { templateId: string; name: string; status: string; dateCreated?: string; comment: string };
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -45,7 +45,7 @@ function expand(rows: Row[]): Row[] {
     return Array.from({ length: 8 }, (_, k) => {
       const n = k + 1;
       const lessons = Array.from({ length: n }, (_, j) => ({ name: `수업 ${j + 1}`, value: `#{수업${j + 1}}` }));
-      return { key: `${r.key}_${n}`, label: `${r.label} ${n}개`, spec: { ...r.spec, items: [...head, ...lessons] } };
+      return { key: `${r.key}_${n}`, label: `${r.label} ${n}개`, spec: { ...r.spec, items: [...head, ...lessons] }, grp: r.grp };
     });
   });
 }
@@ -56,6 +56,8 @@ export default function AlimtalkTemplatesPage() {
   const [remote, setRemote] = useState<Remote[]>([]);
   const [savedIds, setSavedIds] = useState<Record<string, string>>({});
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  // 탭 — 알림 메시지 / 공지 메시지(메시지 모양의 [공지 메시지] 탭과 같은 묶음)
+  const [tab, setTab] = useState<'alert' | 'notice'>('alert');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState('');
@@ -64,7 +66,7 @@ export default function AlimtalkTemplatesPage() {
     setLoading(true); setFailed('');
     try {
       const saved = await getMessageTemplates().catch(() => []);
-      setRows(expand(toRows(saved).map(r => ({ key: r.id, label: r.label, spec: r.spec }))));
+      setRows(expand(toRows(saved).map(r => ({ key: r.id, label: r.label, spec: r.spec, grp: r.grp }))));
       const [ids, list] = await Promise.all([getAlimtalkTemplateIds().catch(() => ({} as Record<string, string>)), api('GET')]);
       const tpls = list.templates as Remote[];
       // 통과했는데 아직 저장 안 된 ID → 저장 (이제 그 알림은 자동으로 간다)
@@ -102,7 +104,9 @@ export default function AlimtalkTemplatesPage() {
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
-  const pickable = rows.filter(r => canPick(r.key));
+  const tabRows = rows.filter(r => (tab === 'notice') === (r.grp === 'notice_kind'));
+  const pickable = tabRows.filter(r => canPick(r.key));
+  const pickedHere = tabRows.filter(r => picked.has(r.key)).length;
   const using = (key: string) => statusOf[key]?.code === 'USING';
   const toggle = (key: string) => setPicked(p => { const n = new Set(p); if (n.has(key)) n.delete(key); else n.add(key); return n; });
 
@@ -132,16 +136,29 @@ export default function AlimtalkTemplatesPage() {
         메시지 모양 화면에 적어 둔 알림을 솔라피에 등록하고 카카오 검수를 한 번에 요청해요.<br />
         카테고리·We 로고 그림은 이미 통과한 &ldquo;시간표 신청 확정/취소&rdquo; 템플릿과 똑같이 올라가요. 통과하면 이 화면을 열 때 ID가 자동으로 저장돼요.
       </p>
+      <div role="tablist" className="flex gap-1.5 mb-4">
+        {([['alert', '알림 메시지'], ['notice', '공지 메시지']] as const).map(([k, label]) => {
+          const n = rows.filter(r => (k === 'notice') === (r.grp === 'notice_kind') && picked.has(r.key)).length;
+          return (
+            <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+              className={`text-[13px] px-4 py-2 border transition-colors ${tab === k ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`}>
+              {label}{n ? ` · ${n}개 고름` : ''}
+            </button>
+          );
+        })}
+      </div>
       {failed && <p className="mb-4 whitespace-pre-line text-[13px] rounded-xl px-4 py-3 bg-[#fef2f2] text-[#b91c1c]">{failed}</p>}
       <div className="flex items-center gap-3 mb-3">
-        <button type="button" disabled={loading || !pickable.length} onClick={() => setPicked(picked.size === pickable.length ? new Set() : new Set(pickable.map(r => r.key)))}
-          className="text-[12px] px-3 py-1 rounded-full border border-[#ddd] disabled:opacity-40">{picked.size && picked.size === pickable.length ? '모두 풀기' : '올릴 수 있는 것 모두 고르기'}</button>
+        <button type="button" disabled={loading || !pickable.length}
+          onClick={() => setPicked(p => { const n = new Set(p); const all = pickable.every(r => n.has(r.key)); for (const r of pickable) { if (all) n.delete(r.key); else n.add(r.key); } return n; })}
+          className="text-[12px] px-3 py-1 rounded-full border border-[#ddd] disabled:opacity-40">{pickable.length && pickable.every(r => picked.has(r.key)) ? '모두 풀기' : '올릴 수 있는 것 모두 고르기'}</button>
         <button type="button" onClick={load} disabled={loading} className="text-[12px] px-3 py-1 rounded-full border border-[#ddd] disabled:opacity-40">{loading ? '불러오는 중…' : '상태 새로 보기'}</button>
         <button type="button" onClick={submit} disabled={busy || !picked.size}
           className="ml-auto text-[13px] px-4 py-2 rounded-full bg-[var(--brand)] text-white disabled:opacity-40">{busy ? '올리는 중…' : `선택한 ${picked.size}개 심사 올리기`}</button>
       </div>
+      {picked.size > pickedHere && <p className="mb-2 text-[11px] text-[#999]">다른 탭에서 고른 {picked.size - pickedHere}개도 같이 올라가요.</p>}
       <ul className="divide-y divide-[#eee] border-y border-[#eee]">
-        {rows.map(r => {
+        {tabRows.map(r => {
           const st = statusOf[r.key] ?? { code: 'NONE' };
           const badge = STATUS[st.code] ?? { label: st.code, cls: 'bg-[#f4f4f5] text-[#71717a]' };
           return (
