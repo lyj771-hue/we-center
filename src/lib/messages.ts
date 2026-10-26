@@ -72,13 +72,12 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
     condition: '관리자가 날짜를 골라 보내면, 그날 수업이 있는 아이마다 한 번 (결석·다른 선생님으로 옮긴 수업은 빼고).\n수업 개수(1~8개)에 맞는 템플릿으로 보낸다 — 1개용~8개용을 따로 심사받는다.',
   },
   {
-    // 카카오 반려(2026-10): "공지" 같은 넓은 말머리는 안 됨 → 목적을 '센터 휴무 일정 안내' 하나로 좁힌다
-    id: 'notice', grp: 'lesson', label: '센터 휴무 일정 안내', sort: 20,
-    spec: { image: 'logo', title: 'We 센터 휴무 일정 안내', sub: 'We 센터',
-      items: [{ name: '휴무', value: '#{제목}' }, { name: '안내일', value: '#{날짜}' }],
-      body: '#{이름} 님, We 센터 휴무 일정을 안내드립니다.\n휴무일에는 수업이 없으니 아래 버튼에서 일정을 확인해 주세요.', button: { name: '휴무 일정 보기', url: `${SITE}/notices/#{글번호}` } },
-    samples: { 날짜: '2026/09/29', 제목: '추석 연휴 10/5~10/7' },
-    condition: '공지사항에 센터 휴무 글을 올릴 때 관리자가 보낼지 고르면, 승인된 보호자 모두에게 한 번.\n휴무 안내에만 쓴다 (다른 공지는 목적별로 템플릿을 따로 심사받아야 한다).',
+    id: 'notice', grp: 'lesson', label: '공지 알림', sort: 20,
+    spec: { image: 'logo', title: 'We 센터 공지사항', sub: 'We 센터',
+      items: [{ name: '제목', value: '#{제목}' }, { name: '게시일', value: '#{날짜}' }],
+      body: '#{이름} 님, 새 공지사항을 안내드립니다.\n자세한 내용은 아래 버튼을 눌러 확인해 주세요.', button: { name: '공지 보기', url: `${SITE}/notices/#{글번호}` } },
+    samples: { 날짜: '2026/09/29' },
+    condition: '공지사항에 글을 올릴 때 관리자가 보낼지 고르면, 승인된 보호자 모두에게 한 번.\n휴무·수업 변경 같은 이용 안내만 (행사·할인 홍보는 알림톡으로 못 보낸다).',
   },
   {
     id: 'schedule_notice', grp: 'lesson', label: '스케줄 공지 알림', sort: 30,
