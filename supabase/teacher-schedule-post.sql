@@ -3,7 +3,7 @@
 -- teacher-read-schedules.sql · admin-alerts.sql · teacher-login.sql 을 먼저 돌린 뒤에.
 --
 -- schedule_slot_owners — 선생님도 관리자처럼 칸마다 누가 신청했는지 본다(아이 이름, 없으면 닉네임).
--- teacher_remove_slots — 게시글에서 내 시간 여러 개 내리기. 그 사이 신청된 시간이 하나라도 있으면 하나도 안 내리고 그 시간들을 돌려준다.
+-- teacher_remove_slots — 게시글에서 내 시간 여러 개 내리기(시간표 빈타임 칸은 x가 된다). 그 사이 신청된 시간이 하나라도 있으면 하나도 안 내리고 그 시간들을 돌려준다.
 --                        보호자 알림 없음, 관리자에게 '선생님 빈 수업 변경 알림'(내렸어요).
 -- teacher_add_slots    — 게시글 기간의 그날, 내 빈타임이 비어 있거나 x인 시간을 게시글에 더한다(x는 풀림). 수업 시작까지 1시간 넘게 남은 시간만.
 --                        보호자에게 '스케줄 수정 알림'(schedule_updated, 한 묶음), 관리자에게 '선생님 빈 수업 변경 알림'(추가했어요).
@@ -97,6 +97,15 @@ begin
 
   select string_agg(to_char(s.day, 'FMMM/FMDD') || '(' || v_dow[extract(dow from s.day)::int + 1] || ') ' || regexp_replace(s.time, '^0', ''), ', ' order by s.day, s.time)
     into v_detail from slots s where s.id = any(p_slots) and s.schedule_id = p_schedule and s.teacher_id = v_tid and s.booked_by is null;
+  -- 내린 시간은 시간표 빈타임 칸을 x(수업 안 함)로 (그 칸에 다른 수업이 없을 때)
+  insert into board_cells (center, day, teacher_id, time, side, status, child_id, name, payment, oral, absent, moved, note, updated_at)
+  select coalesce(v_center, 'eunpyeong'), s.day, v_tid, s.time, 'open', 'off', null, null, '', false, false, false, null, now()
+  from slots s
+  where s.id = any(p_slots) and s.schedule_id = p_schedule and s.teacher_id = v_tid and s.booked_by is null
+    and not exists (select 1 from board_cells b where b.center = coalesce(v_center, 'eunpyeong') and b.day = s.day and b.teacher_id = v_tid
+                      and b.time = s.time and b.side = 'open' and b.status in ('child', 'undecided'))
+  on conflict (center, day, teacher_id, time, side) do update
+    set status = 'off', child_id = null, name = null, absent = false, moved = false, updated_at = now();
   delete from slots s where s.id = any(p_slots) and s.schedule_id = p_schedule and s.teacher_id = v_tid and s.booked_by is null;
   get diagnostics v_n = row_count;
   if v_n = 0 then return jsonb_build_object('result', 'none'); end if;

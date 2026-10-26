@@ -175,7 +175,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const doRemove = async () => {
     if (!schedule || !removeSel.size) return;
     const list = schedule.slots.filter(x => removeSel.has(x.id));
-    if (!(await askConfirm(`내 시간 ${list.length}개를 게시글에서 내릴까요?\n\n${list.map(x => `· ${whenOf(x.day, x.time)}`).join('\n')}\n\n보호자에게는 알림이 가지 않고, 센터(관리자)에게 알림톡이 가요.`, '내리기'))) return;
+    if (!(await askConfirm(`내 시간 ${list.length}개를 게시글에서 내릴까요?\n\n${list.map(x => `· ${whenOf(x.day, x.time)}`).join('\n')}\n\n시간표 그 칸은 x(수업 안 함)가 돼요.\n보호자에게는 알림이 가지 않고, 센터(관리자)에게 알림톡이 가요.`, '내리기'))) return;
     setTWorking(true);
     try {
       const r = await teacherRemoveSlots(schedule.id, [...removeSel]);
