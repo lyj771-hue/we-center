@@ -86,11 +86,11 @@ export async function getPostedSlots(from: string, to: string, center: string): 
   return new Set((data ?? []).map((r: Record<string, string>) => `${r.teacher_id}|${r.day}|${r.lesson_time}`));
 }
 
-/** 수업스케쥴 게시글 기간인 날짜들 — 선생님이 빈 시간을 더할 수 있는 날 */
-export async function getPostedDays(from: string, to: string, center: string): Promise<Set<string>> {
+/** 수업스케쥴 게시글 기간인 날짜 → 그 게시글 — 선생님이 빈 시간을 더할 수 있는 날 */
+export async function getPostedDays(from: string, to: string, center: string): Promise<Map<string, { id: string; title: string }>> {
   const { data, error } = await supabase.rpc('posted_days', { p_from: from, p_to: to, p_center: center });
-  if (error) return new Set();
-  return new Set((data ?? []).map((r: Record<string, string>) => r.day));
+  if (error) return new Map();
+  return new Map((data ?? []).map((r: Record<string, string>) => [r.day, { id: r.schedule_id, title: r.title }]));
 }
 
 /** 선생님이 만든 보낼 알림 보내기 */
@@ -117,7 +117,7 @@ export async function teacherPostSlots(center: string, times: { day: string; tim
   return { ...r, sent };
 }
 
-/** 내 빈타임 칸 x(수업 안 함) — 올라가 있던 시간이면 글에서 빠지고 관리자 알림톡(내렸어요). result: ok / done / busy(이미 수업) / past / not_teacher */
+/** 내 빈타임 칸 x(수업 안 함) — 올라가 있던 시간이면 글에서 빠진다. 관리자에게 늘 알림톡(내렸어요 / x로 바꿨어요), 보호자에게는 없음. result: ok / done / busy(이미 수업) / past / not_teacher */
 export async function teacherSetOff(center: string, day: string, time: string) {
   const { data, error } = await supabase.rpc('teacher_set_open_off', { p_center: center, p_day: day, p_time: time, p_off: true });
   if (error) throw error;

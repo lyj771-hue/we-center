@@ -5,7 +5,7 @@
 -- 1) teacher_post_slots — 선생님이 내 빈타임(비어 있는 칸 또는 x 칸, ?는 안 됨) 여러 개를 골라, 그 날짜가 들어 있는 기존 수업스케쥴 글에 시간을 더한다.
 --    게시글 기간이 아닌 날은 안 된다. x 칸은 x가 풀리며 올라간다.
 --    그 센터에 승인된 보호자에게 '스케줄 수정 알림'(schedule_updated, 글마다 한 묶음), 관리자에게 '선생님 빈 수업 변경 알림'(teacher_schedule_admin, 추가했어요).
--- 2) teacher_set_open_off — 내 빈타임 칸을 x(수업 안 함)로. 아직 아무도 신청 안 한 게시 시간은 글에서 바로 빠진다(관리자 알림 = 내렸어요). x를 다시 열려면 1)로 새 글을 올린다.
+-- 2) teacher_set_open_off — 내 빈타임 칸을 x(수업 안 함)로. 아직 아무도 신청 안 한 게시 시간은 글에서 바로 빠진다. 관리자에게 늘 알림(내렸어요 / x로 바꿨어요), 보호자에게는 없음. x를 다시 열려면 1)로 게시글에 더한다.
 -- 3) 트리거 — 시간표(관리자·선생님 누구든) 빈타임 칸에 x · ? · 아이가 들어가면, 같은 선생님·날짜·시간의 신청 안 된 게시 시간을 글에서 뺀다.
 -- 4) teacher_posted_slots — 시간표 보기에서 "게시 중" 표시용 (모든 선생님). posted_days — 게시글 기간인 날짜들.
 -- 5) teacher_outbox_rows · teacher_mark_outbox — 선생님이 만든 보낼 알림을 /api/alimtalk/teacher-send 가 보내고 결과를 적는다.
@@ -70,11 +70,13 @@ revoke all on function public.schedule_for_day(text, date) from public, anon, au
 -- 게시글 기간인 날짜들 — 선생님 시간표에서 고를 수 있는 날
 drop function if exists public.posted_days(date, date, text);
 create function public.posted_days(p_from date, p_to date, p_center text)
-returns table (day date)
+returns table (day date, schedule_id uuid, title text)
 language sql stable security definer set search_path = public
 as $$
-  select g::date from generate_series(p_from, p_to, interval '1 day') g
-  where (public.is_admin() or public.is_teacher()) and public.schedule_for_day(p_center, g::date) is not null;
+  select g::date, sc.id, sc.title
+  from generate_series(p_from, p_to, interval '1 day') g
+  join schedules sc on sc.id = public.schedule_for_day(p_center, g::date)
+  where public.is_admin() or public.is_teacher();
 $$;
 revoke all on function public.posted_days(date, date, text) from public, anon;
 grant execute on function public.posted_days(date, date, text) to authenticated;
@@ -195,10 +197,8 @@ begin
   values (p_center, p_day, v_tid, p_time, 'open', 'off', null, null, '', false, false, false, null, now())
   on conflict (center, day, teacher_id, time, side) do update
     set status = 'off', child_id = null, name = null, absent = false, moved = false, updated_at = now();
-  -- 올라가 있던 시간을 내렸을 때만 관리자에게
-  if v_removed > 0 then
-    v_ids := v_ids || public.teacher_admin_notice(p_center, v_name, '내렸어요', v_when);
-  end if;
+  -- 관리자에게는 늘 — 게시 중이던 시간이면 '내렸어요', 아니면 'x로 바꿨어요' (보호자에게는 안 간다)
+  v_ids := v_ids || public.teacher_admin_notice(p_center, v_name, case when v_removed > 0 then '내렸어요' else 'x(수업 안 함)로 바꿨어요' end, v_when);
   return jsonb_build_object('result', 'ok', 'removed', v_removed, 'ids', to_jsonb(v_ids));
 end;
 $$;

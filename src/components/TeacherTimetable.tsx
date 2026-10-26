@@ -65,12 +65,13 @@ export default function TeacherTimetable({ center }: { center: Center }) {
 
   // 게시 중인 빈 시간("선생님|날짜|시간") — 수업스케쥴 글에 올라가 있고 아직 신청 없음 (모든 선생님)
   const [posted, setPosted] = useState<Set<string>>(new Set());
-  // 그날이 수업스케쥴 게시글 기간인지 — 기간인 날만 빈 시간을 더할 수 있다
-  const [dayPosted, setDayPosted] = useState(false);
+  // 그날이 들어 있는 수업스케쥴 게시글 — 기간인 날만 빈 시간을 더할 수 있다
+  const [dayPost, setDayPost] = useState<{ id: string; title: string } | null>(null);
+  const dayPosted = !!dayPost;
   const load = useCallback(async () => {
     try {
       const [t, l, h, p, pd] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({})), getPostedSlots(day, day, center), getPostedDays(day, day, center)]);
-      setTeachers(t); setLessons(l); setHolidays(h); setPosted(p); setDayPosted(pd.has(day)); setFailed('');
+      setTeachers(t); setLessons(l); setHolidays(h); setPosted(p); setDayPost(pd.get(day) ?? null); setFailed('');
     } catch (e) {
       setFailed((e as Error).message);
     }
@@ -86,9 +87,10 @@ export default function TeacherTimetable({ center }: { center: Center }) {
     return () => { off(); clearInterval(t); document.removeEventListener('visibilitychange', onFocus); };
   }, [can, load]);
 
-  // 빈 수업 올리기 — 고른 칸("날짜|시간"), 날짜를 바꿔도 남는다
+  // 빈 수업 올리기 — 고른 칸("날짜|시간"), 날짜를 바꿔도 남는다. 한 번에 한 게시글 기간 안에서만(pickedPost)
   const [picking, setPicking] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [pickedPost, setPickedPost] = useState<{ id: string; title: string } | null>(null);
   const [working, setWorking] = useState(false);
   const myId = isAdmin ? undefined : teacher?.teacherId;
   const canEditHere = !!myId && (teacher?.centers ?? []).includes(center);
@@ -154,13 +156,20 @@ export default function TeacherTimetable({ center }: { center: Center }) {
     if (picking) {
       if (c.isPosted) { await showAlert('이미 수업스케쥴에 올라가 있는 시간이에요.'); return; }
       if (!c.free) return;
-      if (!dayPosted) { await showAlert('이 날은 수업스케쥴 게시글 기간이 아니에요.\n이미 올라온 게시글 기간의 날짜만 더할 수 있어요.'); return; }
-      setPicked(p => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+      if (!dayPost) { await showAlert('이 날은 수업스케쥴 게시글 기간이 아니에요.\n이미 올라온 게시글 기간의 날짜만 더할 수 있어요.'); return; }
+      if (pickedPost && picked.size && pickedPost.id !== dayPost.id) {
+        await showAlert(`한 번에 한 게시글 기간 안에서만 고를 수 있어요.\n지금 고른 게시글: ${pickedPost.title}\n\n이 날은 다른 게시글(${dayPost.title}) 기간이에요. 먼저 [게시글에 더하기]로 올린 뒤 따로 골라 주세요.`);
+        return;
+      }
+      const next = new Set(picked);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      setPicked(next);
+      setPickedPost(next.size ? dayPost : null);
       return;
     }
     if (c.isOff) { await showAlert('x(수업 안 함) 칸이에요.\n다시 열려면 [빈 수업 올리기]로 골라 게시글에 더해 주세요.'); return; }
     if (!c.free && !c.isPosted) return;
-    const msg = `${whenOf(day, time)} 내 빈타임을 x(수업 안 함)로 바꿀까요?${c.isPosted ? '\n\n수업스케쥴 글에 올라가 있는 시간이라 글에서 바로 내려가요.\n센터(관리자)에게 알림톡이 가요.' : ''}`;
+    const msg = `${whenOf(day, time)} 내 빈타임을 x(수업 안 함)로 바꿀까요?${c.isPosted ? '\n\n수업스케쥴 글에 올라가 있는 시간이라 글에서 바로 내려가요.' : ''}\n\n센터(관리자)에게 알림톡이 가요. 보호자에게는 가지 않아요.`;
     if (!(await askConfirm(msg, 'x로 바꾸기'))) return;
     setWorking(true);
     try {
@@ -183,7 +192,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
       if (r.result === 'ok') {
         const s = r.sent && 'sent' in r.sent ? r.sent : null;
         await showAlert(`수업스케쥴 게시글에 빈 수업 ${r.count}개를 더했어요.${(r.count ?? 0) < list.length ? `\n(${r.no_post ? `게시글 기간이 아닌 ${r.no_post}개, ` : ''}그 사이 막힌 칸은 빠졌어요)` : ''}${s ? `\n알림톡 — 보냄 ${s.sent}건${s.waiting ? ` · 템플릿 심사 전이라 남겨만 둠 ${s.waiting}건` : ''}` : ''}`);
-        setPicked(new Set()); setPicking(false);
+        setPicked(new Set()); setPickedPost(null); setPicking(false);
       } else if (r.result === 'none') await showAlert(r.no_post ? '고른 날짜가 수업스케쥴 게시글 기간이 아니에요.\n이미 올라온 게시글 기간의 날짜만 더할 수 있어요.' : '더할 수 있는 시간이 없어요. 그 사이 수업이 들어왔거나 이미 올라가 있어요.');
       else await showAlert('선생님 인증된 계정만 올릴 수 있어요.');
       await load();
@@ -210,15 +219,15 @@ export default function TeacherTimetable({ center }: { center: Center }) {
         </button>
         {canEditHere && (picking ? (
           <span className="flex items-center gap-2 ml-auto">
-            <span className="text-[12px] text-[#1d4ed8]">{picked.size}개 고름</span>
+            <span className="text-[12px] text-[#1d4ed8]">{pickedPost ? `${pickedPost.title} · ` : ''}{picked.size}개 고름</span>
             <button onClick={submitPicked} disabled={working || !picked.size} className="text-[12px] px-3 h-8 rounded-full bg-[var(--brand)] text-white disabled:opacity-40">{working ? '더하는 중…' : '게시글에 더하기'}</button>
-            <button onClick={() => { setPicking(false); setPicked(new Set()); }} className="text-[12px] px-3 h-8 rounded-full border border-[#ddd] text-[#555]">그만두기</button>
+            <button onClick={() => { setPicking(false); setPicked(new Set()); setPickedPost(null); }} className="text-[12px] px-3 h-8 rounded-full border border-[#ddd] text-[#555]">그만두기</button>
           </span>
         ) : (
           <button onClick={() => setPicking(true)} className="ml-auto text-[12px] px-3 h-8 rounded-full border border-[var(--brand)] text-[var(--brand)]">빈 수업 올리기</button>
         ))}
       </div>
-      {picking && <p className="text-[12px] text-[#1d4ed8] mb-2">{dayPosted ? '내 빈타임에서 빈칸이나 x 칸(+)을 눌러 골라요. x 칸은 x가 풀리며 올라가요(?는 안 돼요). 날짜를 바꿔 다른 날도 고를 수 있어요.' : '이 날은 수업스케쥴 게시글 기간이 아니라 고를 수 없어요. 게시글이 올라온 날짜로 옮겨 주세요.'}</p>}
+      {picking && <p className="text-[12px] text-[#1d4ed8] mb-2">{dayPost ? `이 날 게시글: ${dayPost.title} — 내 빈타임에서 빈칸이나 x 칸(+)을 눌러 골라요. x 칸은 x가 풀리며 올라가요(?는 안 돼요). 같은 게시글 기간이면 다른 날도 함께 고를 수 있어요.` : '이 날은 수업스케쥴 게시글 기간이 아니라 고를 수 없어요. 게시글이 올라온 날짜로 옮겨 주세요.'}</p>}
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요. ({failed})</p>}
       <div ref={wrapRef} className={`${fit ? 'overflow-hidden' : 'overflow-x-auto'} bg-white`}>
         <table ref={tableRef} className="border-collapse text-[11px] min-w-full">
