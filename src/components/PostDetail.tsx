@@ -9,6 +9,10 @@ import { Post, Category } from '@/lib/types';
 import { getPost, updatePost, deletePost } from '@/lib/store';
 import RichContent from './RichContent';
 import PostTags from './PostTags';
+import NoticePicker from './NoticePicker';
+import type { MessageRow } from '@/lib/messages';
+import { EMPTY_SELECTION, getNoticeKinds, selectionProblem, selectionToTags, tagsToSelection, type NoticeSelection } from '@/lib/noticeAlimtalk';
+import { showAlert } from '@/lib/dialog';
 
 const RichTextEditor = dynamic(() => import('./RichTextEditor'), {
   ssr: false,
@@ -29,20 +33,31 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', location: '' });
   const isWeslang = category === 'weslang';
+  // 공지사항 — 글을 올릴 때 고른 공지 메시지(종류·지점·명절). 수정 화면에서 보이고 고칠 수 있다(알림톡은 다시 보내지 않음)
+  const isNotice = category === 'notices';
+  const [kinds, setKinds] = useState<MessageRow[]>([]);
+  const [notice, setNotice] = useState<NoticeSelection>(EMPTY_SELECTION);
+  useEffect(() => { if (isNotice && isAdmin && editing && !kinds.length) getNoticeKinds().then(setKinds).catch(() => {}); }, [isNotice, isAdmin, editing, kinds.length]);
 
   useEffect(() => {
     getPost(category, id).then(found => {
       if (found) {
         setPost(found);
         setForm({ title: found.title, content: found.content, location: found.location ?? '' });
+        setNotice(tagsToSelection(found.tags));
       }
     });
   }, [category, id]);
 
   const handleSave = async () => {
     if (!post) return;
-    await updatePost(category, id, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location } : {}) });
-    setPost(p => p ? { ...p, ...form } : p);
+    if (!form.title.trim()) { await showAlert(isWeslang ? '가게 이름을 적어 주세요.' : '제목을 적어 주세요.'); return; }
+    const kind = kinds.find(k => k.id === notice.kind);
+    const problem = isNotice ? selectionProblem(notice, kind) : null;
+    if (problem) { await showAlert(problem); return; }
+    const tags = isNotice && kinds.length ? (selectionToTags(notice, kind) ?? []) : undefined;
+    await updatePost(category, id, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location } : {}), ...(tags ? { tags } : {}) });
+    setPost(p => p ? { ...p, ...form, ...(tags ? { tags } : {}) } : p);
     setEditing(false);
   };
 
@@ -84,6 +99,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             <input type="text" value={form.location} placeholder="위치" onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
               className="w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a]" />
           )}
+          {isNotice && isAdmin && <NoticePicker kinds={kinds} value={notice} onChange={setNotice} note="수정해도 알림톡은 다시 보내지 않아요. 고른 지점이 제목 앞에 표시돼요." />}
           <RichTextEditor
             initialContent={form.content}
             onChange={html => setForm(f => ({ ...f, content: html }))}

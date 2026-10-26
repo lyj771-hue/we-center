@@ -57,13 +57,19 @@ export async function addPost(cat: Category, data: Pick<Post, 'title' | 'content
   return fromPostRow(r.data as PostRow);
 }
 
-export async function updatePost(cat: Category, id: string, data: Partial<Pick<Post, 'title' | 'content' | 'imageUrl' | 'location'>>): Promise<void> {
+export async function updatePost(cat: Category, id: string, data: Partial<Pick<Post, 'title' | 'content' | 'imageUrl' | 'location' | 'tags'>>): Promise<void> {
   const patch: Partial<PostRow> = {};
   if (data.title !== undefined) patch.title = data.title;
   if (data.content !== undefined) patch.content = data.content;
   if (data.imageUrl !== undefined) patch.image_url = data.imageUrl ?? null;
   if (data.location !== undefined) patch.location = data.location.trim() || null;
-  const { error } = await supabase.from('posts').update(patch).eq('category', cat).eq('id', id);
+  if (data.tags !== undefined) patch.tags = data.tags.length ? data.tags : null;
+  let { error } = await supabase.from('posts').update(patch).eq('category', cat).eq('id', id);
+  // tags 칸이 아직 없으면(SQL 전) 그것만 빼고
+  if (error && patch.tags !== undefined && (error.code === '42703' || error.code === 'PGRST204')) {
+    delete patch.tags;
+    ({ error } = await supabase.from('posts').update(patch).eq('category', cat).eq('id', id));
+  }
   if (error) throw error;
 }
 

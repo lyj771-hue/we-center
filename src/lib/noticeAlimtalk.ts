@@ -41,3 +41,29 @@ export async function sendNotice(kind: MessageRow, postId: string, center: Notic
     vars: { 이름: r.name, 글번호: postId, ...(center ? { 센터: CENTER_LABEL[center] } : {}), ...(holiday.trim() ? { 명절: holiday.trim() } : {}) },
   })));
 }
+
+/** 글에 고른 것 — 종류(id) · 지점 · 명절 */
+export type NoticeSelection = { kind: string; center: NoticeCenter | null; holiday: string };
+export const EMPTY_SELECTION: NoticeSelection = { kind: '', center: null, holiday: '' };
+
+/** posts.tags 에 넣기 — 화면에는 지점 이름만 보이고(PostTags), 종류·명절은 "kind:…", "holiday:…"로 숨겨 둔다(수정 화면에서 다시 보이게) */
+export function selectionToTags(sel: NoticeSelection, kind: MessageRow | undefined): string[] | undefined {
+  if (!kind) return undefined;
+  return [
+    ...(needsCenter(kind) && sel.center ? [CENTER_LABEL[sel.center]] : []),
+    `kind:${kind.id}`,
+    ...(needsHoliday(kind) && sel.holiday.trim() ? [`holiday:${sel.holiday.trim()}`] : []),
+  ];
+}
+export function tagsToSelection(tags?: string[]): NoticeSelection {
+  const t = tags ?? [];
+  const center = (Object.keys(CENTER_LABEL) as NoticeCenter[]).find(c => t.includes(CENTER_LABEL[c])) ?? null;
+  return { kind: t.find(x => x.startsWith('kind:'))?.slice(5) ?? '', center, holiday: t.find(x => x.startsWith('holiday:'))?.slice(8) ?? '' };
+}
+/** 꼭 채울 칸이 비었으면 알릴 말, 아니면 null */
+export function selectionProblem(sel: NoticeSelection, kind: MessageRow | undefined): string | null {
+  if (!kind) return null;
+  if (needsCenter(kind) && !sel.center) return '이 공지 메시지는 센터를 꼭 골라야 해요.\n수색점 / 의정부점 중 하나를 골라 주세요.';
+  if (needsHoliday(kind) && !sel.holiday.trim()) return '이 공지 메시지는 명절 이름을 꼭 적어야 해요.\n(예: 추석, 설)';
+  return null;
+}
