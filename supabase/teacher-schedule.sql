@@ -5,7 +5,8 @@
 -- 1) teacher_post_slots — 선생님이 내 빈타임(비어 있는 칸 또는 x 칸, ?는 안 됨) 여러 개를 골라, 그 날짜가 들어 있는 기존 수업스케쥴 글에 시간을 더한다.
 --    게시글 기간이 아닌 날은 안 된다. x 칸은 x가 풀리며 올라간다.
 --    그 센터에 승인된 보호자에게 '스케줄 수정 알림'(schedule_updated, 글마다 한 묶음), 관리자에게 '선생님 빈 수업 변경 알림'(teacher_schedule_admin, 추가했어요).
--- 2) teacher_set_open_off — 내 빈타임 칸을 x(수업 안 함)로. 아직 아무도 신청 안 한 게시 시간은 글에서 바로 빠진다. 관리자에게 늘 알림(내렸어요 / x로 바꿨어요), 보호자에게는 없음. x를 다시 열려면 1)로 게시글에 더한다.
+-- 2-1) teacher_close_slots — 게시 중인 내 시간 여러 개를 닫는다(게시글에서 내리고 x, 관리자 알림 = 내렸어요). 시간표 보기의 [시간 닫기].
+-- 2) teacher_set_open_off — (예전 칸 하나씩 x) 내 빈타임 칸을 x(수업 안 함)로. 아직 아무도 신청 안 한 게시 시간은 글에서 바로 빠진다. 관리자에게 늘 알림(내렸어요 / x로 바꿨어요), 보호자에게는 없음. x를 다시 열려면 1)로 게시글에 더한다.
 -- 3) 트리거 — 시간표(관리자·선생님 누구든) 빈타임 칸에 x · ? · 아이가 들어가면, 같은 선생님·날짜·시간의 신청 안 된 게시 시간을 글에서 뺀다.
 -- 4) teacher_posted_slots — 시간표 보기에서 "게시 중" 표시용 (모든 선생님). posted_days — 게시글 기간인 날짜들.
 -- 5) teacher_outbox_rows · teacher_mark_outbox — 선생님이 만든 보낼 알림을 /api/alimtalk/teacher-send 가 보내고 결과를 적는다.
@@ -205,6 +206,42 @@ end;
 $$;
 revoke all on function public.teacher_set_open_off(text, date, text, boolean) from public, anon;
 grant execute on function public.teacher_set_open_off(text, date, text, boolean) to authenticated;
+
+-- 2-1) 게시 중인 내 시간 여러 개 닫기 — p_times = [{"day","time"}, …]. 게시글에서 내리고 x(수업 안 함). 관리자 알림(내렸어요), 보호자 없음
+create or replace function public.teacher_close_slots(p_center text, p_times jsonb)
+returns jsonb language plpgsql security definer set search_path = public
+as $$
+declare
+  v_tid uuid := public.my_teacher_id();
+  v_name text;
+  v_ok jsonb := '[]'::jsonb;
+  v_detail text;
+  v_dow text[] := array['일', '월', '화', '수', '목', '금', '토'];
+  x record;
+begin
+  if v_tid is null then return jsonb_build_object('result', 'not_teacher'); end if;
+  select name into v_name from teachers where id = v_tid;
+  for x in select distinct (e->>'day')::date as day, e->>'time' as time from jsonb_array_elements(p_times) e order by 1, 2 loop
+    if (x.day + x.time::time) < (now() at time zone 'Asia/Seoul') + interval '1 hour' then continue; end if;
+    -- 게시 중(아직 신청 없음)인 내 시간만
+    if not exists (select 1 from slots s join schedules sc on sc.id = s.schedule_id
+                   where s.teacher_id = v_tid and s.day = x.day and s.time = x.time and s.booked_by is null
+                     and sc.center = p_center and sc.hidden_at is null) then continue; end if;
+    insert into board_cells (center, day, teacher_id, time, side, status, child_id, name, payment, oral, absent, moved, note, updated_at)
+    values (p_center, x.day, v_tid, x.time, 'open', 'off', null, null, '', false, false, false, null, now())
+    on conflict (center, day, teacher_id, time, side) do update
+      set status = 'off', child_id = null, name = null, absent = false, moved = false, updated_at = now();   -- 트리거가 게시글에서 뺀다
+    v_ok := v_ok || jsonb_build_object('day', x.day, 'time', x.time);
+  end loop;
+  if jsonb_array_length(v_ok) = 0 then return jsonb_build_object('result', 'none'); end if;
+  select string_agg(to_char((e->>'day')::date, 'FMMM/FMDD') || '(' || v_dow[extract(dow from (e->>'day')::date)::int + 1] || ') ' || regexp_replace(e->>'time', '^0', ''), ', ' order by e->>'day', e->>'time')
+    into v_detail from jsonb_array_elements(v_ok) e;
+  return jsonb_build_object('result', 'ok', 'count', jsonb_array_length(v_ok),
+    'ids', jsonb_build_array(public.teacher_admin_notice(p_center, v_name, '내렸어요', v_detail)));
+end;
+$$;
+revoke all on function public.teacher_close_slots(text, jsonb) from public, anon;
+grant execute on function public.teacher_close_slots(text, jsonb) to authenticated;
 
 -- 3) 시간표 빈타임 칸이 막히면(x · ? · 아이) 아직 신청 안 된 게시 시간을 글에서 뺀다 — 관리자 시간표 관리에서 바꿔도 같다
 create or replace function public.board_cells_unpost_slots()

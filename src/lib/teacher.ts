@@ -117,11 +117,11 @@ export async function teacherPostSlots(center: string, times: { day: string; tim
   return { ...r, sent };
 }
 
-/** 내 빈타임 칸 x(수업 안 함) — 올라가 있던 시간이면 글에서 빠진다. 관리자에게 늘 알림톡(내렸어요 / x로 바꿨어요), 보호자에게는 없음. result: ok / done / busy(이미 수업) / past / not_teacher */
-export async function teacherSetOff(center: string, day: string, time: string) {
-  const { data, error } = await supabase.rpc('teacher_set_open_off', { p_center: center, p_day: day, p_time: time, p_off: true });
+/** 게시 중인 내 시간 여러 개 닫기 — 게시글에서 내리고 x(수업 안 함). 관리자 알림톡(내렸어요), 보호자 없음. result: ok / none / not_teacher */
+export async function teacherCloseSlots(center: string, times: { day: string; time: string }[]) {
+  const { data, error } = await supabase.rpc('teacher_close_slots', { p_center: center, p_times: times });
   if (error) throw error;
-  const r = data as { result: string; removed?: number; ids?: string[] };
+  const r = data as { result: string; count?: number; ids?: string[] };
   if (r.result === 'ok') { notifyScheduleChanged(center); await sendTeacherOutbox(r.ids ?? []).catch(() => {}); }
   return r;
 }
