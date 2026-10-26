@@ -45,6 +45,14 @@ export async function getTeacherLessons(from: string, to: string): Promise<Teach
   }));
 }
 
+/** 바우처·굳센·꿈이든 월 회차 — "날짜|선생님|시간|칸" → 몇 번째 (시간표 관리와 같은 규칙, supabase/teacher-lesson-rounds.sql). SQL 전이면 빈 것 */
+export async function getTeacherRounds(from: string, to: string, holidays: string[]): Promise<Map<string, { method: string; n: number }>> {
+  const { data, error } = await supabase.rpc('teacher_lesson_rounds', { p_from: from, p_to: to, p_holidays: holidays });
+  if (error) return new Map();
+  return new Map((data ?? []).map((r: { day: string; lesson_time: string; teacher_id: string; side: string; method: string; n: number }) =>
+    [`${r.day}|${r.teacher_id}|${r.lesson_time}|${r.side}`, { method: r.method, n: r.n }]));
+}
+
 // ── 관리자: 회원관리 "선생님" 탭 ─────────────────────────────
 
 export interface TeacherLogin { teacherId: string; name: string; centers: string[]; phone?: string; kakaoPhone?: string; memberCode?: string; userId?: string; linkedAt?: string }

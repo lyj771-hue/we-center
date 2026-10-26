@@ -5,10 +5,10 @@ import { useAdmin } from '@/components/AdminContext';
 import { useMember } from '@/components/MemberContext';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getHolidayNames, getPostedOpenSlots, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
-import type { Center } from '@/lib/timetable';
-import { PAY_METHODS, ROW_LABEL, SUNDAY_TEACHERS, defaultPayMethod, rowsForDay, worksAt } from '@/lib/timetable';
+import type { Center, PayMethod } from '@/lib/timetable';
+import { PAY_METHODS, ROUND_LIMIT, ROW_LABEL, SUNDAY_TEACHERS, defaultPayMethod, rowsForDay, worksAt } from '@/lib/timetable';
 import type { TeacherLesson } from '@/lib/teacher';
-import { getTeacherLessons } from '@/lib/teacher';
+import { getTeacherLessons, getTeacherRounds } from '@/lib/teacher';
 
 // 시간표 보기(선생님) — 카카오로 로그인해서 선생님 인증된 계정만. 고치기는 못 하고 보기만.
 // 날짜마다 센터 선생님 × 시간, 선생님마다 고정 · 빈타임 두 칸. 공휴일엔 고정 수업을 빼고 보여 준다.
@@ -25,6 +25,8 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const [failed, setFailed] = useState('');
   // 그날 게시 중인 시간("선생님|시간") — 쉬는 시간을 연 칸은 쉬는 시간 글씨 대신 빈칸으로
   const [postedOpen, setPostedOpen] = useState<Set<string>>(new Set());
+  // 바우처·굳센·꿈이든 월 회차 — 시간표 관리처럼 "바우처3" ("날짜|선생님|시간|칸" → 회차)
+  const [rounds, setRounds] = useState<Map<string, { method: string; n: number }>>(new Map());
   const can = isAdmin || !!teacher;
   // 한눈에 보기 — 열 때마다 늘 이걸로 시작: 표 전체(폭·높이)가 화면에 들어오게 줄인다 ([크게 보기] = 원래 크기, 옆으로 밀어 보기)
   const [fit, setFit] = useState(true);
@@ -65,6 +67,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
     try {
       const [t, l, h, p] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({})), getPostedOpenSlots(day, center).catch(() => new Set<string>())]);
       setTeachers(t); setLessons(l); setHolidays(h); setPostedOpen(p); setFailed('');
+      setRounds(await getTeacherRounds(day, day, Object.keys(h).filter(d => d.startsWith(day.slice(0, 7)))));
     } catch (e) {
       setFailed((e as Error).message);
     }
@@ -100,13 +103,20 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   // 결제 칸 — 확정(✓ 빨강) · 고름(파랑) · 기본 결제(회색). 빈타임 아이는 기본 결제가 없다
   const payText = (l?: TeacherLesson) => {
     if (!l || (l.status !== 'child' && l.status !== 'cancel_requested') || l.moved || l.absent) return null;
-    const name = (k?: string) => PAY_METHODS.find(m => m.key === k)?.label;
+    // 칸에 보이는 이름 — 시간표 관리와 같게(장맞춤 = 장)
+    const name = (k?: string) => { const m = PAY_METHODS.find(x => x.key === k); return m?.cell ?? m?.label; };
+    // 월 회차 — 시간표 관리와 같게 결제 이름 뒤에 숫자, 넘치면 빨간 !
+    const r = rounds.get(`${l.day}|${l.teacherId}|${l.time}|${l.side}`);
+    const limit = r ? ROUND_LIMIT[r.method as PayMethod] : undefined;
+    const over = !!r && !!limit && r.n >= limit;
+    const rn = r ? <>{r.n}{over && <span className="ml-0.5">!</span>}</> : null;
     if (l.payNote || l.payMethod) {
       const t = l.payNote || name(l.payMethod) || '';
-      return l.payConfirmed ? <span className="text-[#b91c1c]">✓{t}</span> : <span className="text-[#1d4ed8]">{t}</span>;
+      if (over) return <span className="font-bold text-[#dc2626]">{l.payConfirmed ? '✓' : ''}{t}{rn}</span>;
+      return l.payConfirmed ? <span className="text-[#b91c1c]">✓{t}{rn}</span> : <span className="text-[#1d4ed8]">{t}{rn}</span>;
     }
     const base = l.side === 'fixed' ? name(defaultPayMethod(l.payment)) : undefined;
-    return base ? <span className="text-[#a1a1aa]">{base}</span> : null;
+    return base ? <span className={over ? 'font-bold text-[#dc2626]' : 'text-[#a1a1aa]'}>{base}{rn}</span> : null;
   };
 
   const text = (l?: TeacherLesson) => {
