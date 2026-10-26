@@ -8,9 +8,12 @@ import { addDays, getHolidayNames, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd
 import type { Center } from '@/lib/timetable';
 import { PAY_METHODS, ROW_LABEL, SUNDAY_TEACHERS, defaultPayMethod, rowsForDay, worksAt } from '@/lib/timetable';
 import type { TeacherLesson } from '@/lib/teacher';
-import { getTeacherLessons } from '@/lib/teacher';
+import { getPostedSlots, getTeacherLessons, teacherPostSlots, teacherSetOff } from '@/lib/teacher';
+import { askConfirm, showAlert } from '@/lib/dialog';
 
-// 시간표 보기(선생님) — 카카오로 로그인해서 선생님 인증된 계정만. 고치기는 못 하고 보기만.
+// 시간표 보기(선생님) — 카카오로 로그인해서 선생님 인증된 계정만. 다른 칸은 보기만.
+// 선생님은 내 빈타임 칸만: [빈 수업 올리기]로 비어 있는 칸 여러 개를 골라 수업스케쥴 새 글로 올리고(보호자·관리자 알림톡),
+// 칸을 눌러 x(수업 안 함)로 바꾸거나 풀 수 있다 — x로 바꾸면 아직 신청 없는 게시 시간은 글에서 바로 빠진다(supabase/teacher-schedule.sql).
 // 날짜마다 센터 선생님 × 시간, 선생님마다 고정 · 빈타임 두 칸. 공휴일엔 고정 수업을 빼고 보여 준다.
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -59,15 +62,32 @@ export default function TeacherTimetable({ center }: { center: Center }) {
     return () => { ro.disconnect(); window.removeEventListener('resize', measure); reset(); };
   }, [fit, lessons, teachers, day, folded]);
 
+  // 게시 중인 빈 시간("선생님|날짜|시간") — 수업스케쥴 글에 올라가 있고 아직 신청 없음
+  const [posted, setPosted] = useState<Set<string>>(new Set());
   const load = useCallback(async () => {
     try {
-      const [t, l, h] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({}))]);
-      setTeachers(t); setLessons(l); setHolidays(h); setFailed('');
+      const [t, l, h, p] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({})), getPostedSlots(day, day, center)]);
+      setTeachers(t); setLessons(l); setHolidays(h); setPosted(p); setFailed('');
     } catch (e) {
       setFailed((e as Error).message);
     }
-  }, [day, teacher]);
+  }, [day, center]);
   useEffect(() => { if (can) load(); }, [can, load]);
+  // 수업스케쥴과 실시간으로 맞추기 — 15초마다, 그리고 화면으로 돌아올 때 다시 읽는다(보호자 신청·관리자 변경이 바로 보이게)
+  useEffect(() => {
+    if (!can) return;
+    const t = setInterval(load, 15000);
+    const onFocus = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onFocus); };
+  }, [can, load]);
+
+  // 빈 수업 올리기 — 고른 칸("날짜|시간"), 날짜를 바꿔도 남는다
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [working, setWorking] = useState(false);
+  const myId = isAdmin ? undefined : teacher?.teacherId;
+  const canEditHere = !!myId && (teacher?.centers ?? []).includes(center);
 
   const label = center === 'uijeongbu' ? '의정부' : '수색';
   if (!can) {
@@ -122,6 +142,52 @@ export default function TeacherTimetable({ center }: { center: Center }) {
       </span>
     );
   };
+  const DOWS = DOW;
+  const whenOf = (dd: string, time: string) => { const x = parseYmd(dd); return `${x.getMonth() + 1}/${x.getDate()}(${DOWS[x.getDay()]}) ${time.replace(/^0/, '')}`; };
+  // 내 빈타임 칸 누르기 — 고르는 중이면 고르기/풀기, 아니면 x(수업 안 함) 바꾸기/풀기
+  const tapMine = async (time: string, c: { free: boolean; isPosted: boolean; isOff: boolean }) => {
+    const k = `${day}|${time}`;
+    if (picking) {
+      if (!c.free || c.isPosted) { if (c.isPosted) showAlert('이미 수업스케쥴에 올라가 있는 시간이에요.'); return; }
+      setPicked(p => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+      return;
+    }
+    if (!c.free && !c.isPosted && !c.isOff) return;
+    const off = !c.isOff;
+    const msg = off
+      ? `${whenOf(day, time)} 내 빈타임을 x(수업 안 함)로 바꿀까요?${c.isPosted ? '\n\n수업스케쥴 글에 올라가 있는 시간이라, 글에서 바로 빠져요.' : ''}\n\n센터(관리자)에게 알림톡이 가요.`
+      : `${whenOf(day, time)} x(수업 안 함)를 풀까요?\n다시 빈 시간이 돼요. (수업스케쥴에는 다시 올려야 보여요)\n\n센터(관리자)에게 알림톡이 가요.`;
+    if (!(await askConfirm(msg, off ? 'x로 바꾸기' : 'x 풀기'))) return;
+    setWorking(true);
+    try {
+      const r = await teacherSetOff(center, day, time, off);
+      if (r.result === 'busy') await showAlert('그 사이 수업이 들어와서 바꿀 수 없어요. 화면을 새로 볼게요.');
+      else if (r.result === 'past') await showAlert('지난 날은 바꿀 수 없어요.');
+      else if (r.result === 'not_teacher') await showAlert('선생님 인증된 계정만 바꿀 수 있어요.');
+      await load();
+    } catch (e) {
+      await showAlert(`바꾸지 못했어요. 수업스케쥴 연동 SQL(supabase/teacher-schedule.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`);
+    } finally { setWorking(false); }
+  };
+  const submitPicked = async () => {
+    const list = [...picked].sort().map(k => { const [dd, time] = k.split('|'); return { day: dd, time }; });
+    if (!list.length) { await showAlert('올릴 빈 시간을 눌러 골라 주세요.'); return; }
+    if (!(await askConfirm(`빈 수업 ${list.length}개를 수업스케쥴 새 글로 올릴까요?\n\n${list.map(x => `· ${whenOf(x.day, x.time)}`).join('\n')}\n\n${label} 보호자에게 스케줄 알림톡, 센터(관리자)에게도 알림톡이 가요.`, '올리기'))) return;
+    setWorking(true);
+    try {
+      const r = await teacherPostSlots(center, list);
+      if (r.result === 'ok') {
+        const s = r.sent && 'sent' in r.sent ? r.sent : null;
+        await showAlert(`수업스케쥴에 빈 수업 ${r.count}개를 올렸어요.${(r.count ?? 0) < list.length ? `\n(그 사이 막힌 ${list.length - (r.count ?? 0)}개는 빠졌어요)` : ''}${s ? `\n알림톡 — 보냄 ${s.sent}건${s.waiting ? ` · 템플릿 심사 전이라 남겨만 둠 ${s.waiting}건` : ''}` : ''}`);
+        setPicked(new Set()); setPicking(false);
+      } else if (r.result === 'none') await showAlert('올릴 수 있는 시간이 없어요. 그 사이 수업이 들어왔거나 이미 올라가 있어요.');
+      else await showAlert('선생님 인증된 계정만 올릴 수 있어요.');
+      await load();
+    } catch (e) {
+      await showAlert(`올리지 못했어요. 수업스케쥴 연동 SQL(supabase/teacher-schedule.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`);
+    } finally { setWorking(false); }
+  };
+
   const th = 'border border-[#d4d4d8] px-1 py-1.5 font-normal whitespace-nowrap';
   const td = 'border border-[#e4e4e7] h-9 px-1 text-center align-middle text-[12px] whitespace-nowrap';
   const nav = 'text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]';
@@ -138,7 +204,17 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           className={`text-[12px] px-2.5 h-8 border ${fit ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`}>
           {fit ? '크게 보기' : '한눈에 보기'}
         </button>
+        {canEditHere && (picking ? (
+          <span className="flex items-center gap-2 ml-auto">
+            <span className="text-[12px] text-[#1d4ed8]">{picked.size}개 고름</span>
+            <button onClick={submitPicked} disabled={working || !picked.size} className="text-[12px] px-3 h-8 rounded-full bg-[var(--brand)] text-white disabled:opacity-40">{working ? '올리는 중…' : '올리기'}</button>
+            <button onClick={() => { setPicking(false); setPicked(new Set()); }} className="text-[12px] px-3 h-8 rounded-full border border-[#ddd] text-[#555]">그만두기</button>
+          </span>
+        ) : (
+          <button onClick={() => setPicking(true)} className="ml-auto text-[12px] px-3 h-8 rounded-full border border-[var(--brand)] text-[var(--brand)]">빈 수업 올리기</button>
+        ))}
       </div>
+      {picking && <p className="text-[12px] text-[#1d4ed8] mb-2">내 빈타임에서 비어 있는 칸(+)을 눌러 골라요. 날짜를 바꿔 다른 날도 고를 수 있어요.</p>}
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요. ({failed})</p>}
       <div ref={wrapRef} className={`${fit ? 'overflow-hidden' : 'overflow-x-auto'} bg-white`}>
         <table ref={tableRef} className="border-collapse text-[11px] min-w-full">
@@ -182,7 +258,25 @@ export default function TeacherTimetable({ center }: { center: Center }) {
                     <FragmentCols key={t.id}>
                       {/* 빈타임에 아이가 있으면 그 시간은 빈타임 아이 수업 — 고정 칸은 흐리게 */}
                       <td className={`${td} ${openKid ? 'bg-[#f4f4f5] opacity-60' : ''}`}>{text(f) ?? (ROW_LABEL[time] && <span className="text-[#c4c4cc]">{ROW_LABEL[time]}</span>)}</td>
-                      <td className={`${td} bg-[#fcfcfd]`}>{text(o)}</td>
+                      {t.id === myId && canEditHere ? (() => {
+                        const k = `${day}|${time}`;
+                        const isPosted = posted.has(`${t.id}|${day}|${time}`);
+                        const isOff = o?.status === 'off';
+                        const free = !o && !(f && f.status === 'child' && !f.moved && !f.absent) && day >= toYmd(new Date());
+                        const sel = picked.has(k);
+                        return (
+                          <td className={`${td} p-0 ${sel ? 'bg-[#dbeafe]' : 'bg-[#fcfcfd]'}`}>
+                            <button type="button" onClick={() => tapMine(time, { free, isPosted, isOff })} disabled={working}
+                              className={`w-full h-9 px-1 ${free || isPosted || isOff ? 'cursor-pointer hover:bg-[#eef5fe]' : 'cursor-default'}`}
+                              aria-label={`${time} 내 빈타임`}>
+                              {sel ? <span className="text-[#1d4ed8] font-medium">✓ 고름</span>
+                                : isOff ? <span className="text-[#a1a1aa]">x 수업 안 함</span>
+                                : isPosted ? <span className="text-[10px] px-1 rounded bg-[#ecfdf5] text-[#047857]">게시 중</span>
+                                : text(o) ?? (picking && free ? <span className="text-[#c4c4cc]">+</span> : null)}
+                            </button>
+                          </td>
+                        );
+                      })() : <td className={`${td} bg-[#fcfcfd]`}>{text(o)}{isAdmin && !o && posted.has(`${t.id}|${day}|${time}`) && <span className="text-[9px] px-1 rounded bg-[#ecfdf5] text-[#047857]">게시 중</span>}</td>}
                       <td className={`${td} bg-[#f9fdfa]`}>{payText(openKid ? o : f)}</td>
                     </FragmentCols>
                   );
@@ -193,7 +287,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-[#999] mt-3 leading-[2]">보기만 할 수 있어요. 바꿀 일이 있으면 센터에 말씀해 주세요. · [한눈에 보기] = 표 전체를 화면에 맞춰 줄여요(두 손가락으로 벌려 확대할 수 있어요) · 줄 = 다른 선생님에게 옮김 · ? = 미정 · &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제: 회색 = 기본, <span className="text-[#1d4ed8]">파랑</span> = 고름, <span className="text-[#b91c1c]">✓빨강</span> = 결제 완료 · 선생님 이름을 누르면 펼치기·접기</p>
+      <p className="text-[11px] text-[#999] mt-3 leading-[2]">내 빈타임 칸만 바꿀 수 있어요 — [빈 수업 올리기]로 비어 있는 칸을 골라 수업스케쥴에 올리고, 칸을 눌러 x(수업 안 함)로 바꾸거나 풀어요(x로 바꾸면 게시 중인 시간은 글에서 빠져요). 다른 칸은 보기만 · 게시 중 = 수업스케쥴에 올라가 있고 아직 신청 없음 · [한눈에 보기] = 표 전체를 화면에 맞춰 줄여요(두 손가락으로 벌려 확대할 수 있어요) · 줄 = 다른 선생님에게 옮김 · ? = 미정 · &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제: 회색 = 기본, <span className="text-[#1d4ed8]">파랑</span> = 고름, <span className="text-[#b91c1c]">✓빨강</span> = 결제 완료 · 선생님 이름을 누르면 펼치기·접기</p>
     </div>
   );
 }

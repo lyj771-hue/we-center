@@ -7,14 +7,15 @@ import { sendOutbox } from './leave';
 /** 알림을 확인하면 이 이벤트 → 관리자 띠의 빨간 숫자도 새로 */
 export const ALERTS_CHANGED = 'admin-alerts-changed';
 
-export type AlertKind = 'signup' | 'branch' | 'book' | 'cancel_request' | 'cancel_withdraw' | 'lesson_cancel';
+export type AlertKind = 'signup' | 'branch' | 'book' | 'cancel_request' | 'cancel_withdraw' | 'lesson_cancel' | 'teacher_schedule';
 export const ALERT_KINDS: { key: AlertKind; label: string }[] = [
   { key: 'signup', label: '가입 신청' },
   { key: 'branch', label: '다른 지점 가입' },
   { key: 'book', label: '수업 신청' },
   { key: 'cancel_request', label: '취소 신청' },
   { key: 'cancel_withdraw', label: '취소 철회' },
-  { key: 'lesson_cancel', label: '수업 취소 신청' },   // 보호자가 마이페이지에서 취소 신청 (lesson-cancel-approval.sql)
+  { key: 'lesson_cancel', label: '수업 취소 신청' },
+  { key: 'teacher_schedule', label: '선생님 빈 수업' },   // 선생님이 시간표 보기에서 올림·x (teacher-schedule.sql)   // 보호자가 마이페이지에서 취소 신청 (lesson-cancel-approval.sql)
 ];
 
 export interface AdminAlert { id: string; kind: AlertKind; center: 'eunpyeong' | 'uijeongbu'; title: string; detail?: string; createdAt: string; readAt?: string }

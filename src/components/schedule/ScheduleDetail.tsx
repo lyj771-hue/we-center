@@ -24,8 +24,9 @@ import { askConfirm, showAlert } from '@/lib/dialog';
 export default function ScheduleDetail({ id }: { id: string }) {
   const router = useRouter();
   const { isAdmin } = useAdmin();
-  const { userId, profile } = useMember();
-  const canView = isAdmin || (!!userId && !!profile?.approvedAt);
+  const { userId, profile, teacher } = useMember();
+  // 선생님은 두 지점 모두 보기만 (신청은 보호자만)
+  const canView = isAdmin || !!teacher || (!!userId && !!profile?.approvedAt);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -44,7 +45,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
       setTeachers(t);
       setSchedule(s);
       // 보호자: 이 스케쥴 기간의 우리 아이 수업 — 겹치는 시간은 미리 "수업 있음"으로
-      if (s && !isAdmin && userId) {
+      if (s && !isAdmin && !teacher && userId) {
         const days = scheduleDays(s);
         const mine = await getMyLessons(days[0], days[days.length - 1]).catch(() => []);
         const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -56,9 +57,17 @@ export default function ScheduleDetail({ id }: { id: string }) {
     } finally {
       setLoaded(true);
     }
-  }, [id, isAdmin, userId]);
+  }, [id, isAdmin, teacher, userId]);
 
   useEffect(() => { if (canView) load(); }, [canView, load]);
+  // 실시간 보강 — 선생님이 시간표에서 x로 바꿔 칸이 빠지는 것(지우기 알림은 필터에 안 걸릴 수 있다)까지, 20초마다·화면으로 돌아올 때 다시 읽는다
+  useEffect(() => {
+    if (!canView) return;
+    const t = setInterval(load, 20000);
+    const onShow = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
+  }, [canView, load]);
 
   // 실시간: 이 스케쥴의 칸·신청 기록이 바뀌면 잠깐 모았다가 다시 불러온다
   useEffect(() => {
@@ -143,7 +152,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
             schedule={schedule}
             teachers={teachers}
             isAdmin={isAdmin}
-            myId={userId}
+            myId={teacher ? null : userId}
             nickname={myName}
             busySlot={busySlot}
             conflicts={conflicts}
