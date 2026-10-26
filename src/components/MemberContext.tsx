@@ -54,13 +54,20 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   useEffect(() => { refreshBranches(); }, [refreshBranches]);
 
   useEffect(() => {
+    // 로그인 직후엔 apply 가 여러 번(첫 세션·로그인·토큰 갱신) 거의 동시에 불린다.
+    // 늦게 끝난 예전 확인 결과가 새 결과를 덮어쓰면, 이미 이어진 선생님·가입한 보호자에게도 가입 창이 뜬다 → 마지막 요청 결과만 쓴다.
+    // 둘 다 없다고 나오면(세션이 막 붙는 중일 수 있어) 잠깐 뒤 한 번 더 확인하고 나서 가입 창을 띄운다.
+    let seq = 0;
+    const check = (id: string) => Promise.all([getMyProfile(id).catch(() => null), getMyTeacher()]);
     const apply = (id: string | null) => {
+      const my = ++seq;
       setUserId(id);
       if (!id) { setProfile(null); setTeacher(null); setLoading(false); return; }
       setLoading(true);
-      Promise.all([getMyProfile(id).catch(() => null), getMyTeacher()])
-        .then(([p, t]) => { setProfile(p); setTeacher(t); })
-        .finally(() => setLoading(false));
+      check(id)
+        .then(async ([p, t]) => (p || t ? [p, t] as const : (await new Promise(r => setTimeout(r, 700)), check(id))))
+        .then(([p, t]) => { if (my !== seq) return; setProfile(p); setTeacher(t); })
+        .finally(() => { if (my === seq) setLoading(false); });
     };
     // 카카오 로그인이 실패해서 돌아오면 주소에 error_description 이 붙는다 — 알려 주고 주소를 깨끗이
     const params = new URLSearchParams(window.location.hash.slice(1) || window.location.search);
