@@ -47,7 +47,8 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
   useEffect(() => { refresh(); }, [category]);
 
   const handleAdd = async () => {
-    if (!form.title.trim()) return;
+    // 제목은 꼭 — 비우면 저장하지 않고 알려 준다
+    if (!form.title.trim()) { await showAlert(isWeslang ? '가게 이름을 적어 주세요.' : '제목을 적어 주세요.'); return; }
     // 공지 메시지 — 꼭 채울 칸을 비우면 저장하지 않는다
     if (kind && wantCenter && !notice.center) { await showAlert('이 공지 메시지는 센터를 꼭 골라야 해요.\n수색점 / 의정부점 중 하나를 골라 주세요.'); return; }
     if (kind && wantHoliday && !notice.holiday.trim()) { await showAlert('이 공지 메시지는 명절 이름을 꼭 적어야 해요.\n(예: 추석, 설)'); return; }
@@ -119,7 +120,8 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
               <p className="text-[11px] tracking-[0.2em] text-[#888] mb-6">새 글 작성</p>
               <input
                 type="text"
-                placeholder={isWeslang ? '가게 이름' : '제목'}
+                placeholder={isWeslang ? '가게 이름 (필수)' : '제목 (필수)'}
+                aria-required="true"
                 value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 className="w-full border-b border-[#ddd] py-2 text-[15px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]"
