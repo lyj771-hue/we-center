@@ -123,7 +123,8 @@ begin
   select name into v_name from teachers where id = v_tid;
 
   for x in select distinct (e->>'day')::date as day, e->>'time' as time from jsonb_array_elements(p_times) e order by 1, 2 loop
-    if x.day < v_today then continue; end if;
+    -- 수업 시작이 지금부터 1시간 넘게 남은 시간만
+    if (x.day + x.time::time) < (now() at time zone 'Asia/Seoul') + interval '1 hour' then continue; end if;
     v_sid := public.schedule_for_day(p_center, x.day);
     if v_sid is null then v_no_post := v_no_post + 1; continue; end if;
     if not public.open_cell_free(v_tid, x.day, x.time, p_center) then continue; end if;

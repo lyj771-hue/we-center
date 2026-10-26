@@ -151,11 +151,12 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const DOWS = DOW;
   const whenOf = (dd: string, time: string) => { const x = parseYmd(dd); return `${x.getMonth() + 1}/${x.getDate()}(${DOWS[x.getDay()]}) ${time.replace(/^0/, '')}`; };
   // 내 빈타임 칸 누르기 — 고르는 중이면 고르기/풀기(빈칸·x), 아니면 x(수업 안 함)로 바꾸기. x를 다시 열 땐 [빈타임 열기]로 게시글에 더한다
-  const tapMine = async (time: string, c: { free: boolean; isPosted: boolean; isOff: boolean }) => {
+  const tapMine = async (time: string, c: { free: boolean; isPosted: boolean; isOff: boolean; soonEnough: boolean }) => {
     const k = `${day}|${time}`;
     if (picking) {
       if (c.isPosted) { await showAlert('이미 수업스케쥴에 올라가 있는 시간이에요.'); return; }
       if (!c.free) return;
+      if (!c.soonEnough && !picked.has(k)) { await showAlert('수업 시작까지 1시간이 안 남은 시간은 열 수 없어요.'); return; }
       if (!dayPost) { await showAlert('이 날은 수업스케쥴 게시글 기간이 아니에요.\n이미 올라온 게시글 기간의 날짜만 더할 수 있어요.'); return; }
       if (pickedPost && picked.size && pickedPost.id !== dayPost.id) {
         await showAlert(`한 번에 한 게시글 기간 안에서만 고를 수 있어요.\n지금 고른 게시글: ${pickedPost.title}\n\n이 날은 다른 게시글(${dayPost.title}) 기간이에요. 먼저 [게시글에 더하기]로 올린 뒤 따로 골라 주세요.`);
@@ -227,7 +228,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           <button onClick={() => setPicking(true)} className="ml-auto text-[12px] px-3 h-8 rounded-full border border-[var(--brand)] text-[var(--brand)]">빈타임 열기 (빈칸·x 여러 개)</button>
         ))}
       </div>
-      {picking && <p className="text-[12px] text-[#1d4ed8] mb-2">{dayPost ? `이 날 게시글: ${dayPost.title} — 내 빈타임에서 빈칸이나 x 칸(+)을 눌러 골라요. x 칸은 x가 풀리며 올라가요(?는 안 돼요). 같은 게시글 기간이면 다른 날도 함께 고를 수 있어요.` : '이 날은 수업스케쥴 게시글 기간이 아니라 고를 수 없어요. 게시글이 올라온 날짜로 옮겨 주세요.'}</p>}
+      {picking && <p className="text-[12px] text-[#1d4ed8] mb-2">{dayPost ? `이 날 게시글: ${dayPost.title} — 내 빈타임에서 빈칸이나 x 칸(+)을 눌러 골라요. x 칸은 x가 풀리며 올라가요(?는 안 돼요). 수업 시작까지 1시간 넘게 남은 시간만 열 수 있어요. 같은 게시글 기간이면 다른 날도 함께 고를 수 있어요.` : '이 날은 수업스케쥴 게시글 기간이 아니라 고를 수 없어요. 게시글이 올라온 날짜로 옮겨 주세요.'}</p>}
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요. ({failed})</p>}
       <div ref={wrapRef} className={`${fit ? 'overflow-hidden' : 'overflow-x-auto'} bg-white`}>
         <table ref={tableRef} className="border-collapse text-[11px] min-w-full">
@@ -277,11 +278,13 @@ export default function TeacherTimetable({ center }: { center: Center }) {
                         const isOff = o?.status === 'off';
                         // 올릴 수 있는 칸 — 비어 있거나 x (?·아이는 안 됨), 고정 칸에 살아 있는 수업도 없고 오늘 이후
                         const free = (!o || o.status === 'off') && !(f && f.status === 'child' && !f.moved && !f.absent) && day >= toYmd(new Date());
-                        const pickable = free && dayPosted && !isPosted;
+                        // 수업 시작이 지금부터 1시간 넘게 남은 시간만 열 수 있다
+                        const soonEnough = new Date(`${day}T${time.length === 4 ? `0${time}` : time}:00`).getTime() >= Date.now() + 60 * 60 * 1000;
+                        const pickable = free && dayPosted && !isPosted && soonEnough;
                         const sel = picked.has(k);
                         return (
                           <td className={`${td} p-0 ${sel ? 'bg-[#dbeafe]' : 'bg-[#fcfcfd]'}`}>
-                            <button type="button" onClick={() => tapMine(time, { free, isPosted, isOff })} disabled={working}
+                            <button type="button" onClick={() => tapMine(time, { free, isPosted, isOff, soonEnough })} disabled={working}
                               className={`w-full h-9 px-1 ${free || isPosted ? 'cursor-pointer hover:bg-[#eef5fe]' : 'cursor-default'}`}
                               aria-label={`${time} 내 빈타임`}>
                               {sel ? <span className="text-[#1d4ed8] font-medium">✓ 고름</span>
