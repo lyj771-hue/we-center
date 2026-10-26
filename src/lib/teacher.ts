@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { notifyScheduleChanged } from './sync';
 
 // 선생님 카카오 로그인 · 시간표 보기 (supabase/teacher-login.sql)
 
@@ -74,4 +75,46 @@ export async function saveTeacherPhone(teacherId: string, phone: string): Promis
 export async function unlinkTeacher(teacherId: string): Promise<void> {
   const { error } = await supabase.from('teacher_logins').update({ user_id: null, linked_at: null }).eq('teacher_id', teacherId);
   if (error) throw error;
+}
+
+// ── 선생님: 수업스케쥴 게시글에서 내 시간 내리기 · 더하기 (supabase/teacher-schedule-post.sql) ─────────────
+
+/** 칸마다 신청한 사람(아이 이름) — 관리자·선생님. 칸 id → 이름 */
+export async function getSlotOwners(scheduleId: string): Promise<Map<string, string>> {
+  const { data, error } = await supabase.rpc('schedule_slot_owners', { p_schedule: scheduleId });
+  if (error) return new Map();
+  return new Map((data ?? []).map((r: Record<string, string>) => [r.slot_id, r.name]));
+}
+
+/** 선생님이 만든 보낼 알림 보내기 */
+async function sendTeacherOutbox(ids: string[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
+  if (!ids.length) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };
+  const { data: s } = await supabase.auth.getSession();
+  const res = await fetch('/api/alimtalk/teacher-send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(s.session ? { Authorization: `Bearer ${s.session.access_token}` } : {}) },
+    body: JSON.stringify({ ids }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error ?? `오류 ${res.status}`);
+  return j;
+}
+
+/** 내 시간 내리기 — 그 사이 신청된 게 있으면 하나도 안 내리고 result 'booked' + booked(칸 id·이름). 관리자 알림톡(내렸어요), 보호자 없음 */
+export async function teacherRemoveSlots(scheduleId: string, slotIds: string[]) {
+  const { data, error } = await supabase.rpc('teacher_remove_slots', { p_schedule: scheduleId, p_slots: slotIds });
+  if (error) throw error;
+  const r = data as { result: string; count?: number; ids?: string[]; booked?: { slot_id: string; name: string }[] };
+  if (r.result === 'ok') { notifyScheduleChanged(); await sendTeacherOutbox(r.ids ?? []).catch(() => {}); }
+  return r;
+}
+
+/** 내 시간 더하기 — 보호자(스케줄 수정 알림)·관리자(추가했어요) 알림톡 */
+export async function teacherAddSlots(scheduleId: string, times: { day: string; time: string }[]) {
+  const { data, error } = await supabase.rpc('teacher_add_slots', { p_schedule: scheduleId, p_times: times });
+  if (error) throw error;
+  const r = data as { result: string; count?: number; ids?: string[] };
+  let sent: Awaited<ReturnType<typeof sendTeacherOutbox>> | null = null;
+  if (r.result === 'ok') { notifyScheduleChanged(); sent = await sendTeacherOutbox(r.ids ?? []).catch(() => null); }
+  return { ...r, sent };
 }

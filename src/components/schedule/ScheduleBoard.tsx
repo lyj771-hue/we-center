@@ -7,6 +7,7 @@ import { dowLabel, scheduleDays, scheduleRange, shortDay } from '@/lib/schedule'
 // (신청·취소 기록은 DB bookings 표에 계속 남지만 화면에는 보이지 않는다)
 // 보호자: 빈 시간 = 누르면 신청, 내 신청 = "✓ 신청완료"(누르면 취소 신청) → "취소중"(누르면 철회) → 회색 "취소완료",
 //         다른 분 신청 = 언제나 "마감".
+// 선생님: 관리자처럼 신청자를 보고, 내 줄에서 시간 내리기(골라서 [내리기])·더하기(+ → [저장]).
 // 관리자: 신청된 칸 = "시간 + 닉네임", 취소 신청된 칸 = "취소요청", 취소 승인된 칸 = 회색 "취소완료" — 보기만.
 //         취소 승인·신청 취소(시간 다시 열기)는 [수정](ScheduleEditor)에서 한다. 빈 칸은 그냥 보인다.
 
@@ -25,6 +26,24 @@ interface Props {
   onWithdrawCancel: (slot: Slot, teacher: Teacher) => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  /** 관리자·선생님 — 칸마다 누가 신청했는지 보인다 */
+  staffView?: boolean;
+  /** 선생님 — 내 시간 내리기·더하기 */
+  teacherTools?: TeacherTools;
+}
+
+export interface TeacherTools {
+  teacherId: string;
+  /** 내릴 내 시간(칸 id) */
+  removeSel: Set<string>;
+  /** 더할 시간 — 날짜 → 시간들 (저장 전) */
+  adds: Record<string, string[]>;
+  working: boolean;
+  onToggleRemove: (slot: Slot) => void;
+  onOpenAdd: (day: string) => void;
+  onDropAdd: (day: string, time: string) => void;
+  onRemove: () => void;
+  onSave: () => void;
 }
 
 const TINTS = ['#e8f1fd', '#fdf1e3', '#e8f5ee', '#f3ecfb', '#fdecef', '#eef3f5'];
@@ -33,6 +52,7 @@ const pill = 'inline-flex items-center gap-1.5 text-[11px] md:text-[12px] px-3 m
 
 export default function ScheduleBoard({
   schedule, teachers, isAdmin, myId, nickname, busySlot, conflicts, onPick, onRequestCancel, onWithdrawCancel, onEdit, onDelete,
+  staffView = isAdmin, teacherTools: tt,
 }: Props) {
   const days = scheduleDays(schedule);
   const centerHolidays = schedule.holidays.filter(h => !h.teacherId);
@@ -48,7 +68,8 @@ export default function ScheduleBoard({
       tint: TINTS[i % TINTS.length],
       days: days
         .map(day => ({ day, off: offOf.get(`${t.id}|${day}`), slots: schedule.slots.filter(s => s.teacherId === t.id && s.day === day) }))
-        .filter(d => d.slots.length > 0 || d.off !== undefined),
+        // 선생님 내 줄 — 공휴일이 아니면 게시글의 모든 날(시간을 더할 수 있게)
+        .filter(d => d.slots.length > 0 || d.off !== undefined || (tt?.teacherId === t.id && !holidayOf.has(d.day))),
     }))
     .filter(r => r.days.length > 0);
 
@@ -82,7 +103,7 @@ export default function ScheduleBoard({
             <span className="inline-flex items-center gap-1.5 text-[12px] text-[#166534] bg-[#e8f5ee] px-3 py-0.5 rounded-full">
               <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />실시간 반영 중
             </span>
-            {!isAdmin && nickname && (
+            {!staffView && nickname && (
               <span className="text-[12px] text-[var(--brand)] bg-[#e8f1fd] px-3 py-0.5 rounded-full">{nickname} 님으로 신청돼요</span>
             )}
           </div>
@@ -98,6 +119,19 @@ export default function ScheduleBoard({
                   {teacher.name.slice(0, 1)}
                 </span>
                 <h3 className="text-[14px] md:text-[16px] text-[#27272a]">{teacher.name} 선생님</h3>
+                {/* 선생님 내 줄 — 고른 게 있을 때만 [내리기], 더할 시간이 있을 때만 [저장] */}
+                {tt?.teacherId === teacher.id && (tt.removeSel.size > 0 || Object.values(tt.adds).some(v => v.length)) && (
+                  <span className="ml-auto flex gap-1.5">
+                    {tt.removeSel.size > 0 && (
+                      <button type="button" onClick={tt.onRemove} disabled={tt.working}
+                        className="text-[12px] px-3 h-8 rounded-full bg-[#e11d48] text-white disabled:opacity-40">내리기 {tt.removeSel.size}</button>
+                    )}
+                    {Object.values(tt.adds).some(v => v.length) && (
+                      <button type="button" onClick={tt.onSave} disabled={tt.working}
+                        className="text-[12px] px-3 h-8 rounded-full bg-[#16a34a] text-white disabled:opacity-40">저장 {Object.values(tt.adds).reduce((n, v) => n + v.length, 0)}</button>
+                    )}
+                  </span>
+                )}
               </div>
               {tDays.map(({ day, off, slots }) => (
                 <div key={day} className="flex items-start gap-2.5">
@@ -107,11 +141,22 @@ export default function ScheduleBoard({
                   <div className="flex flex-wrap gap-1.5 flex-1">
                     {off !== undefined ? (
                       <span className="text-[11px] md:text-[12px] text-[#b45309] pt-2">휴무{off ? ` · ${off}` : ''}</span>
-                    ) : holidayOf.has(day) && !isAdmin ? (
+                    ) : holidayOf.has(day) && !staffView ? (
                       <span className="text-[11px] md:text-[12px] text-[#b45309] pt-2">공휴일</span>
-                    ) : slots.map(s => {
+                    ) : <>{slots.map(s => {
                       const busy = busySlot === s.id;
-                      if (isAdmin) {
+                      // 선생님 내 시간 — 신청 안 된 시간은 눌러서 내릴 시간으로 고르기, 신청된 시간은 누가 했는지 보이고 못 고른다
+                      if (tt?.teacherId === teacher.id && !s.bookedBy) {
+                        const on = tt.removeSel.has(s.id);
+                        return (
+                          <button key={s.id} type="button" aria-pressed={on} onClick={() => tt.onToggleRemove(s)} disabled={tt.working}
+                            title={on ? '누르면 내릴 시간에서 빼요' : '누르면 내릴 시간으로 골라요'}
+                            className={`${pill} ${on ? 'border-[#e11d48] bg-[#e11d48] text-white' : 'border-[#d4d4d8] text-[#71717b] hover:border-[#e11d48] hover:text-[#e11d48]'}`}>
+                            {on ? `✓ ${s.time} 내리기` : s.time}
+                          </button>
+                        );
+                      }
+                      if (staffView) {
                         // 관리자 — 보기만. 취소 승인·신청 취소(시간 다시 열기)는 [수정]에서
                         const hint = '취소 승인·신청 취소는 [수정]에서 해요';
                         if (s.bookedBy && s.cancelState === 'requested') {
@@ -187,6 +232,19 @@ export default function ScheduleBoard({
                         </button>
                       );
                     })}
+                    {/* 선생님 내 줄 — 저장 전 더할 시간(눌러서 빼기) + 그날 시간 더하기(내릴 시간을 고르는 중엔 못 누름) */}
+                    {tt?.teacherId === teacher.id && <>
+                      {(tt.adds[day] ?? []).map(time => (
+                        <button key={`add-${time}`} type="button" onClick={() => tt.onDropAdd(day, time)} title="누르면 빼요"
+                          className={`${pill} border-dashed border-[#16a34a] bg-[#f0fdf4] text-[#15803d]`}>
+                          + {time.replace(/^0/, '')} <span aria-hidden="true">×</span>
+                        </button>
+                      ))}
+                      <button type="button" onClick={() => tt.onOpenAdd(day)} disabled={tt.working || tt.removeSel.size > 0}
+                        aria-label={`${shortDay(day)} 시간 더하기`} title={tt.removeSel.size > 0 ? '내릴 시간을 고르는 중엔 더할 수 없어요' : '그날 빈칸·x 시간 더하기'}
+                        className={`${pill} justify-center w-8 px-0 border-[#16a34a] text-[#16a34a] hover:bg-[#f0fdf4] disabled:opacity-30 disabled:hover:bg-transparent`}>+</button>
+                    </>}
+                    </>}
                   </div>
                 </div>
               ))}

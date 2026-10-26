@@ -7,7 +7,7 @@ export type MessageTemplate = { id: string; grp: string; label: string; body: st
 /** 묶음 — 이 순서로 보여 준다. vars = 그 묶음 메시지에 넣을 수 있는 #{변수} */
 export const MESSAGE_GROUPS: { key: string; label: string; vars: string[] }[] = [
   { key: 'lesson',    label: '수업·공지',   vars: ['이름', '날짜', '월일', '요일', '센터', '제목', '글번호', '선생님', '시간', '사유', '수업1', '수업2', '수업3', '수업4', '수업5', '수업6', '수업7', '수업8'] },
-  { key: 'timetable', label: '시간표 신청·취소', vars: ['이름', '날짜', '월일', '요일', '시간', '선생님', '센터', '신청결과', '남은시간'] },
+  { key: 'timetable', label: '시간표 신청·취소', vars: ['이름', '날짜', '월일', '요일', '시간', '선생님', '센터', '신청결과', '남은시간', '구분', '내용'] },
   { key: 'prepaid',   label: '선결제',      vars: ['이름', '구분', '날짜', '기존횟수', '변동', '남은횟수'] },
   { key: 'member',    label: '회원',        vars: ['이름', '날짜', '센터', '결과'] },
   { key: 'fixed',     label: '고정 스케줄', vars: ['이름', '구분', '날짜', '요일', '수업', '선생님', '변동내용'] },
@@ -87,7 +87,7 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
       items: [{ name: '제목', value: '#{제목}' }, { name: '수정일', value: '#{날짜}' }],
       body: '#{이름} 님, 빈 수업 안내가 업데이트되었어요.\n아래 버튼을 눌러 바뀐 시간을 확인해 주세요.\n\n※ 이 메시지는 We 센터 수업 신청을 위한 빈 수업 알림으로, 빈 수업 안내가 바뀔 때마다 발송됩니다.', button: { name: '수업 신청하기', url: `${SITE}/schedule/#{글번호}` } },
     samples: { 제목: '이번주 10/20~10/24 빈타임 안내' },
-    condition: '수업스케줄 게시글을 [고치기]로 저장할 때 관리자가 보낼지 고르면, 그 센터에 승인된 보호자(전화번호 있는) 모두에게 한 번.\n지금은 [보낼 알림]에 쌓아 두고, 솔라피 연결 뒤 보낸다.',
+    condition: '수업스케줄 게시글을 [고치기]로 저장할 때 관리자가 보낼지 고르면, 또는 선생님이 게시글에 시간을 더할 때, 그 센터에 승인된 보호자(전화번호 있는) 모두에게 한 번.\n지금은 [보낼 알림]에 쌓아 두고, 솔라피 연결 뒤 보낸다.',
   },
   {
     id: 'teacher_leave', grp: 'lesson', label: '선생님 휴무 수업 취소 알림', sort: 40,
@@ -112,6 +112,13 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
       body: '보호자가 신청한 수업 취소가 승인되었어요.\n시간표 관리에서 그 칸에 다른 아이를 넣을 수 있어요.', button: { name: '시간표 관리', url: `${SITE}/admin/timetable` } },
     samples: { 날짜: '2026/10/21', 요일: '화', 시간: '15:40' },
     condition: '보호자가 마이페이지에서 신청한 수업 취소를 관리자가 [알림] 화면에서 승인할 때 관리자에게 한 번 (받는 번호 = Vercel 환경 변수 ALIMTALK_ADMIN_PHONE).\n#{남은시간} = 취소 신청한 때 수업까지 남은 시간',
+  },
+  {
+    id: 'teacher_schedule_admin', grp: 'timetable', label: '선생님 빈 수업 변경 알림 (관리자에게)', sort: 25,
+    spec: { image: 'logo', title: '#{선생님} 선생님 빈 수업 변경', sub: 'We 센터 #{센터}', items: [],
+      body: '#{선생님} 선생님이 빈 수업을 #{구분}\n#{내용}\n\n※ 이 메시지는 선생님이 수업스케쥴 게시글에서 시간을 더하거나 내릴 때 센터 관리자에게 발송돼요', button: { name: '시간표 관리', url: `${SITE}/admin/timetable` } },
+    samples: { 선생님: '이정길', 구분: '추가했어요', 내용: '10/27(화) 15:40, 16:20', 센터: '수색점' },
+    condition: '선생님이 수업스케쥴 게시글에서 내 시간을 더하거나(추가했어요) 내릴 때(내렸어요) 관리자에게 한 번 (받는 번호 = Vercel 환경 변수 ALIMTALK_ADMIN_PHONE). 내릴 때 보호자에게는 안 간다.\n#{구분} = 추가했어요 / 내렸어요',
   },
   {
     id: 'lesson_cancel_late', grp: 'timetable', label: '늦은 취소 안내 (보호자에게)', sort: 30,
