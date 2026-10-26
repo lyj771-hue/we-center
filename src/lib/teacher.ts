@@ -86,6 +86,13 @@ export async function getPostedSlots(from: string, to: string, center: string): 
   return new Set((data ?? []).map((r: Record<string, string>) => `${r.teacher_id}|${r.day}|${r.lesson_time}`));
 }
 
+/** 수업스케쥴 게시글 기간인 날짜들 — 선생님이 빈 시간을 더할 수 있는 날 */
+export async function getPostedDays(from: string, to: string, center: string): Promise<Set<string>> {
+  const { data, error } = await supabase.rpc('posted_days', { p_from: from, p_to: to, p_center: center });
+  if (error) return new Set();
+  return new Set((data ?? []).map((r: Record<string, string>) => r.day));
+}
+
 /** 선생님이 만든 보낼 알림 보내기 */
 async function sendTeacherOutbox(ids: string[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
   if (!ids.length) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };
@@ -100,11 +107,11 @@ async function sendTeacherOutbox(ids: string[]): Promise<{ sent: number; failed:
   return j;
 }
 
-/** 내 빈 시간 여러 개를 수업스케쥴 새 글로 — 보호자·관리자 알림톡까지. result: ok / none(올릴 수 있는 칸 없음) / not_teacher */
+/** 내 빈 시간 여러 개를 그 날짜가 들어 있는 기존 수업스케쥴 글에 더한다 — 보호자(스케줄 수정 알림)·관리자 알림톡까지. result: ok / none(더할 수 있는 칸 없음) / not_teacher. no_post = 게시글 기간이 아니라 빠진 수 */
 export async function teacherPostSlots(center: string, times: { day: string; time: string }[]) {
   const { data, error } = await supabase.rpc('teacher_post_slots', { p_center: center, p_times: times });
   if (error) throw error;
-  const r = data as { result: string; schedule_id?: string; count?: number; ids?: string[] };
+  const r = data as { result: string; count?: number; no_post?: number; ids?: string[] };
   if (r.result === 'ok') notifyScheduleChanged(center);
   const sent = r.result === 'ok' ? await sendTeacherOutbox(r.ids ?? []).catch(e => ({ error: (e as Error).message })) : null;
   return { ...r, sent };

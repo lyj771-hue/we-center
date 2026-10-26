@@ -2,11 +2,12 @@
 -- 실행 방법: Supabase 대시보드 → SQL Editor → New query → 붙여넣고 Run. 여러 번 실행해도 괜찮다.
 -- outbox-batch.sql · admin-alerts.sql · teacher-login.sql 을 먼저 돌린 뒤에.
 --
--- 1) teacher_post_slots — 선생님이 내 빈타임(비어 있는 칸 또는 x 칸, ?는 안 됨) 여러 개를 골라 수업스케쥴 새 글로 올린다. x 칸은 x가 풀리며 올라간다.
---    그 센터에 승인된 보호자에게 '스케줄 공지 알림'(schedule_notice), 관리자에게 '선생님 빈 수업 변경 알림'(teacher_schedule_admin).
+-- 1) teacher_post_slots — 선생님이 내 빈타임(비어 있는 칸 또는 x 칸, ?는 안 됨) 여러 개를 골라, 그 날짜가 들어 있는 기존 수업스케쥴 글에 시간을 더한다.
+--    게시글 기간이 아닌 날은 안 된다. x 칸은 x가 풀리며 올라간다.
+--    그 센터에 승인된 보호자에게 '스케줄 수정 알림'(schedule_updated, 글마다 한 묶음), 관리자에게 '선생님 빈 수업 변경 알림'(teacher_schedule_admin, 추가했어요).
 -- 2) teacher_set_open_off — 내 빈타임 칸을 x(수업 안 함)로. 아직 아무도 신청 안 한 게시 시간은 글에서 바로 빠진다(관리자 알림 = 내렸어요). x를 다시 열려면 1)로 새 글을 올린다.
 -- 3) 트리거 — 시간표(관리자·선생님 누구든) 빈타임 칸에 x · ? · 아이가 들어가면, 같은 선생님·날짜·시간의 신청 안 된 게시 시간을 글에서 뺀다.
--- 4) teacher_posted_slots — 시간표 보기에서 "게시 중" 표시용 (선생님은 내 것, 관리자는 전부).
+-- 4) teacher_posted_slots — 시간표 보기에서 "게시 중" 표시용 (모든 선생님). posted_days — 게시글 기간인 날짜들.
 -- 5) teacher_outbox_rows · teacher_mark_outbox — 선생님이 만든 보낼 알림을 /api/alimtalk/teacher-send 가 보내고 결과를 적는다.
 
 alter table outbox_messages add column if not exists batch_id uuid;
@@ -42,10 +43,41 @@ as $$
   select s.teacher_id, s.day, s.time, s.schedule_id
   from slots s join schedules sc on sc.id = s.schedule_id
   where s.day between p_from and p_to and s.booked_by is null and sc.hidden_at is null and sc.center = p_center
-    and (public.is_admin() or s.teacher_id = public.my_teacher_id());
+    and (public.is_admin() or public.is_teacher());
 $$;
 revoke all on function public.teacher_posted_slots(date, date, text) from public, anon;
 grant execute on function public.teacher_posted_slots(date, date, text) to authenticated;
+
+-- 그 날이 이 글의 기간인지 — 날짜를 고른 글(공휴일 등)은 그 날짜들, 아니면 그 주 월~토
+create or replace function public.schedule_covers(p_days jsonb, p_week_start date, p_day date)
+returns boolean language sql immutable
+as $$
+  select case when p_days is not null and jsonb_typeof(p_days) = 'array' and jsonb_array_length(p_days) > 0
+              then p_days ? to_char(p_day, 'YYYY-MM-DD')
+              else p_day between p_week_start and p_week_start + 5 end;
+$$;
+
+-- 그 날이 들어 있는 게시글(숨기지 않은 것 중 가장 최근)
+create or replace function public.schedule_for_day(p_center text, p_day date)
+returns uuid language sql stable security definer set search_path = public
+as $$
+  select sc.id from schedules sc
+  where sc.center = p_center and sc.hidden_at is null and public.schedule_covers(sc.days, sc.week_start, p_day)
+  order by sc.created_at desc limit 1;
+$$;
+revoke all on function public.schedule_for_day(text, date) from public, anon, authenticated;
+
+-- 게시글 기간인 날짜들 — 선생님 시간표에서 고를 수 있는 날
+drop function if exists public.posted_days(date, date, text);
+create function public.posted_days(p_from date, p_to date, p_center text)
+returns table (day date)
+language sql stable security definer set search_path = public
+as $$
+  select g::date from generate_series(p_from, p_to, interval '1 day') g
+  where (public.is_admin() or public.is_teacher()) and public.schedule_for_day(p_center, g::date) is not null;
+$$;
+revoke all on function public.posted_days(date, date, text) from public, anon;
+grant execute on function public.posted_days(date, date, text) to authenticated;
 
 -- 관리자에게 보낼 알림 한 줄 + 관리자 알림(빨간 숫자)
 create or replace function public.teacher_admin_notice(p_center text, p_teacher_name text, p_kind text, p_detail text)
@@ -66,7 +98,7 @@ end;
 $$;
 revoke all on function public.teacher_admin_notice(text, text, text, text) from public, anon, authenticated;
 
--- 1) 빈 수업 올리기 — p_times = [{"day":"2026-10-27","time":"15:40"}, …]
+-- 1) 빈 수업 더하기 — p_times = [{"day":"2026-10-27","time":"15:40"}, …] → 그 날짜가 들어 있는 기존 게시글에 시간을 더한다
 create or replace function public.teacher_post_slots(p_center text, p_times jsonb)
 returns jsonb language plpgsql security definer set search_path = public
 as $$
@@ -75,15 +107,14 @@ declare
   v_name text;
   v_today date := (now() at time zone 'Asia/Seoul')::date;
   v_ok jsonb := '[]'::jsonb;
-  v_days text[];
+  v_no_post int := 0;
   v_sid uuid;
-  v_batch uuid := gen_random_uuid();
+  v_batch uuid;
   v_ids uuid[] := '{}';
-  v_out uuid;
-  v_title text;
   v_detail text;
   v_dow text[] := array['일', '월', '화', '수', '목', '금', '토'];
   x record;
+  g record;
 begin
   if v_tid is null then return jsonb_build_object('result', 'not_teacher'); end if;
   if p_center not in ('eunpyeong', 'uijeongbu') then return jsonb_build_object('result', 'bad_center'); end if;
@@ -91,46 +122,43 @@ begin
 
   for x in select distinct (e->>'day')::date as day, e->>'time' as time from jsonb_array_elements(p_times) e order by 1, 2 loop
     if x.day < v_today then continue; end if;
+    v_sid := public.schedule_for_day(p_center, x.day);
+    if v_sid is null then v_no_post := v_no_post + 1; continue; end if;
     if not public.open_cell_free(v_tid, x.day, x.time, p_center) then continue; end if;
     if exists (select 1 from slots s join schedules sc on sc.id = s.schedule_id
-               where s.teacher_id = v_tid and s.day = x.day and s.time = x.time and s.booked_by is null and sc.hidden_at is null) then continue; end if;
-    v_ok := v_ok || jsonb_build_object('day', x.day, 'time', x.time);
+               where s.teacher_id = v_tid and s.day = x.day and s.time = x.time and sc.center = p_center and sc.hidden_at is null) then continue; end if;
+    v_ok := v_ok || jsonb_build_object('day', x.day, 'time', x.time, 'sid', v_sid);
   end loop;
-  if jsonb_array_length(v_ok) = 0 then return jsonb_build_object('result', 'none'); end if;
+  if jsonb_array_length(v_ok) = 0 then return jsonb_build_object('result', 'none', 'no_post', v_no_post); end if;
 
-  select array_agg(distinct e->>'day' order by e->>'day') into v_days from jsonb_array_elements(v_ok) e;
-  select string_agg(to_char((e->>'day')::date, 'FMMM/FMDD') || '(' || v_dow[extract(dow from (e->>'day')::date)::int + 1] || ') ' || regexp_replace(e->>'time', '^0', ''), ', ')
-    into v_detail from jsonb_array_elements(v_ok) e;
-  v_title := v_name || ' 선생님 빈 수업 ('
-    || to_char(v_days[1]::date, 'FMMM/FMDD')
-    || case when array_length(v_days, 1) > 1 then '~' || to_char(v_days[array_length(v_days, 1)]::date, 'FMMM/FMDD') else '' end || ')';
-
-  insert into schedules (week_start, days, title, notice, holidays, center)
-  values (v_days[1]::date, to_jsonb(v_days), v_title, '', '[]'::jsonb, p_center)
-  returning id into v_sid;
-  -- x 칸은 x를 풀고 올린다
+  -- x 칸은 x를 풀고, 그 글에 시간을 더한다
   delete from board_cells b using jsonb_array_elements(v_ok) e
   where b.center = p_center and b.teacher_id = v_tid and b.day = (e->>'day')::date and b.time = e->>'time' and b.side = 'open' and b.status in ('off', 'none');
   insert into slots (schedule_id, teacher_id, day, time)
-  select v_sid, v_tid, (e->>'day')::date, e->>'time' from jsonb_array_elements(v_ok) e;
+  select (e->>'sid')::uuid, v_tid, (e->>'day')::date, e->>'time' from jsonb_array_elements(v_ok) e
+  on conflict (schedule_id, teacher_id, day, time) do nothing;
 
-  -- 보호자 — 그 센터에 승인된 보호자(번호 있는)에게 스케줄 공지 알림 (단체 한 묶음)
-  insert into outbox_messages (template_id, ref_id, child_id, user_id, child_name, phone, vars, batch_id)
-  select 'schedule_notice', v_sid, ch.id, p.user_id, coalesce(ch.name, p.nickname), p.phone,
-         jsonb_build_object('이름', coalesce(ch.name, p.nickname), '센터', case p_center when 'uijeongbu' then '의정부점' else '수색점' end,
-                            '제목', v_title, '날짜', to_char(v_today, 'YYYY/MM/DD'), '글번호', v_sid),
-         v_batch
-  from profiles p
-  left join lateral (select c.id, c.name from children c where c.guardian_user_id = p.user_id order by (c.center = p_center) desc limit 1) ch on true
-  where p.phone is not null and coalesce(p.nickname, '') <> ''
-    and ((coalesce(p.center, 'eunpyeong') = p_center and p.approved_at is not null)
-         or exists (select 1 from member_centers mc where mc.user_id = p.user_id and mc.center = p_center and mc.approved_at is not null));
-  select coalesce(array_agg(id), '{}') into v_ids from outbox_messages where batch_id = v_batch;
+  -- 보호자 — 시간이 더해진 글마다, 그 센터에 승인된 보호자(번호 있는)에게 스케줄 수정 알림 (글마다 한 묶음)
+  for g in select distinct (e->>'sid')::uuid as sid from jsonb_array_elements(v_ok) e loop
+    v_batch := gen_random_uuid();
+    insert into outbox_messages (template_id, ref_id, child_id, user_id, child_name, phone, vars, batch_id)
+    select 'schedule_updated', g.sid, ch.id, p.user_id, coalesce(ch.name, p.nickname), p.phone,
+           jsonb_build_object('이름', coalesce(ch.name, p.nickname), '센터', case p_center when 'uijeongbu' then '의정부점' else '수색점' end,
+                              '제목', (select title from schedules where id = g.sid), '날짜', to_char(v_today, 'YYYY/MM/DD'), '글번호', g.sid),
+           v_batch
+    from profiles p
+    left join lateral (select c.id, c.name from children c where c.guardian_user_id = p.user_id order by (c.center = p_center) desc limit 1) ch on true
+    where p.phone is not null and coalesce(p.nickname, '') <> ''
+      and ((coalesce(p.center, 'eunpyeong') = p_center and p.approved_at is not null)
+           or exists (select 1 from member_centers mc where mc.user_id = p.user_id and mc.center = p_center and mc.approved_at is not null));
+    v_ids := v_ids || coalesce((select array_agg(id) from outbox_messages where batch_id = v_batch), '{}');
+  end loop;
 
-  v_out := public.teacher_admin_notice(p_center, v_name, '새로 올렸어요', v_detail);
-  v_ids := v_ids || v_out;
+  select string_agg(to_char((e->>'day')::date, 'FMMM/FMDD') || '(' || v_dow[extract(dow from (e->>'day')::date)::int + 1] || ') ' || regexp_replace(e->>'time', '^0', ''), ', ' order by e->>'day', e->>'time')
+    into v_detail from jsonb_array_elements(v_ok) e;
+  v_ids := v_ids || public.teacher_admin_notice(p_center, v_name, '추가했어요', v_detail);
 
-  return jsonb_build_object('result', 'ok', 'schedule_id', v_sid, 'count', jsonb_array_length(v_ok), 'ids', to_jsonb(v_ids));
+  return jsonb_build_object('result', 'ok', 'count', jsonb_array_length(v_ok), 'no_post', v_no_post, 'ids', to_jsonb(v_ids));
 end;
 $$;
 revoke all on function public.teacher_post_slots(text, jsonb) from public, anon;
