@@ -6,7 +6,8 @@ import type { CellView, Center, Child, PayEntry } from '@/lib/timetable';
 import { childLabel, saveDayCell, setLessonPayment } from '@/lib/timetable';
 import { getMembers } from '@/lib/store';
 import type { Member } from '@/lib/types';
-import { addLeave, addOutbox } from '@/lib/leave';
+import { addLeave, addAndSendOutbox } from '@/lib/leave';
+import { sendSummary } from '@/lib/alimtalkNotify';
 import { askConfirm, showAlert } from '@/lib/dialog';
 
 // 선생님 휴무 (시간표 날짜별) — 종일 또는 고른 시간. 그 시간 수업 칸은 "줄 + 휴무"(옮김처럼 수업·결제에서 빠짐)로 바꾸고,
@@ -85,10 +86,11 @@ export default function TeacherLeaveDialog({ teacher, day, center, rows, lessons
         if (p && !p.confirmed) await setLessonPayment(c.childId!, day, l.time, teacher.id, center, null);
       } catch { failed++; }
     }
-    // 2) 휴무 기록 + 보낼 알림
+    // 2) 휴무 기록 + 보호자 알림톡(바로 보냄)
+    let sendRes: { sent: number; failed: number; skipped: number; waiting: number } | null = null;
     try {
       const id = await addLeave({ day, teacherId: teacher.id, center, times: allDay ? null : [...picked].sort(), reason });
-      await addOutbox(sendable.map(k => ({
+      sendRes = await addAndSendOutbox(sendable.map(k => ({
         templateId: 'teacher_leave', refId: id, childId: k.childId, userId: k.userId, childName: k.name, phone: k.phone,
         vars: {
           이름: k.child?.name ?? k.name, 날짜: `${y}/${String(m).padStart(2, '0')}/${String(dd).padStart(2, '0')}`, 월일: `${m}/${dd}`,
@@ -103,7 +105,7 @@ export default function TeacherLeaveDialog({ teacher, day, center, rows, lessons
     }
     setSaving(false);
     onDone();
-    showAlert(`${teacher.name} 선생님 ${dayText} ${allDay ? '종일' : `${[...picked].sort().map(hm).join(', ')}`} 휴무로 바꿨어요.\n수업 ${hit.length}개 취소${failed ? ` (${failed}개는 저장 실패 — 다시 해 주세요)` : ''} · 보낼 알림 ${sendable.length}건을 남겼어요.\n(알림은 솔라피 연결 뒤 [알림 메시지 → 보낼 알림]에서 보내요)`);
+    showAlert(`${teacher.name} 선생님 ${dayText} ${allDay ? '종일' : `${[...picked].sort().map(hm).join(', ')}`} 휴무로 바꿨어요.\n수업 ${hit.length}개 취소${failed ? ` (${failed}개는 저장 실패 — 다시 해 주세요)` : ''}\n휴무 수업 취소 알림톡 — ${sendRes ? sendSummary(sendRes) : '보낼 아이 없음'}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
   };
 
   const chip = (on: boolean) => `px-3 py-1 rounded-full border text-[13px] ${on ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`;

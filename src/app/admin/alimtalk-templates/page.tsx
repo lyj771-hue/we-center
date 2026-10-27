@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { supabase } from '@/lib/supabaseClient';
-import { getMessageTemplates, tabOfMessage, toRows, type MessageSpec, type MessageTab } from '@/lib/messages';
+import { getMessageTemplates, sendWiringOf, tabOfMessage, toRows, type MessageSpec, type MessageTab } from '@/lib/messages';
 import { getAlimtalkTemplateIds, saveAlimtalkTemplateId } from '@/lib/leave';
 import { askConfirm, showAlert } from '@/lib/dialog';
 
@@ -167,7 +167,11 @@ export default function AlimtalkTemplatesPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-[14px]">{r.label}</p>
                 <p className="text-[11px] text-[#aaa] truncate">{r.spec.title} · 항목 {r.spec.items.length}줄{r.spec.image === 'card' ? ' · 선결제 카드 그림' : r.spec.image === 'logo' ? ' · We 로고' : ''}{r.spec.button.name ? ` · 버튼 ${r.spec.button.name}` : ''}</p>
-                {st.code === 'REJECTED' && st.remote?.comment && <p className="mt-1 whitespace-pre-line text-[12px] text-[#b91c1c]">반려 사유: {st.remote.comment}</p>}
+                {/* 시스템에서 보내는지 — 연결된 곳 / 아직 보내는 기능 없음 */}
+                {sendWiringOf(r.key)
+                  ? <p className="mt-1 text-[11px] text-[#047857]">✓ 발송 연결됨 — {sendWiringOf(r.key)}</p>
+                  : <p className="mt-1 text-[11px] text-[#b91c1c]">✗ 아직 보내는 기능 없음</p>}
+                {st.code === 'REJECTED' && st.remote?.comment &&<p className="mt-1 whitespace-pre-line text-[12px] text-[#b91c1c]">반려 사유: {st.remote.comment}</p>}
                 {st.code === 'USING' && st.next && <p className="mt-1 whitespace-pre-line text-[12px] text-[#1d4ed8]">새 버전 {STATUS[st.next.status]?.label ?? st.next.status}{st.next.status === 'REJECTED' && st.next.comment ? ` — ${st.next.comment}` : ''} · 통과하면 새 것으로 바뀌어요</p>}
                 {st.code === 'PENDING' && <p className="mt-1 text-[12px] text-[#92400e]">솔라피에 등록만 되고 검수 요청이 안 됐어요 — 솔라피 콘솔에서 [검수 요청]을 눌러 주세요.</p>}
               </div>

@@ -33,6 +33,25 @@ export const isAdminMessage = (t: { id?: string; key?: string; label?: string })
 export const tabOfMessage = (t: { grp: string; id?: string; key?: string; label?: string }): MessageTab =>
   t.grp === 'notice_kind' ? 'notice' : isAdminMessage(t) ? 'admin' : 'alert';
 
+/** 시스템에서 실제로 보내는 곳 — 심사 올리기 목록에 '발송 연결'로 보여 준다. 없으면 아직 보내는 기능이 없는 알림.
+ *  새 알림을 보내게 만들면 여기에도 적는다 */
+const SEND_WIRING: Record<string, string> = {
+  lesson_tomorrow: '시간표 관리(날짜별) [이 날 수업 알림] 버튼',
+  schedule_notice: '수업스케쥴 새 글을 올릴 때',
+  schedule_updated: '수업스케쥴 글을 고쳐 저장·다시 올릴 때, 선생님이 게시글 시간을 더할 때',
+  teacher_leave: '시간표 관리 선생님 [휴무] 저장할 때',
+  booking_result: '시간표 관리 [스케줄 변경 완료](수업 취소·확정), 보호자가 수업스케쥴 신청할 때, 신청 취소할 때',
+  lesson_cancel_admin: '보호자 수업 취소 신청을 승인할 때 (관리자 번호로)',
+  teacher_schedule_admin: '선생님이 수업스케쥴 게시글 시간을 더하거나 내릴 때 (관리자 번호로)',
+  lesson_cancel_late: '수업 2시간 안 남기고 신청한 취소를 승인할 때',
+  prepaid_use: '선결제 카드 충전·차감·수정, 시간표 [결제 완료]로 선결제 확정할 때',
+  member_approved: '회원관리에서 [승인]할 때',
+  fixed_change: '[이 날부터 고정]·고정 시간표에서 아이가 바뀔 때',
+};
+/** 이 알림(심사 화면 key, 예: lesson_tomorrow_3 · notice_holiday)을 시스템이 보내는 곳 — 없으면 undefined */
+export const sendWiringOf = (key: string): string | undefined =>
+  SEND_WIRING[key] ?? SEND_WIRING[key.replace(/_\d+$/, '')] ?? (key.startsWith('notice_') ? '공지사항에 글을 올릴 때 공지 메시지를 고르면' : undefined);
+
 export const fillVars =(body: string, vars: Record<string, string> = SAMPLE_VARS) =>
   body.replace(/#\{([^}]+)\}/g, (m, k: string) => vars[k.trim()] ?? m);
 
