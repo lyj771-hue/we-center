@@ -8,6 +8,8 @@ export interface Post {
   location?: string;
   /** 공지사항 — 글을 올릴 때 고른 공지 메시지 종류·센터·명절. 제목 앞에 작은 표시로 (supabase/post-tags.sql) */
   tags?: string[];
+  /** 관리자가 정한 순서(작을수록 위) — We슐랭 (supabase/post-order.sql). 없으면 새 글이라 맨 위 */
+  order?: number;
   createdAt: string;
 }
 

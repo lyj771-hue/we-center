@@ -11,6 +11,7 @@ interface PostRow {
   image_url: string | null;
   location?: string | null;
   tags?: string[] | null;
+  sort_order?: number | null;
   created_at: string;
 }
 
@@ -23,6 +24,7 @@ function fromPostRow(row: PostRow): Post {
     imageUrl: row.image_url ?? undefined,
     location: row.location ?? undefined,
     tags: row.tags?.length ? row.tags : undefined,
+    order: row.sort_order ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -35,6 +37,13 @@ export async function getAllPosts(cat: Category): Promise<Post[]> {
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data as PostRow[]).map(fromPostRow);
+}
+
+/** 관리자: 게시글 순서 저장 — ids 순서대로 1, 2, 3 … (We슐랭) */
+export async function savePostOrder(ids: string[]): Promise<void> {
+  const res = await Promise.all(ids.map((id, i) => supabase.from('posts').update({ sort_order: i + 1 }).eq('id', id)));
+  const err = res.find(r => r.error)?.error;
+  if (err) throw err;
 }
 
 export async function getPost(cat: Category, id: string): Promise<Post | null> {

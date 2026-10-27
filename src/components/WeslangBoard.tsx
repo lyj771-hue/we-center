@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { savePostOrder } from '@/lib/store';
+import { showAlert } from '@/lib/dialog';
 import PhotoViewer from './PhotoViewer';
 import Portal from './Portal';
 import { Post } from '@/lib/types';
@@ -111,21 +113,82 @@ function NoteViewer({ title, location, onClose }: { title: string; location?: st
   );
 }
 
-/** We슐랭 가게 글들 — 가운데에 하나씩, 새 글이 위로 */
 /** 한 쪽에 보이는 가게 수 */
 const PER_PAGE = 3;
 
+/** 보이는 순서 — 관리자가 정한 순서(작을수록 위). 아직 순서가 없는 새 글은 맨 위에 새 글부터 */
+const sortPosts = (posts: Post[]) => [...posts].sort((a, b) =>
+  (a.order === undefined) !== (b.order === undefined) ? (a.order === undefined ? -1 : 1)
+    : a.order !== undefined && b.order !== undefined ? a.order - b.order
+    : b.createdAt.localeCompare(a.createdAt));
+
+/** We슐랭 가게 글들 — 왼쪽 가게 목록(누르면 그 가게로, 관리자는 ▲▼로 순서 바꾸기) + 가운데에 하나씩 */
 export default function WeslangBoard({ posts, basePath, isAdmin, onDelete }: { posts: Post[]; basePath: string; isAdmin: boolean; onDelete: (id: string) => void }) {
   const [page, setPage] = useState(0);
+  // 순서 — 처음엔 디비 순서, 관리자가 바꾸면 바로 저장하고 화면도 바로 바꾼다
+  const [ids, setIds] = useState<string[]>([]);
+  const [listOpen, setListOpen] = useState(false);   // 휴대폰 — 목록 펼치기
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setIds(sortPosts(posts).map(p => p.id)); }, [posts]);
   if (posts.length === 0) return <div className="py-24 text-center text-sm text-[#bbb] tracking-widest">등록된 가게가 없습니다</div>;
-  const pages = Math.ceil(posts.length / PER_PAGE);
+  const ordered = ids.map(id => posts.find(p => p.id === id)).filter((p): p is Post => !!p);
+  const pages = Math.ceil(ordered.length / PER_PAGE);
   const cur = Math.min(page, pages - 1);
-  const shown = posts.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
+  const shown = ordered.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
   const go = (p: number) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  // 목록에서 가게를 누르면 — 그 쪽으로 넘기고 그 가게로 스크롤
+  const jump = (id: string) => {
+    const i = ordered.findIndex(p => p.id === id);
+    setPage(Math.floor(i / PER_PAGE));
+    setListOpen(false);
+    setTimeout(() => document.getElementById(`weslang-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  };
+  const move = async (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= ordered.length) return;
+    const next = ordered.map(p => p.id);
+    [next[i], next[j]] = [next[j], next[i]];
+    const prev = ids;
+    setIds(next);
+    setSaving(true);
+    try { await savePostOrder(next); }
+    catch (e) { setIds(prev); await showAlert(`순서를 저장하지 못했어요 — SQL(supabase/post-order.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); }
+    finally { setSaving(false); }
+  };
+  const list = (
+    <ol className="space-y-0.5">
+      {ordered.map((p, i) => (
+        <li key={p.id} className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-[13px] ${shown.some(s => s.id === p.id) ? 'bg-white/80' : ''}`}>
+          <span className="w-5 shrink-0 text-[11px] text-[#bbb] tabular-nums">{i + 1}</span>
+          <button type="button" onClick={() => jump(p.id)} className="flex-1 min-w-0 text-left truncate text-[#333] hover:text-[var(--brand)]">{p.title}</button>
+          {isAdmin && (
+            <span className="shrink-0 flex">
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0 || saving} aria-label={`${p.title} 위로`}
+                className="w-6 h-6 text-[11px] text-[#888] hover:text-[var(--brand)] disabled:opacity-25">▲</button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === ordered.length - 1 || saving} aria-label={`${p.title} 아래로`}
+                className="w-6 h-6 text-[11px] text-[#888] hover:text-[var(--brand)] disabled:opacity-25">▼</button>
+            </span>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
   return (
-    <>
+    <div className="md:flex md:items-start md:gap-6">
+      {/* 왼쪽 가게 목록 — PC는 옆에 고정, 휴대폰은 위에 [목록]으로 펼치기 */}
+      <aside className="hidden md:block w-[210px] shrink-0 sticky top-28 self-start rounded-xl bg-[#f6f6f7] p-3">
+        <p className="px-2 pb-2 text-[11px] tracking-[0.15em] text-[#999]">가게 목록{isAdmin && <span className="ml-1 tracking-normal text-[#bbb]">· ▲▼ 순서 바꾸기</span>}</p>
+        {list}
+      </aside>
+      <div className="md:hidden mb-6">
+        <button type="button" onClick={() => setListOpen(o => !o)} className="w-full rounded-xl bg-[#f6f6f7] px-4 py-2.5 text-left text-[13px] text-[#555]">
+          가게 목록 {ordered.length}곳 <span className="float-right text-[#999]">{listOpen ? '▲' : '▼'}</span>
+        </button>
+        {listOpen && <div className="mt-1 rounded-xl bg-[#f6f6f7] p-2">{list}</div>}
+      </div>
+      <div className="flex-1 min-w-0">
       <div className="flex flex-col items-center gap-y-16 md:gap-y-20">
-        {shown.map(post => <WeslangEntry key={post.id} post={post} basePath={basePath} isAdmin={isAdmin} onDelete={onDelete} />)}
+        {shown.map(post => <div key={post.id} id={`weslang-${post.id}`} className="scroll-mt-28 w-full flex justify-center"><WeslangEntry post={post} basePath={basePath} isAdmin={isAdmin} onDelete={onDelete} /></div>)}
       </div>
       {/* 쪽 넘기기 — 한 쪽에 3개 */}
       {pages > 1 && (
@@ -140,6 +203,7 @@ export default function WeslangBoard({ posts, basePath, isAdmin, onDelete }: { p
             className="w-7 h-7 rounded-full border border-[#e5e5e5] bg-white text-[12px] text-[#555] disabled:opacity-30">›</button>
         </nav>
       )}
-    </>
+      </div>
+    </div>
   );
 }
