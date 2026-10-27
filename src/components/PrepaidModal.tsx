@@ -6,6 +6,7 @@ import type { Child } from '@/lib/timetable';
 import type { LedgerRow } from '@/lib/prepaid';
 import { addCharge, getChildLedger } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
+import { notifyPrepaid, sendSummary } from '@/lib/alimtalkNotify';
 
 // 회원 관리 "결제내역" 탭에서 여는 선결제 카드 창. 선결제는 아이(=센터)마다 따로다.
 
@@ -43,18 +44,25 @@ export default function PrepaidModal({ child, onClose }: { child: Child; onClose
   const charge = () => {
     const n = Number(count);
     if (!n || n < 0) { showAlert('충전 횟수를 적어 주세요.'); return; }
-    run(async () => { await addCharge(child.id, day, n, memo); setCount(''); setMemo(''); }, '충전하지 못했어요.');
+    run(async () => { await addCharge(child.id, day, n, memo); setCount(''); setMemo(''); await tell('충전', day, n); }, '충전하지 못했어요.');
+  };
+  // 저장한 뒤 보호자에게 '선결제 사용·충전·변경' 알림톡 (보호자 계정과 이어진 아이만)
+  const tell = async (kind: '사용' | '충전' | '변경', d: string, delta: number) => {
+    try {
+      const r = await notifyPrepaid(child, kind, d, left, delta);
+      if (r.sent + r.failed + r.skipped + r.waiting) await showAlert(`선결제 ${kind} 알림톡 — ${sendSummary(r)}`);
+    } catch (e) { await showAlert(`저장했지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
   };
   const deduct = () => {
     const n = Number(useCount);
     if (!n || n < 0) { showAlert('차감 횟수를 적어 주세요.'); return; }
-    run(async () => { await addCharge(child.id, useDay, -n, useMemo); setUseCount('1'); setUseMemo(''); }, '차감하지 못했어요.');
+    run(async () => { await addCharge(child.id, useDay, -n, useMemo); setUseCount('1'); setUseMemo(''); await tell('사용', useDay, -n); }, '차감하지 못했어요.');
   };
   const fix = () => {
     if (fixLeft === '') { showAlert('남은 횟수를 적어 주세요.'); return; }
     const diff = Number(fixLeft) - left;
     if (!diff) { showAlert(`지금 남은 횟수(${left}회)와 같아요.`); return; }
-    run(async () => { await addCharge(child.id, fixDay, diff, fixMemo, true); setFixLeft(''); setFixMemo(''); }, '수정하지 못했어요.');
+    run(async () => { await addCharge(child.id, fixDay, diff, fixMemo, true); setFixLeft(''); setFixMemo(''); await tell('변경', fixDay, diff); }, '수정하지 못했어요.');
   };
 
   const input = 'border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]';

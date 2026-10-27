@@ -12,6 +12,7 @@ import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry
 import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
 import { addAndSendOutbox, getDayLeaves, type TeacherLeave } from '@/lib/leave';
 import { getMembers } from '@/lib/store';
+import { notifyFixedChanges, notifyLessonDay, notifyPrepaidUses, sendSummary } from '@/lib/alimtalkNotify';
 import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import { decideCancelWithDialogs, getCancelRequests, minutesLabel, type CancelRequest } from '@/lib/alerts';
 import {
@@ -548,12 +549,16 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     const nameOf = (x: { childId: string }) => children.find(k => k.id === x.childId)?.name;
     const changes = lessonChangesByOps();
     const cancels = changes.filter(linked);
+    // 고정 수업이 바뀌는 아이 — 이 날부터 고정(날짜별) · 고정 시간표에서 아이가 생기거나(확정) 빠지면(취소) '고정 스케줄' 알림톡
+    const fixedChanges = fixedChangesByOps();
+    const fixedLinked = fixedChanges.filter(linked);
     // 회원 계정과 이어지지 않은 아이 — 알림을 못 보낸다는 것도 함께 알려 준다
-    const unlinked = [...new Set(changes.filter(x => !linked(x)).map(x => `${nameOf(x) ?? '이름 없음'}(${x.result})`))];
+    const unlinked = [...new Set([...changes, ...fixedChanges].filter(x => !linked(x)).map(x => `${nameOf(x) ?? '이름 없음'}(${x.result})`))];
     const nC = cancels.filter(x => x.result === '취소'), nR = cancels.filter(x => x.result === '확정');
-    if (changes.length && !(await askConfirm([
+    if ((changes.length || fixedChanges.length) && !(await askConfirm([
       nC.length ? `수업 취소 ${nC.length}건 — '수업 취소' 알림톡이 가요. (${nC.map(nameOf).join(', ')})` : '',
       nR.length ? `수업 추가 ${nR.length}건 — '수업 확정' 알림톡이 가요. (${nR.map(nameOf).join(', ')})` : '',
+      fixedLinked.length ? `고정 수업 ${fixedLinked.map(x => `${nameOf(x)} ${x.result}`).join(', ')} — '고정 스케줄' 알림톡이 가요.` : '',
       unlinked.length ? `회원 계정과 이어지지 않아 알림이 안 가요: ${unlinked.join(', ')}` : '',
     ].filter(Boolean).join('\n') + '\n저장할까요?'))) return;
     setSavingSched(true);
@@ -584,6 +589,47 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     // 저장된 취소만 알림
     const okCancels = cancels.filter(x => ![...failedOps].some(k => k.includes(x.teacherId) && k.includes(x.time)));
     if (okCancels.length) await notifyCancelled(okCancels);
+    // 저장된 고정 수업 변경만 알림
+    const okFixed = fixedLinked.filter(x => !failedOps.some(k => k.includes(x.teacherId) && k.includes(x.time)));
+    if (okFixed.length) {
+      try {
+        const r = await notifyFixedChanges(okFixed.map(x => ({ ...x, teacherName: teachers.find(t => t.id === x.teacherId)?.name ?? '' })));
+        await showAlert(`고정 스케줄 알림톡 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+      } catch (e) { await showAlert(`저장했지만 고정 스케줄 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
+    }
+  };
+  // [이 날 수업 알림] — 이 날 이 센터 수업이 있는 아이마다 보호자에게 '수업 일정' 알림톡 (수업 개수 1~8개 템플릿)
+  const [sendingDay, setSendingDay] = useState(false);
+  const sendLessonDay = async () => {
+    const kids = [...new Set(lessons.map(x => x.childId))];
+    const linkedKids = kids.filter(id => !!children.find(k => k.id === id)?.guardianUserId);
+    const names = linkedKids.map(id => children.find(k => k.id === id)?.name).join(', ');
+    if (!linkedKids.length) { await showAlert('이 날 수업이 있는 아이 중 회원 계정과 이어진 아이가 없어요.'); return; }
+    if (!(await askConfirm(`${day.replace(/-/g, '/')} ${CENTERS.find(c => c.key === center)?.label} 수업 일정 알림톡을 보낼까요?\n아이 ${linkedKids.length}명: ${names}${kids.length > linkedKids.length ? `\n(회원 계정과 안 이어진 ${kids.length - linkedKids.length}명은 빼요)` : ''}`, '보내기'))) return;
+    setSendingDay(true);
+    try {
+      const r = await notifyLessonDay(day, center, lessons.map(x => ({ childId: x.childId, time: x.time, teacherName: teachers.find(t => t.id === x.teacherId)?.name ?? '' })));
+      await showAlert(`수업 일정 알림톡 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+    } catch (e) { await showAlert(`보내지 못했어요.\n${(e as Error).message}`); }
+    finally { setSendingDay(false); }
+  };
+  // 고정 수업 변경 — 이 날부터 고정(날짜별, 그 요일 고정 수업과 비교) · 고정 시간표(오늘부터)에서 칸의 아이가 바뀐 것
+  const fixedChangesByOps = () => {
+    type FC = { childId: string; teacherId: string; time: string; result: '확정' | '취소'; weekday: number; from: string };
+    const out: FC[] = [];
+    for (const o of ops.values()) {
+      if (o.kind !== 'from' && o.kind !== 'fixed') continue;
+      const old = o.kind === 'from' ? cellOf(base, o.teacherId, o.time) : cellOf(board.fixed, o.teacherId, o.time);
+      const inp = o.input === 'reset' ? null : o.input;
+      const newId = inp && inp.status === 'child' ? inp.childId ?? undefined : undefined;
+      const oldId = old.status === 'child' ? old.childId : undefined;
+      if (oldId === newId) continue;
+      const wdx = o.kind === 'from' ? d.getDay() : weekday;
+      const from = o.kind === 'from' ? day : toYmd(new Date());
+      if (oldId) out.push({ childId: oldId, teacherId: o.teacherId, time: o.time, result: '취소', weekday: wdx, from });
+      if (newId) out.push({ childId: newId, teacherId: o.teacherId, time: o.time, result: '확정', weekday: wdx, from });
+    }
+    return out;
   };
 
   // 수업 후 결제 체크 — 먼저 표에만 표시하고, [결제 완료]에서 한꺼번에 저장한다
@@ -661,17 +707,28 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     if (!canPay) return;
     setSavingPay(true);
     const failedKeys: string[] = [];
+    const prepaidUses = new Map<string, number>();   // 이번에 선결제로 확정한 아이 → 횟수 (알림톡)
     for (const x of toConfirm) {
       const k = keyOf(x.childId, x.time);
       const e = paidOf(x.childId, x.time) ?? (x.base ? { method: x.base } : undefined);
       if (!e) continue;
-      try { await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { ...e, confirmed: true }); }
+      try {
+        await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { ...e, confirmed: true });
+        if (e.method === 'prepaid' && !e.note) prepaidUses.set(x.childId, (prepaidUses.get(x.childId) ?? 0) + 1);
+      }
       catch { failedKeys.push(k); }
     }
     setDraft(dr => new Map([...dr].filter(([k]) => failedKeys.includes(k))));
     setSavingPay(false);
     await load();
     if (failedKeys.length) showAlert(`${failedKeys.length}건을 저장하지 못했어요. 다시 [결제 완료]를 눌러 주세요.`);
+    // 선결제 사용 — 아이마다 그날 한 번 '선결제 사용' 알림톡
+    if (prepaidUses.size) {
+      try {
+        const r = await notifyPrepaidUses(day, [...prepaidUses].map(([childId, count]) => ({ childId, count })));
+        if (r.sent + r.failed + r.skipped + r.waiting) await showAlert(`선결제 사용 알림톡 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+      } catch (e) { await showAlert(`결제는 확정했지만 선결제 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
+    }
   };
 
   // 남은 횟수 — 바우처·굳센·꿈이든은 이번 달 제공 횟수에서, 선결제는 지금까지 충전한 횟수에서 확정된 만큼 뺀다
@@ -937,6 +994,13 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           {schedPending + draft.size > 0 && (
             <button onClick={() => { setOps(new Map()); setAssignDraft(new Map()); setDraft(new Map()); }} disabled={savingSched || savingPay}
               className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
+          )}
+          {mode === 'day' && !isTest && (
+            <button onClick={sendLessonDay} disabled={!!schedPending || !lessons.length || sendingDay}
+              title="이 날 수업이 있는 아이마다 보호자에게 '수업 일정' 알림톡 (결석·옮긴 수업 빼고, 시간표 변경을 먼저 저장해야 해요)"
+              className="text-[13px] border border-[#f59e0b] text-[#b45309] bg-white px-4 py-2 hover:bg-[#fffbeb] disabled:opacity-40">
+              {sendingDay ? '보내는 중…' : '이 날 수업 알림'}
+            </button>
           )}
           <button onClick={saveSchedule} disabled={!(schedPending + draft.size) || savingSched}
             className="text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">

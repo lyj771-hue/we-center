@@ -10,6 +10,7 @@ import PaymentsTab from '@/components/PaymentsTab';
 import type { Center, Child } from '@/lib/timetable';
 import { getChildren, getPaymentCounts, linkChild, methodInCenter, setChildBalance, setChildUses } from '@/lib/timetable';
 import { addCharge } from '@/lib/prepaid';
+import { notifyMemberApproved, sendSummary } from '@/lib/alimtalkNotify';
 
 // 회원 관리 (관리자 전용) — 카카오로 로그인한 보호자 표.
 // 이름(아이 이름)은 보호자가 가입할 때 입력한 것, 설명은 관리자가 적는다. 센터 닉네임(center_nickname)은 더 쓰지 않는다(있던 값만 남아 있음).
@@ -249,9 +250,17 @@ export default function MembersView({ center }: { center: Center }) {
       if (approve) {
         // 아이 명단의 같은 아이(이름·뒷번호)와 잇고, 적은 선결제·우진학교·지원금을 그 아이에게 맞춘다
         await saveApproveInput(m, await matchChild(m));
+        await sendApproved(m);
       }
       load();
     } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
+  };
+  // 승인하면 그 보호자에게 '회원가입 승인' 알림톡
+  const sendApproved = async (m: Member) => {
+    try {
+      const r = await notifyMemberApproved(m, center, isExtra(m) ? requestedAt.get(`${m.userId}|${center}`) : m.joinedAt);
+      await showAlert(`회원가입 승인 알림톡 — ${sendSummary(r)}`);
+    } catch (e) { await showAlert(`승인했지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
   };
 
   const remove = async (m: Member) => {
@@ -315,7 +324,7 @@ export default function MembersView({ center }: { center: Center }) {
       const here = kidOf(m.userId);
       if (!approve && here) { await linkChild(here.id, null); loadKids(); autoTried.current.add(`${m.userId}|${center}`); }
       // 추가 지점 승인 — 이 지점 명단의 같은 아이(이름·뒷번호)와도 잇는다 (지점마다 회원 코드가 따로라서)
-      if (approve) await saveApproveInput(m, await matchChild(m));
+      if (approve) { await saveApproveInput(m, await matchChild(m)); await sendApproved(m); }
       load();
     }
     catch (e) { showAlert(`저장하지 못했어요. 다시 시도해 주세요.\n${(e as Error).message ?? ''}`); load(); loadKids(); }
