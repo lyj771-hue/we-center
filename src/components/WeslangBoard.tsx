@@ -175,9 +175,10 @@ export default function WeslangBoard({ posts, basePath, isAdmin, onDelete }: { p
   );
   return (
     <div className="md:flex md:items-start md:gap-6">
-      {/* 왼쪽 가게 목록 — PC는 옆에 고정, 휴대폰은 위에 [목록]으로 펼치기 */}
+      {/* 왼쪽 가게 목록 — 관리자 화면에서만. PC는 옆에 고정, 휴대폰은 위에 [목록]으로 펼치기 */}
+      {isAdmin && <>
       <aside className="hidden md:block w-[210px] shrink-0 sticky top-28 self-start rounded-xl bg-[#f6f6f7] p-3">
-        <p className="px-2 pb-2 text-[11px] tracking-[0.15em] text-[#999]">가게 목록{isAdmin && <span className="ml-1 tracking-normal text-[#bbb]">· ▲▼ 순서 바꾸기</span>}</p>
+        <p className="px-2 pb-2 text-[11px] tracking-[0.15em] text-[#999]">가게 목록<span className="ml-1 tracking-normal text-[#bbb]">· ▲▼ 순서 바꾸기</span></p>
         {list}
       </aside>
       <div className="md:hidden mb-6">
@@ -186,6 +187,7 @@ export default function WeslangBoard({ posts, basePath, isAdmin, onDelete }: { p
         </button>
         {listOpen && <div className="mt-1 rounded-xl bg-[#f6f6f7] p-2">{list}</div>}
       </div>
+      </>}
       <div className="flex-1 min-w-0">
       <div className="flex flex-col items-center gap-y-16 md:gap-y-20">
         {shown.map(post => <div key={post.id} id={`weslang-${post.id}`} className="scroll-mt-28 w-full flex justify-center"><WeslangEntry post={post} basePath={basePath} isAdmin={isAdmin} onDelete={onDelete} /></div>)}
