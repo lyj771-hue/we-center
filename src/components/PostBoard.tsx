@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
-import { getAllPosts, addPost, deletePost } from '@/lib/store';
+import { getAllPosts, addPost, deletePost, updatePost } from '@/lib/store';
 import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
 import WeslangBoard from './WeslangBoard';
@@ -168,7 +168,13 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
 
       {/* List */}
       {variant === 'carrot' ? (
-        <CarrotBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} onWrite={() => setEditing(true)} />
+        <CarrotBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} onWrite={() => setEditing(true)}
+          onToggleSold={async p => {
+            const sold = !!p.tags?.includes('sold');
+            if (!(await askConfirm(sold ? `"${p.title}"을(를) 거래 중으로 되돌릴까요?` : `"${p.title}"을(를) 거래완료로 표시할까요?`))) return;
+            try { await updatePost(category, p.id, { tags: sold ? (p.tags ?? []).filter(t => t !== 'sold') : [...(p.tags ?? []), 'sold'] }); refresh(); }
+            catch (e) { showAlert(`바꾸지 못했어요 — SQL(supabase/post-tags.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); }
+          }} />
       ) : variant === 'weslang' ? (
         <WeslangBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
       ) : variant === 'scrapbook' ? (

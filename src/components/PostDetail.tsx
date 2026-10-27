@@ -114,7 +114,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
       ) : (
         <>
           <div className="flex items-start justify-between gap-4 mb-3">
-            <h1 className="text-[22px] font-medium leading-snug flex-1"><PostTags tags={post.tags} className="mr-2" />{post.title}</h1>
+            <h1 className="text-[22px] font-medium leading-snug flex-1"><PostTags tags={post.tags} className="mr-2" />{post.tags?.includes('sold') && <span className="mr-2 align-middle text-[12px] px-2 py-0.5 rounded bg-[#e4e4e7] text-[#52525b]">거래완료</span>}{post.title}</h1>
             {isAdmin && (
               <div className="flex gap-2 shrink-0">
                 <button onClick={() => setEditing(true)} className="text-[11px] border border-[#e5e5e5] px-3.5 py-1.5 hover:bg-[#f8f8f8] transition-colors">수정</button>

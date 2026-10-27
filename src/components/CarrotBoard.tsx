@@ -7,6 +7,7 @@ import { excerpt, extractImages, toText } from '@/lib/postText';
 import { showAlert } from '@/lib/dialog';
 
 // We당근당근 — 당근마켓 목록 모양. 왼쪽 네모 사진(본문 첫 사진) · 오른쪽 제목(두 줄) · 회색 한 줄(센터 · 언제) · 본문 앞부분.
+// 거래완료 — 관리자 ⋮ → [거래완료로 표시]. 목록에선 사진 위 "거래완료"·제목 앞 회색 표시, 글에서도 제목 앞에.
 // 주황 [+ 센터에게] — 누구나 보인다(휴대폰에선 오른쪽 아래에 떠 있다). 관리자는 새 글, 그 밖엔 "올리는건 저희가 해요^^" 팝업. 관리자: 오른쪽 위 ⋮ → 삭제
 
 const CARROT = '#ff6f0f';
@@ -24,8 +25,13 @@ function ago(iso: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrite }: {
+/** 거래완료 — 글의 tags 에 'sold' */
+export const isSold = (p: Post) => !!p.tags?.includes('sold');
+
+export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrite, onToggleSold }: {
   posts: Post[]; basePath: string; isAdmin: boolean; onDelete: (id: string) => void; onWrite: () => void;
+  /** 관리자 — 거래완료로 표시 / 거래 중으로 되돌리기 */
+  onToggleSold?: (post: Post) => void;
 }) {
   const [menu, setMenu] = useState<string | null>(null);
   const [page, setPage] = useState(0);
@@ -49,18 +55,23 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
           {shown.map(post => {
             const img = post.imageUrl ?? extractImages(post.content)[0];
             const text = excerpt(toText(post.content), 60);
+            const sold = isSold(post);
             return (
               <li key={post.id} className="relative py-6 md:py-7">
                 <Link href={`${basePath}/${post.id}`} className="flex gap-4 md:gap-5 group">
-                  <div className="w-[110px] h-[110px] md:w-[140px] md:h-[140px] shrink-0 rounded-xl overflow-hidden bg-[#f2f2f2]">
+                  <div className="relative w-[110px] h-[110px] md:w-[140px] md:h-[140px] shrink-0 rounded-xl overflow-hidden bg-[#f2f2f2]">
                     {img
-                      ? <img src={img} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300" />
+                      ? <img src={img} alt="" loading="lazy" className={`w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300 ${sold ? 'grayscale opacity-60' : ''}`} />
                       : <div className="w-full h-full flex items-center justify-center text-[30px]" aria-hidden="true">🥕</div>}
+                    {/* 거래완료 — 사진 위에 */}
+                    {sold && <span className="absolute inset-0 flex items-center justify-center bg-black/35 text-white text-[13px] md:text-[14px] font-semibold">거래완료</span>}
                   </div>
                   <div className="min-w-0 flex-1 pr-7 pt-0.5">
                     {/* 회색(센터 · 언제) → 제목 → 본문 */}
                     <p className="text-[11px] md:text-[12px] leading-[1.8] text-[#9ca3af]">We센터 · {ago(post.createdAt)}</p>
-                    <p className="mt-2.5 text-[13px] md:text-[15px] leading-[1.8] font-medium line-clamp-2 break-keep" style={{ color: CARROT }}>{post.title}</p>
+                    <p className={`mt-2.5 text-[13px] md:text-[15px] leading-[1.8] font-medium line-clamp-2 break-keep ${sold ? 'opacity-60' : ''}`} style={{ color: CARROT }}>
+                      {sold && <span className="mr-1.5 align-middle text-[11px] px-1.5 py-0.5 rounded bg-[#e4e4e7] text-[#52525b] no-underline">거래완료</span>}{post.title}
+                    </p>
                     {text && <p className="mt-2.5 text-[11px] md:text-[12px] leading-[2] text-[#52525b] line-clamp-2">{text}</p>}
                   </div>
                 </Link>
@@ -69,7 +80,11 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
                     <button type="button" aria-label="더보기" onClick={() => setMenu(m => (m === post.id ? null : post.id))}
                       className="w-7 h-7 flex items-center justify-center text-[#9ca3af] hover:text-[#18181b] text-[18px] leading-none">⋮</button>
                     {menu === post.id && (
-                      <div className="absolute right-0 mt-1 z-10 bg-white border border-[#e5e5e5] rounded-lg shadow-lg py-1 min-w-[80px]">
+                      <div className="absolute right-0 mt-1 z-10 bg-white border border-[#e5e5e5] rounded-lg shadow-lg py-1 min-w-[120px]">
+                        {onToggleSold && (
+                          <button type="button" onClick={() => { setMenu(null); onToggleSold(post); }}
+                            className="w-full px-4 py-2 text-left text-[13px] text-[#333] hover:bg-[#fafafa] whitespace-nowrap">{sold ? '거래 중으로 되돌리기' : '거래완료로 표시'}</button>
+                        )}
                         <button type="button" onClick={() => { setMenu(null); onDelete(post.id); }}
                           className="w-full px-4 py-2 text-left text-[13px] text-red-500 hover:bg-[#fafafa]">삭제</button>
                       </div>
