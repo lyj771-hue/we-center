@@ -82,6 +82,12 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
         </ul>
       )}
 
+      {/* 화면 오른쪽 아래에 떠 있는 버튼 — 목록을 내리는 동안 따라오다가, 쪽 넘기기 버튼 바로 위(없으면 목록 끝)에서 멈춘다(sticky) */}
+      <div className={`sticky z-[150] flex justify-end pointer-events-none mt-4`}
+        style={{ bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))' }}>
+        <span className="pointer-events-auto">{writeBtn('px-3 py-1.5 text-[12px]')}</span>
+      </div>
+
       {/* 쪽 넘기기 — 한 쪽에 3개 */}
       {pages > 1 && (
         <nav aria-label="쪽 넘기기" className="mt-4 flex items-center justify-center gap-1">
@@ -96,12 +102,6 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
             className="w-7 h-7 rounded-full border border-[#e5e5e5] text-[12px] text-[#555] disabled:opacity-30">›</button>
         </nav>
       )}
-
-      {/* 화면 오른쪽 아래에 떠 있는 버튼 — 목록을 내리는 동안 따라오다가, 쪽 넘기기 줄(없으면 목록 끝)에 닿으면 거기 멈춘다(sticky) */}
-      <div className={`sticky z-[150] flex justify-end pointer-events-none ${pages > 1 ? '-mt-7' : 'mt-4'}`}
-        style={{ bottom: 'calc(84px + env(safe-area-inset-bottom, 0px))' }}>
-        <span className="pointer-events-auto">{writeBtn('px-3 py-1.5 text-[12px]')}</span>
-      </div>
     </div>
   );
 }

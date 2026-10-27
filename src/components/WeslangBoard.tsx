@@ -112,11 +112,34 @@ function NoteViewer({ title, location, onClose }: { title: string; location?: st
 }
 
 /** We슐랭 가게 글들 — 가운데에 하나씩, 새 글이 위로 */
+/** 한 쪽에 보이는 가게 수 */
+const PER_PAGE = 3;
+
 export default function WeslangBoard({ posts, basePath, isAdmin, onDelete }: { posts: Post[]; basePath: string; isAdmin: boolean; onDelete: (id: string) => void }) {
+  const [page, setPage] = useState(0);
   if (posts.length === 0) return <div className="py-24 text-center text-sm text-[#bbb] tracking-widest">등록된 가게가 없습니다</div>;
+  const pages = Math.ceil(posts.length / PER_PAGE);
+  const cur = Math.min(page, pages - 1);
+  const shown = posts.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
+  const go = (p: number) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   return (
-    <div className="flex flex-col items-center gap-y-16 md:gap-y-20">
-      {posts.map(post => <WeslangEntry key={post.id} post={post} basePath={basePath} isAdmin={isAdmin} onDelete={onDelete} />)}
-    </div>
+    <>
+      <div className="flex flex-col items-center gap-y-16 md:gap-y-20">
+        {shown.map(post => <WeslangEntry key={post.id} post={post} basePath={basePath} isAdmin={isAdmin} onDelete={onDelete} />)}
+      </div>
+      {/* 쪽 넘기기 — 한 쪽에 3개 */}
+      {pages > 1 && (
+        <nav aria-label="쪽 넘기기" className="mt-10 flex items-center justify-center gap-1">
+          <button type="button" onClick={() => go(cur - 1)} disabled={cur === 0} aria-label="앞 쪽"
+            className="w-7 h-7 rounded-full border border-[#e5e5e5] bg-white text-[12px] text-[#555] disabled:opacity-30">‹</button>
+          {Array.from({ length: pages }, (_, i) => (
+            <button key={i} type="button" onClick={() => go(i)} aria-current={i === cur ? 'page' : undefined}
+              className={`w-7 h-7 rounded-full text-[12px] tabular-nums ${i === cur ? 'bg-[var(--brand)] text-white font-semibold' : 'text-[#555] hover:bg-[#f4f4f5]'}`}>{i + 1}</button>
+          ))}
+          <button type="button" onClick={() => go(cur + 1)} disabled={cur === pages - 1} aria-label="다음 쪽"
+            className="w-7 h-7 rounded-full border border-[#e5e5e5] bg-white text-[12px] text-[#555] disabled:opacity-30">›</button>
+        </nav>
+      )}
+    </>
   );
 }
