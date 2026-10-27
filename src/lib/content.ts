@@ -91,7 +91,7 @@ export const NOTICES = {
 // ── 기타 (/etc) ───────────────────────────────
 export const ETC = {
   eyebrow: 'We당근당근',
-  heading: '재활용품 당근해드려요',
+  heading: '재활 관련 용품을 당근해드려요',
   subtext: '',
 };
 
