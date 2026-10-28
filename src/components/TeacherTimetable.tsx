@@ -9,6 +9,7 @@ import type { Center, PayMethod } from '@/lib/timetable';
 import { PAY_METHODS, ROUND_LIMIT, ROW_LABEL, SUNDAY_TEACHERS, defaultPayMethod, rowsForDay, worksAt } from '@/lib/timetable';
 import type { TeacherLesson } from '@/lib/teacher';
 import { getTeacherLessons, getTeacherRounds } from '@/lib/teacher';
+import { onScheduleChanged } from '@/lib/sync';
 
 // 시간표 보기(선생님) — 카카오로 로그인해서 선생님 인증된 계정만. 고치기는 못 하고 보기만.
 // 날짜마다 센터 선생님 × 시간, 선생님마다 고정 · 빈타임 두 칸. 공휴일엔 고정 수업을 빼고 보여 준다.
@@ -24,7 +25,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   const [holidays, setHolidays] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState('');
   // 그날 게시 중인 시간("선생님|시간") — 쉬는 시간을 연 칸은 쉬는 시간 글씨 대신 빈칸으로
-  const [postedOpen, setPostedOpen] = useState<Set<string>>(new Set());
+  const [postedOpen, setPostedOpen] = useState<Map<string, string>>(new Map());
   // 바우처·굳센·꿈이든 월 회차 — 시간표 관리처럼 "바우처3" ("날짜|선생님|시간|칸" → 회차)
   const [rounds, setRounds] = useState<Map<string, { method: string; n: number }>>(new Map());
   const can = isAdmin || !!teacher;
@@ -65,7 +66,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
 
   const load = useCallback(async () => {
     try {
-      const [t, l, h, p] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({})), getPostedOpenSlots(day, center).catch(() => new Set<string>())]);
+      const [t, l, h, p] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({})), getPostedOpenSlots(day, center).catch(() => new Map<string, string>())]);
       setTeachers(t); setLessons(l); setHolidays(h); setPostedOpen(p); setFailed('');
       setRounds(await getTeacherRounds(day, day, Object.keys(h).filter(d => d.startsWith(day.slice(0, 7)))));
     } catch (e) {
@@ -73,6 +74,15 @@ export default function TeacherTimetable({ center }: { center: Center }) {
     }
   }, [day, center]);
   useEffect(() => { if (can) load(); }, [can, load]);
+  // 수업스케쥴 신청·취소·게시, 시간표 관리 저장이 바로 보이게 — 신호를 받으면 바로, 놓친 것은 1분마다·화면으로 돌아올 때
+  useEffect(() => {
+    if (!can) return;
+    const off = onScheduleChanged(() => load());
+    const t = setInterval(load, 60000);
+    const onShow = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => { off(); clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
+  }, [can, load]);
 
   const label = center === 'uijeongbu' ? '의정부' : '수색';
   if (!can) {
@@ -195,7 +205,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
                       {/* 빈타임에 아이가 있으면 그 시간은 빈타임 아이 수업 — 고정 칸은 흐리게 */}
                       <td className={`${td} ${openKid ? 'bg-[#f4f4f5] opacity-60' : ''}`}>{text(f) ?? (ROW_LABEL[time] && !postedOpen.has(`${t.id}|${time}`) && <span className="text-[#c4c4cc]">{ROW_LABEL[time]}</span>)}</td>
                       <td className={`${td} bg-[#fcfcfd]`}>{(!o || o.status === 'off') && postedOpen.has(`${t.id}|${time}`)
-                        ? <span className="text-[10px] px-1 rounded bg-[#ecfdf5] text-[#047857]">게시 중</span>
+                        ? <span className={`text-[10px] px-1 rounded ${postedOpen.get(`${t.id}|${time}`) === '게시 중' ? 'bg-[#ecfdf5] text-[#047857]' : 'bg-[#fef3c7] text-[#b45309]'}`}>{postedOpen.get(`${t.id}|${time}`)}</span>
                         : text(o)}</td>
                       <td className={`${td} bg-[#f9fdfa]`}>{payText(openKid ? o : f)}</td>
                     </FragmentCols>

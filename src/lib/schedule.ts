@@ -542,10 +542,17 @@ export async function deleteTeacher(id: string): Promise<void> {
 }
 
 /** 그날 그 센터에 게시 중인(아직 신청 없는) 시간 — "선생님|시간". 시간표에서 쉬는 시간을 연 칸은 빈칸으로 보이게 (관리자·선생님) */
-export async function getPostedOpenSlots(day: string, center: 'eunpyeong' | 'uijeongbu'): Promise<Set<string>> {
-  const { data: scs } = await supabase.from('schedules').select('id').eq('center', center).is('hidden_at', null);
+export async function getPostedOpenSlots(day: string, center: 'eunpyeong' | 'uijeongbu'): Promise<Map<string, string>> {
+  const { data: scs } = await supabase.from('schedules').select('*').eq('center', center).is('hidden_at', null);
+  // 예약 게시 글(게시 전)의 시간은 "게시 예정"
+  const reserved = new Set((scs ?? []).filter(r => r.publish_at && new Date(r.publish_at).getTime() > Date.now()).map(r => r.id as string));
   const ids = (scs ?? []).map(r => r.id as string);
-  if (!ids.length) return new Set();
-  const { data } = await supabase.from('slots').select('teacher_id, time').eq('day', day).is('booked_by', null).in('schedule_id', ids);
-  return new Set((data ?? []).map(r => `${r.teacher_id}|${r.time}`));
+  if (!ids.length) return new Map();
+  const { data } = await supabase.from('slots').select('teacher_id, time, schedule_id').eq('day', day).is('booked_by', null).in('schedule_id', ids);
+  const out = new Map<string, string>();
+  for (const r of data ?? []) {
+    const k = `${r.teacher_id}|${r.time}`;
+    if (!reserved.has(r.schedule_id)) out.set(k, '게시 중'); else if (!out.has(k)) out.set(k, '게시 예정');
+  }
+  return out;
 }

@@ -386,7 +386,9 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     if (reserving) {
       const at = new Date(`${pubDate}T${pubTime}:00`);
       if (Number.isNaN(at.getTime())) { alert('게시 날짜와 시간을 골라 주세요.'); return; }
-      if (at.getTime() <= Date.now() + 60000) { alert('게시 시간이 이미 지났거나 너무 가까워요.\n시간을 다시 고르거나 [바로 올리기]를 눌러 주세요.'); return; }
+      // 게시까지 적어도 5분 — 5분 전 '게시 예정' 알림톡이 갈 시간. 이미 예약한 시각을 그대로 두고 고칠 때는 괜찮다
+      const keepTime = !!existing?.publishAt && new Date(existing.publishAt).getTime() === at.getTime();
+      if (!keepTime && at.getTime() < Date.now() + 5 * 60000) { alert('게시까지 적어도 5분은 남아야 예약할 수 있어요.\n(5분 전에 보호자에게 게시 예정 알림톡이 가요)\n시간을 다시 고르거나 [바로 올리기]를 눌러 주세요.'); return; }
       publishAt = at.toISOString();
       if (!confirm(`${publishLabel(publishAt)}에 게시할까요?\n그 전에는 보호자에게 안 보이고, 게시 5분 전에 ${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자에게 '게시 예정' 알림톡이 가요.\n게시 전까지는 언제든 고칠 수 있어요.`)) return;
     } else if (!live) publishAt = existing?.publishAt ? new Date().toISOString() : null;

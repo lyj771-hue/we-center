@@ -98,7 +98,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   // 보호자가 마이페이지에서 한 수업 취소 신청(승인 기다리는 것) — 그날 · 이 센터. 칸에 "취소신청", 칸을 누르면 [승인]/[거절]
   const [cancelReqs, setCancelReqs] = useState<CancelRequest[]>([]);
   // 그날 게시 중인 시간("선생님|시간") — 쉬는 시간을 연 칸은 쉬는 시간 글씨 대신 빈칸으로
-  const [postedOpen, setPostedOpen] = useState<Set<string>>(new Set());
+  const [postedOpen, setPostedOpen] = useState<Map<string, string>>(new Map());
   const reqOf = (side: Side, teacherId: string, time: string) => cancelReqs.find(r => r.side === side && r.teacherId === teacherId && r.time === time);
 
   const load = useCallback(async () => {
@@ -120,7 +120,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         setAssigns(await getDayAssigns(day, center).catch(() => ({ added: [], removed: [] })));
         setLeaves(await getDayLeaves(day, center).catch(() => []));
         setCancelReqs((await getCancelRequests().catch(() => [] as CancelRequest[])).filter(r => r.day === day && r.center === center));
-        setPostedOpen(await getPostedOpenSlots(day, center).catch(() => new Set<string>()));
+        setPostedOpen(await getPostedOpenSlots(day, center).catch(() => new Map<string, string>()));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
       setFailed('');
@@ -958,7 +958,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                             const b = e.currentTarget.getBoundingClientRect();
                             setPicking({ teacher: t, time, side: 'open', cell: right, rect: { left: b.left, top: b.top, bottom: b.bottom } });
                           }}>
-                            <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} nonMember={isNonMember(right)} requested={!!reqOf('open', t.id, time)} posted={mode === 'day' && postedOpen.has(`${t.id}|${time}`)} />
+                            <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} nonMember={isNonMember(right)} requested={!!reqOf('open', t.id, time)} posted={mode === 'day' ? postedOpen.get(`${t.id}|${time}`) : undefined} />
                           </td>}
                           {kindTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
@@ -1074,9 +1074,10 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
 }
 
 /** 칸 글자 — 3김채현 처럼 (숫자 + 이름) */
-function CellText({ cell, label, muted, nonMember, requested, posted }: { cell: CellView; label?: string; muted?: boolean; nonMember?: boolean; requested?: boolean; posted?: boolean }) {
+function CellText({ cell, label, muted, nonMember, requested, posted }: { cell: CellView; label?: string; muted?: boolean; nonMember?: boolean; requested?: boolean; posted?: string }) {
   // 수업스케쥴 게시글에 올라가 있고 아직 신청 없는 빈타임 — 선생님 시간표 보기와 똑같이 "게시 중"
-  if (posted && (cell.status === 'empty' || cell.status === 'none' || cell.status === 'off')) return <span className="text-[10px] px-1 rounded bg-[#ecfdf5] text-[#047857]">게시 중</span>;
+  if (posted && (cell.status === 'empty' || cell.status === 'none' || cell.status === 'off'))
+    return <span className={`text-[10px] px-1 rounded ${posted === '게시 중' ? 'bg-[#ecfdf5] text-[#047857]' : 'bg-[#fef3c7] text-[#b45309]'}`}>{posted}</span>;
   if (cell.status === 'empty' || cell.status === 'none') {
     return label ? <span className="text-[#c4c4cc]">{label}</span> : null;
   }
