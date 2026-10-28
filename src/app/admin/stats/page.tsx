@@ -10,7 +10,7 @@ import { getMembers } from '@/lib/store';
 import { childLabel, getChildren } from '@/lib/timetable';
 
 // 대시보드 · 스케줄 잡기 (전체 관리자만) — 수업스케쥴 게시글 목록, 누르면 그 글의 선착순 결과.
-// 참여 보호자 수, 시간이 다 잡히기까지, 보호자마다 잡은 수 · 한발 늦음(눌렀는데 다른 분이 먼저) · 10분 안 취소 — 처음 누른 순서대로.
+// 참여 보호자 수, 시간이 다 잡히기까지, 보호자마다 잡은 수 · 한발 늦음(눌렀는데 다른 분이 먼저) · 10분 안 취소 — 처음 누른 순서대로. (센터 취소는 세지만 안 보여 준다)
 // 한발 늦음은 supabase/booking-misses.sql 을 실행한 뒤부터 쌓인다.
 
 type CenterFilter = 'all' | 'eunpyeong' | 'uijeongbu';
@@ -176,7 +176,6 @@ function Detail({ schedule, full, rows, names, teachers, data, onBack }: {
                   <th className="py-2 px-2 text-right font-normal">잡은 수</th>
                   <th className="py-2 px-2 text-right font-normal">한발 늦음</th>
                   <th className="py-2 px-2 text-right font-normal">10분 안 취소</th>
-                  <th className="py-2 px-2 text-right font-normal">센터 취소</th>
                   <th className="py-2 pl-2 text-right font-normal whitespace-nowrap">처음 누른 때</th>
                 </tr>
               </thead>
@@ -188,7 +187,6 @@ function Detail({ schedule, full, rows, names, teachers, data, onBack }: {
                     <td className="py-2 px-2 text-right">{r.got}</td>
                     <td className={`py-2 px-2 text-right ${r.missed ? 'text-[#e11d48]' : 'text-[#ccc]'}`}>{r.missed}</td>
                     <td className={`py-2 px-2 text-right ${r.freeCancelled ? '' : 'text-[#ccc]'}`}>{r.freeCancelled}</td>
-                    <td className={`py-2 px-2 text-right ${r.adminCancelled ? '' : 'text-[#ccc]'}`}>{r.adminCancelled}</td>
                     <td className="py-2 pl-2 text-right text-[#666] whitespace-nowrap">게시 후 {since(start, r.firstAt)}</td>
                   </tr>
                 ))}
