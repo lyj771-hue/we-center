@@ -112,10 +112,10 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
   },
   {
     id: 'schedule_reserved', grp: 'lesson', label: '스케줄 게시 예정 알림', sort: 32,
-    spec: { image: 'logo', title: '#{센터} #{스케줄} 수업 스케줄 게시 예정 안내', sub: 'We 센터',
+    spec: { image: 'logo', title: '#{센터} #{기간} 수업 스케줄 게시 예정 안내', sub: 'We 센터',
       items: [{ name: '제목', value: '#{제목}' }, { name: '게시 시간', value: '#{게시시간}' }],
       body: '#{이름} 님, 빈 수업 시간이 #{게시시간}에 올라와요.\n게시되면 아래 버튼을 눌러 원하시는 시간을 신청해 주세요. 먼저 신청한 순서로 정해져요.\n\n※ 이 메시지는 We 센터 수업 신청을 위한 빈 수업 게시 예정 알림으로, 예약된 빈 수업이 게시되기 5분 전에 발송됩니다.', button: { name: '빈 수업 보기', url: `${SITE}/schedule/#{글번호}` } },
-    samples: { 제목: '다음 주 11/2~11/7 빈 수업 안내', 스케줄: '다음주' },
+    samples: { 제목: '다음 주 11/2~11/7 빈 수업 안내', 기간: '다음주' },
     condition: '수업스케줄 게시글을 예약 게시로 올리면, 게시 5분 전에 서버가 저절로 그 센터에 승인된 보호자(전화번호 있는) 모두에게 한 번.\n버튼은 그 게시글로 가고, 게시 전에 누르면 "몇 시에 게시돼요" 화면이 보이다가 게시 시각에 저절로 열린다. (supabase/schedule-reserve.sql)',
   },
   {
