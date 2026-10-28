@@ -305,6 +305,8 @@ export async function bookSlot(slotId: string): Promise<'ok' | 'taken' | 'not_ap
   const { data, error } = await supabase.rpc('book_slot', { p_slot: slotId });
   if (error) throw error;
   if (data === 'ok') notifyScheduleChanged();
+  // 한발 늦음 — 대시보드(스케줄 잡기)에서 센다 (supabase/booking-misses.sql). 실패해도 그만
+  if (data === 'taken') supabase.rpc('log_booking_miss', { p_slot: slotId }).then(() => {}, () => {});
   return data;
 }
 

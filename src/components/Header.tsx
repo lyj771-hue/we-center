@@ -48,6 +48,8 @@ export default function Header() {
     { label: '선생님 시간표', items: [{ href: '/teacher/timetable', label: '수색' }, { href: '/teacher/timetable/uijeongbu', label: '의정부' }] },
     // 수업 현황 — 전체 관리자만 (직원 계정엔 안 보인다)
     ...(canSeeStats ? [{ label: '수업 현황', items: [{ href: '/admin/dashboard', label: '수업 현황' }] }] : []),
+    // 대시보드 — 전체 관리자만. 스케줄 잡기(선착순 결과)
+    ...(canSeeStats ? [{ label: '대시보드', items: [{ href: '/admin/stats', label: '스케줄 잡기' }] }] : []),
     { label: '알림 메시지', items: [{ href: '/admin/messages', label: '메시지 모양' }, { href: '/admin/alimtalk-templates', label: '심사 올리기' }, { href: '/admin/alimtalk-test', label: '테스트 보내기' }] },
     { label: '알림', items: [{ href: '/admin/alerts', label: '알림' }] },
   ];
