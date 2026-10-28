@@ -1,12 +1,12 @@
 'use client';
 
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
-import { dowLabel, scheduleDays, scheduleRange, shortDay } from '@/lib/schedule';
+import { dowLabel, FREE_CANCEL_MIN, isPublished, publishLabel, scheduleDays, scheduleRange, shortDay } from '@/lib/schedule';
 
 // 한 주 스케쥴 카드 — 공지(제목·기간·안내·휴무) + 선생님별 요일별 시간 버튼.
 // (신청·취소 기록은 DB bookings 표에 계속 남지만 화면에는 보이지 않는다)
-// 보호자: 빈 시간 = 누르면 신청, 내 신청 = "✓ 신청완료"(누르면 취소 신청) → "취소중"(누르면 철회) → 회색 "취소완료",
-//         다른 분 신청 = 언제나 "마감".
+// 보호자: 빈 시간 = 누르면 신청, 내 신청 = "✓ 신청완료"(게시 후 10분 취소 가능 글은 그 10분 동안만 눌러서 바로 취소, 그 밖엔 못 누름),
+//         예전에 들어온 취소 신청 = "취소중"(누르면 철회) → 회색 "취소완료", 다른 분 신청 = 언제나 "마감".
 // 선생님: 관리자처럼 신청자를 보고, 내 줄에서 시간 내리기(골라서 [내리기])·더하기(+ → [저장]).
 // 관리자: 신청된 칸 = "시간 + 닉네임", 취소 신청된 칸 = "취소요청", 취소 승인된 칸 = 회색 "취소완료" — 보기만.
 //         취소 승인·신청 취소(시간 다시 열기)는 [수정](ScheduleEditor)에서 한다. 빈 칸은 그냥 보인다.
@@ -21,8 +21,10 @@ interface Props {
   /** 보호자: 우리 아이 수업과 시간이 겹쳐 신청할 수 없는 칸 */
   conflicts?: Set<string>;
   onPick: (slot: Slot, teacher: Teacher) => void;
-  /** 보호자: 내 신청을 취소 신청 / 취소 신청 철회 */
-  onRequestCancel: (slot: Slot, teacher: Teacher) => void;
+  /** 보호자: 게시 후 10분 자유 취소가 끝나는 시각(ms) — 지금 취소할 수 있을 때만, 아니면 null */
+  freeCancelUntil?: number | null;
+  /** 보호자: 내 신청 바로 취소(10분 안) / 예전 취소 신청 철회 */
+  onFreeCancel: (slot: Slot, teacher: Teacher) => void;
   onWithdrawCancel: (slot: Slot, teacher: Teacher) => void;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -51,7 +53,7 @@ const TINTS = ['#e8f1fd', '#fdf1e3', '#e8f5ee', '#f3ecfb', '#fdecef', '#eef3f5']
 const pill = 'inline-flex items-center gap-1.5 text-[11px] md:text-[12px] px-3 min-h-[32px] rounded-full border-[1.5px] transition-colors';
 
 export default function ScheduleBoard({
-  schedule, teachers, isAdmin, myId, nickname, busySlot, conflicts, onPick, onRequestCancel, onWithdrawCancel, onEdit, onDelete,
+  schedule, teachers, isAdmin, myId, nickname, busySlot, conflicts, onPick, freeCancelUntil, onFreeCancel, onWithdrawCancel, onEdit, onDelete,
   staffView = isAdmin, teacherTools: tt,
 }: Props) {
   const days = scheduleDays(schedule);
@@ -59,7 +61,9 @@ export default function ScheduleBoard({
   const holidayOf = new Map(centerHolidays.map(h => [h.date, h.label]));
   // 선생님별 휴무 — "선생님|날짜" → 사유
   const offOf = new Map(schedule.holidays.filter(h => h.teacherId).map(h => [`${h.teacherId}|${h.date}`, h.label]));
-  const created = new Date(schedule.createdAt);
+  const created = new Date(schedule.publishAt ?? schedule.createdAt);
+  const live = isPublished(schedule);
+  const untilText = freeCancelUntil ? (() => { const d = new Date(freeCancelUntil); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; })() : '';
 
   // 시간이나 휴무가 있는 선생님만, 명단 순서대로
   const rows = teachers
@@ -103,6 +107,16 @@ export default function ScheduleBoard({
             <span className="inline-flex items-center gap-1.5 text-[12px] text-[#166534] bg-[#e8f5ee] px-3 py-0.5 rounded-full">
               <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />실시간 반영 중
             </span>
+            {/* 관리자·선생님 — 예약 게시 · 10분 취소 */}
+            {staffView && schedule.publishAt && !live && (
+              <span className="text-[12px] text-[#b45309] bg-[#fef3c7] px-3 py-0.5 rounded-full">{publishLabel(schedule.publishAt)} 게시 예정 · 보호자에게 아직 안 보여요</span>
+            )}
+            {staffView && schedule.freeCancel && (
+              <span className="text-[12px] text-[#555] bg-[#f4f4f5] px-3 py-0.5 rounded-full">게시 후 {FREE_CANCEL_MIN}분 취소 가능</span>
+            )}
+            {!staffView && freeCancelUntil && (
+              <span className="text-[12px] text-[#b45309] bg-[#fef3c7] px-3 py-0.5 rounded-full">{untilText}까지는 신청완료를 눌러 바로 취소할 수 있어요</span>
+            )}
             {!staffView && nickname && (
               <span className="text-[12px] text-[var(--brand)] bg-[#e8f1fd] px-3 py-0.5 rounded-full">{nickname} 님으로 신청돼요</span>
             )}
@@ -203,12 +217,17 @@ export default function ScheduleBoard({
                             </button>
                           );
                         }
-                        return (
-                          <button key={s.id} type="button" disabled={busy} onClick={() => onRequestCancel(s, teacher)}
-                            title="누르면 취소를 신청해요"
+                        // 게시 후 10분 안 — 눌러서 바로 취소. 그 밖엔 누를 수 없다(취소는 센터로)
+                        return freeCancelUntil ? (
+                          <button key={s.id} type="button" disabled={busy} onClick={() => onFreeCancel(s, teacher)}
+                            title={`${untilText}까지 누르면 바로 취소해요`}
                             className={`${pill} border-[#0a0a0a] bg-[#0a0a0a] text-white hover:opacity-90`}>
-                            ✓ {s.time} 신청완료
+                            ✓ {s.time} 신청완료 <span className="text-[10px] opacity-70">취소</span>
                           </button>
+                        ) : (
+                          <span key={s.id} title="취소·변경은 센터로 연락해 주세요" className={`${pill} border-[#0a0a0a] bg-[#0a0a0a] text-white`}>
+                            ✓ {s.time} 신청완료
+                          </span>
                         );
                       }
                       if (s.bookedBy) {

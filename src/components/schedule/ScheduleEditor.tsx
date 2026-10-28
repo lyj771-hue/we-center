@@ -8,16 +8,20 @@ import { ROW_LABEL, cellOf, childLabel, getChildren, getDayBoard, rowsForDay, wo
 import { getMemberCenters, getMembers } from '@/lib/store';
 import { addAndSendOutbox, addOutbox, newBatchId } from '@/lib/leave';
 import {
-  addDays, addTeacher, approveCancel, cancelSlot, deleteTeacher, deleteTemplate, dowLabel, getKoreanHolidays, getTemplates, parseDateList, parseYmd,
-  saveSchedule, saveTemplate, scheduleRange, setScheduleHidden, shortDay, slashDay, thisMonday, updateTeacher, weekDays,
+  addDays, addTeacher, approveCancel, cancelSlot, deleteTeacher, deleteTemplate, dowLabel, FREE_CANCEL_MIN, getKoreanHolidays, getTemplates, isPublished,
+  parseDateList, parseYmd, publishLabel, saveSchedule, saveTemplate, scheduleRange, setScheduleHidden, shortDay, slashDay, thisMonday, toYmd, updateTeacher, weekDays,
 } from '@/lib/schedule';
 
 // 관리자: 스케쥴 올리기·고치기.
 // 스케줄 선택(이번 주 / 다음 주 / 공휴일) → (형식 불러오기) → 선생님별·날짜별 시간 넣기 → 올리기.
 // 이번 주·다음 주는 월~토이고 휴무일을 표시할 수 있다. 공휴일은 날짜를 직접 적는다("2026/10/9, 2026/12/25").
 // 지금 상태를 형식으로 저장할 수 있다(요일 기준). 고칠 땐 이미 신청된 시간은 잠겨서 뺄 수 없다(먼저 신청 취소).
+// 다음 주·공휴일은 예약 게시(기본 오후 3:30) — 게시 전엔 보호자에게 안 보이고 고칠 수 있다. 게시 5분 전 '게시 예정' 알림톡은 서버가 보낸다.
+// [게시 후 10분 취소 가능](기본 체크) — 게시 후 10분 동안 보호자가 승인 없이 바로 취소. 그 뒤로는 보호자 취소·취소 신청 없음.
 
-const DEFAULT_NOTICE = '원하시는 시간을 누르면 바로 신청돼요. 선착순이에요!\n취소가 필요하면 신청완료 버튼을 눌러 취소 신청해 주세요.';
+const DEFAULT_NOTICE = '원하시는 시간을 누르면 바로 신청돼요. 선착순이에요!\n신청한 뒤 취소나 변경은 센터로 연락해 주세요.';
+/** 예약 게시 기본 시각 */
+const DEFAULT_PUBLISH_TIME = '15:30';
 
 type Mode = 'this' | 'next' | 'holiday';
 
@@ -94,6 +98,20 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
   const [custom, setCustom] = useState<Record<string, string | undefined>>({});
   const [saving, setSaving] = useState(false);
   const [showTeachers, setShowTeachers] = useState(false);
+  // 예약 게시 — 아직 게시 전(새 글 포함)인 다음 주·공휴일만. 기본 날짜는 오늘(3:25가 지났으면 내일) 오후 3:30
+  const live = existing ? isPublished(existing) : false;
+  const [reserve, setReserve] = useState(existing ? !!existing.publishAt && !live : true);
+  const [pubDate, setPubDate] = useState(() => {
+    if (existing?.publishAt) return toYmd(new Date(existing.publishAt));
+    const n = new Date();
+    return n.getHours() * 60 + n.getMinutes() < 15 * 60 + 25 ? toYmd(n) : addDays(toYmd(n), 1);
+  });
+  const [pubTime, setPubTime] = useState(() => {
+    if (!existing?.publishAt) return DEFAULT_PUBLISH_TIME;
+    const d = new Date(existing.publishAt);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  });
+  const [freeCancel, setFreeCancel] = useState(existing ? !!existing.freeCancel : true);
 
   useEffect(() => { getTemplates().then(setTemplates).catch(() => {}); }, []);
 
@@ -361,6 +379,18 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
       }
     }
     if (!slots.length && !confirm('넣은 시간이 하나도 없어요. 그래도 올릴까요?')) return;
+    // 게시 시각 — 예약이면 고른 날짜·시간, 바로면 지금(예약해 둔 글을 바로 올릴 때) / 새 글은 비움. 이미 게시된 글은 그대로
+    const showReserve = !live && mode !== 'this';
+    const reserving = showReserve && reserve;
+    let publishAt: string | null | undefined;
+    if (reserving) {
+      const at = new Date(`${pubDate}T${pubTime}:00`);
+      if (Number.isNaN(at.getTime())) { alert('게시 날짜와 시간을 골라 주세요.'); return; }
+      if (at.getTime() <= Date.now() + 60000) { alert('게시 시간이 이미 지났거나 너무 가까워요.\n시간을 다시 고르거나 [바로 올리기]를 눌러 주세요.'); return; }
+      publishAt = at.toISOString();
+      if (!confirm(`${publishLabel(publishAt)}에 게시할까요?\n그 전에는 보호자에게 안 보이고, 게시 5분 전에 ${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자에게 '게시 예정' 알림톡이 가요.\n게시 전까지는 언제든 고칠 수 있어요.`)) return;
+    } else if (!live) publishAt = existing?.publishAt ? new Date().toISOString() : null;
+    const nowLive = !reserving;   // 저장하면 보호자에게 보이는지
     // 다시 올리기 — 알림이 간다고 먼저 알려 준다
     if (republish && !confirm(`다시 올리면 ${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자(번호 있는 분)에게 '스케줄 수정 알림'이 가요.\n다시 올릴까요?`)) return;
     // 취소 승인 · 신청 취소 — 그 보호자에게 '수업 취소' 알림톡이 간다고 먼저 알려 준다
@@ -424,21 +454,25 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
             .filter(h => days.includes(h.date) && active.some(t => t.id === h.teacherId)),
         ],
         slots,
+        publishAt,
+        freeCancel: live ? undefined : mode !== 'this' && freeCancel,
       }, existing);
       // 내린 글을 고쳐서 [다시 올리기] — 다시 보이게
       if (republish && existing?.hiddenAt) { await setScheduleHidden(id, false); logLines.unshift('내린 글 다시 올림'); }
       const logTitle = `수업스케쥴 ${republish ? '다시 올림' : existing?.hiddenAt ? '고침(내린 채로)' : existing ? '고침' : '올림'} — ${shownTitle.trim() || autoTitle} (${range})`;
       if (!existing) logLines.unshift(`시간 ${slots.length}개 올림`);
+      if (reserving && publishAt) logLines.unshift(`예약 게시: ${publishLabel(publishAt)}${freeCancel ? ` · 게시 후 ${FREE_CANCEL_MIN}분 취소 가능` : ''}`);
       if (failed) logLines.push(`※ 취소 승인·신청 취소 ${failed}건은 적용하지 못함`);
       await addAdminLog({ center, kind: existing ? 'schedule_edit' : 'schedule_new', title: logTitle, detail: logLines.join('\n') || '바꾼 내용 없음', refId: id });
       // 다시 올릴 때는 묻지 않고 업데이트 알림을 남긴다 / 내린 채로 저장하면 알림 없음
-      if (existing && (republish || !existing.hiddenAt)) await notifyUpdated(id, shownTitle.trim() || autoTitle, !republish);
-      // 새 글 — '스케줄 공지' 알림톡 (먼저 신청한 순서라 올리는 즉시 보낸다)
-      if (!existing) await notifyUpdated(id, shownTitle.trim() || autoTitle, true, 'schedule_notice');
+      if (existing && live && (republish || !existing.hiddenAt)) await notifyUpdated(id, shownTitle.trim() || autoTitle, !republish);
+      // 새 글(또는 예약해 둔 글을 바로 올림) — '스케줄 공지' 알림톡 (먼저 신청한 순서라 올리는 즉시 보낸다). 예약 게시는 5분 전에 서버가 '게시 예정' 알림
+      if ((!existing || !live) && nowLive && !existing?.hiddenAt) await notifyUpdated(id, shownTitle.trim() || autoTitle, true, 'schedule_notice');
+      if (reserving && publishAt) alert(`${publishLabel(publishAt)}에 게시돼요.\n게시 5분 전에 보호자에게 '게시 예정' 알림톡이 가요.`);
       if (cancelled.length) await notifyCancelled(cancelled);
       onClose(id);
-    } catch {
-      alert('저장하지 못했어요. 다시 시도해 주세요.');
+    } catch (e) {
+      alert(`저장하지 못했어요. 다시 시도해 주세요.${/publish_at|free_cancel|prealert_at/.test((e as Error).message ?? '') ? '\n(예약 게시는 SQL — supabase/schedule-reserve.sql 을 먼저 실행해 주세요)' : ''}`);
     } finally {
       setSaving(false);
     }
@@ -483,6 +517,36 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
           </div>
         )}
       </div>
+
+      {/* 게시 — 다음 주·공휴일은 예약 게시(기본 오후 3:30) + 게시 후 10분 취소 가능 */}
+      {!live && mode !== 'this' ? (
+        <div className="space-y-3">
+          <p className={label}>게시</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {([[true, '예약 게시'], [false, '바로 올리기']] as const).map(([v, name]) => (
+              <button key={name} type="button" onClick={() => setReserve(v)}
+                className={`text-[13px] px-4 py-2 border transition-colors ${reserve === v ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>
+                {name}
+              </button>
+            ))}
+          </div>
+          {reserve && (
+            <div className="flex flex-wrap items-center gap-2">
+              <input type="date" value={pubDate} min={toYmd(new Date())} onChange={e => setPubDate(e.target.value)} aria-label="게시 날짜"
+                className="border border-[#ddd] px-2.5 py-1.5 text-[14px] outline-none focus:border-[var(--brand)]" />
+              <input type="time" value={pubTime} step={300} onChange={e => setPubTime(e.target.value)} aria-label="게시 시간"
+                className="border border-[#ddd] px-2.5 py-1.5 text-[14px] outline-none focus:border-[var(--brand)]" />
+              <span className="text-[12px] text-[#888]">에 게시 · 그 전엔 보호자에게 안 보여요 · 5분 전에 '게시 예정' 알림톡</span>
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-[14px] cursor-pointer">
+            <input type="checkbox" checked={freeCancel} onChange={e => setFreeCancel(e.target.checked)} />
+            게시 후 {FREE_CANCEL_MIN}분 동안 보호자가 바로 취소할 수 있어요 <span className="text-[12px] text-[#999]">(승인 없이 · {FREE_CANCEL_MIN}분 뒤엔 취소 안 됨)</span>
+          </label>
+        </div>
+      ) : existing?.publishAt && (
+        <p className="text-[13px] text-[#888]">{publishLabel(existing.publishAt)} 게시됨{existing.freeCancel ? ` · 게시 후 ${FREE_CANCEL_MIN}분 취소 가능` : ''}</p>
+      )}
 
       {/* 공지 */}
       <div className="space-y-4">
@@ -732,7 +796,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
         )}
         <button onClick={() => handleSave(!!existing?.hiddenAt)} disabled={saving}
           className="flex-1 bg-[var(--brand)] text-white text-[14px] py-3 tracking-widest hover:opacity-90 disabled:opacity-50">
-          {saving ? '저장 중...' : existing?.hiddenAt ? '다시 올리기' : existing ? '저장' : '올리기'}
+          {saving ? '저장 중...' : existing?.hiddenAt ? '다시 올리기' : !live && mode !== 'this' && reserve ? '예약 게시' : existing && live ? '저장' : '올리기'}
         </button>
         <button onClick={() => onClose()} className="flex-1 border border-[#e5e5e5] text-[14px] py-3 tracking-widest hover:bg-[#f8f8f8]">취소</button>
       </div>

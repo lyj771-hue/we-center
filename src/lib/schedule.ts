@@ -61,6 +61,10 @@ export interface Schedule {
   center: 'eunpyeong' | 'uijeongbu';
   /** 숨긴 글 — 보호자에겐 안 보인다 */
   hiddenAt?: string;
+  /** 예약 게시 시각 — 그 전에는 보호자에게 안 보인다(supabase/schedule-reserve.sql). 없으면 만든 즉시 게시 */
+  publishAt?: string;
+  /** 게시 후 10분 동안 보호자가 바로 취소할 수 있는 글 */
+  freeCancel?: boolean;
   slots: Slot[];
   bookings: Booking[];
 }
@@ -215,6 +219,8 @@ export interface ScheduleSummary {
   center: 'eunpyeong' | 'uijeongbu';
   /** 숨긴 글 — 보호자 목록에 안 보인다(신청 수업은 그대로) */
   hiddenAt?: string;
+  /** 예약 게시 시각 */
+  publishAt?: string;
 }
 
 type ScheduleRow = {
@@ -235,6 +241,7 @@ export async function listSchedules(): Promise<ScheduleSummary[]> {
     createdAt: r.created_at,
     center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
     hiddenAt: r.hidden_at ?? undefined,
+    publishAt: r.publish_at ?? undefined,
   }));
 }
 
@@ -275,6 +282,8 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
     holidays: (row.holidays ?? []) as Holiday[],
     createdAt: row.created_at,
     hiddenAt: (r as { hidden_at?: string | null }).hidden_at ?? undefined,
+    publishAt: (r as { publish_at?: string | null }).publish_at ?? undefined,
+    freeCancel: !!(r as { free_cancel?: boolean }).free_cancel,
     center: row.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
     slots: (slotsRes.data ?? [])
       .map(s => ({
@@ -359,6 +368,33 @@ export const requestCancel = (slotId: string) => slotRpc('request_cancel', slotI
 export const withdrawCancel = (slotId: string) => slotRpc('withdraw_cancel', slotId);
 export const approveCancel = (slotId: string) => slotRpc('approve_cancel', slotId);
 
+/** 게시됐는지 — 예약 게시 시각이 지났거나 예약이 없으면 */
+export const isPublished = (s: Pick<Schedule, 'publishAt'>, now = Date.now()) => !s.publishAt || new Date(s.publishAt).getTime() <= now;
+/** 자유 취소가 끝나는 시각(ms) — 게시(없으면 만든) 시각 + 10분. 자유 취소 글이 아니면 null */
+export const FREE_CANCEL_MIN = 10;
+export const freeCancelUntil = (s: Pick<Schedule, 'publishAt' | 'createdAt' | 'freeCancel'>) =>
+  s.freeCancel ? new Date(s.publishAt ?? s.createdAt).getTime() + FREE_CANCEL_MIN * 60000 : null;
+/** "2026/10/30(금) 15:30" */
+export function publishLabel(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}(${DOW[d.getDay()]}) ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** 보호자: 게시 후 10분 안 — 내 신청을 바로 취소(시간이 다시 열린다). ok / too_late / not_allowed */
+export async function freeCancelSlot(slotId: string): Promise<string> {
+  const { data, error } = await supabase.rpc('free_cancel_slot', { p_slot: slotId });
+  if (error) throw error;
+  notifyScheduleChanged();
+  return data;
+}
+
+/** 보호자: 아직 게시 전인 글 — 제목·게시 시각만 (알림톡 버튼으로 미리 들어왔을 때). 없으면 null */
+export async function getSchedulePreview(id: string): Promise<{ title: string; center: string; publishAt: string } | null> {
+  const { data, error } = await supabase.rpc('schedule_preview', { p_id: id });
+  if (error || !data) return null;
+  return { title: data.title, center: data.center, publishAt: data.publish_at };
+}
+
 /** 관리자: 신청을 지우고 시간을 다시 연다 */
 export async function cancelSlot(slotId: string): Promise<void> {
   const { data, error } = await supabase.rpc('cancel_slot', { p_slot: slotId });
@@ -380,8 +416,13 @@ export interface ScheduleDraft {
   center?: 'eunpyeong' | 'uijeongbu';
   /** 올릴 칸들 (선생님·날짜·시간) */
   slots: { teacherId: string; day: string; time: string }[];
+  /** 예약 게시 시각(ISO) — null 이면 바로 게시, undefined 면 그대로 둔다 */
+  publishAt?: string | null;
+  /** 게시 후 10분 자유 취소 — undefined 면 그대로 둔다 */
+  freeCancel?: boolean;
 }
 
+const sameTime = (a?: string | null, b?: string | null) => (a ? new Date(a).getTime() : 0) === (b ? new Date(b).getTime() : 0);
 const slotKey = (s: { teacherId: string; day: string; time: string }) => `${s.teacherId}|${s.day}|${s.time}`;
 
 /** 새로 올리거나(id 없음) 고친다. 고칠 땐 신청된 칸은 그대로 두고, 빈 칸만 넣고 뺀다 */
@@ -392,6 +433,10 @@ export async function saveSchedule(draft: ScheduleDraft, existing?: Schedule): P
     title: draft.title.trim(),
     notice: draft.notice,
     holidays: draft.holidays,
+    // 예약 칸 — SQL(schedule-reserve.sql) 전에도 저장되게 바꿀 때만 넣는다. 게시 시각이 바뀌면 5분 전 알림을 다시
+    ...(draft.publishAt !== undefined && (draft.publishAt || existing?.publishAt)
+      ? { publish_at: draft.publishAt, ...(!sameTime(draft.publishAt, existing?.publishAt) ? { prealert_at: null } : {}) } : {}),
+    ...(draft.freeCancel !== undefined && (draft.freeCancel || existing?.freeCancel) ? { free_cancel: draft.freeCancel } : {}),
   };
   let id = existing?.id;
   if (id) {

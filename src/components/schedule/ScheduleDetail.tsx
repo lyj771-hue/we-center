@@ -13,7 +13,8 @@ import ScheduleGate from './ScheduleGate';
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import { onScheduleChanged } from '@/lib/sync';
 import {
-  bookSlot, notifyBooked, setScheduleHidden, getSchedule, scheduleDays, getScheduleTeachers, requestCancel, shortDay, withdrawCancel,
+  bookSlot, FREE_CANCEL_MIN, freeCancelSlot, freeCancelUntil, getSchedulePreview, notifyBooked, publishLabel, setScheduleHidden, getSchedule, scheduleDays,
+  getScheduleTeachers, shortDay, withdrawCancel,
 } from '@/lib/schedule';
 import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -23,6 +24,8 @@ import { rowsForDay } from '@/lib/timetable';
 // 수업스케쥴 하나 — 공지 + 선생님별 시간. 승인된 보호자는 시간을 눌러 선착순으로 신청한다.
 // 누를 때마다 DB가 다시 확인하고(동시에 눌러도 한 명만 성공), 끝나면 새로 불러온다.
 // 다른 분이 신청하면 실시간으로 화면이 바뀐다(Supabase Realtime). 관리자는 고치기·지우기·신청 취소.
+// 보호자 취소 — 기본은 없음(센터로 연락). 게시 후 10분 취소 가능 글만 그 10분 동안 신청완료를 눌러 바로 취소(supabase/schedule-reserve.sql).
+// 예약 게시 글 — 게시 전에 알림톡 버튼으로 들어온 보호자에겐 "몇 시에 게시돼요"를 보여 주다가 그 시각에 저절로 연다.
 // 선생님: 관리자처럼 칸마다 누가 신청했는지 보고, 내 시간은 여러 개 골라 [내리기], 그날 + 로 빈칸·x 시간을 골라 [저장](= 더하기). (supabase/teacher-schedule-post.sql)
 
 export default function ScheduleDetail({ id }: { id: string }) {
@@ -45,6 +48,10 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const [addFor, setAddFor] = useState<{ day: string; options: string[]; picked: Set<string> } | null>(null);
   const [tWorking, setTWorking] = useState(false);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 게시 전 글(보호자) — 제목·게시 시각
+  const [preview, setPreview] = useState<{ title: string; publishAt: string } | null>(null);
+  // 10분 자유 취소 — 끝나는 시각이 되면 화면을 다시 그린다
+  const [, setTick] = useState(0);
 
   // 보호자 화면엔 보호자가 정한 닉네임
   const myName = profile?.nickname;
@@ -61,6 +68,8 @@ export default function ScheduleDetail({ id }: { id: string }) {
         setRemoveSel(sel => new Set([...sel].filter(sid => s.slots.some(x => x.id === sid && !x.bookedBy))));
       }
       setSchedule(s);
+      if (!s && !isAdmin && !teacher) setPreview(await getSchedulePreview(id));
+      else setPreview(null);
       // 보호자: 이 스케쥴 기간의 우리 아이 수업 — 겹치는 시간은 미리 "수업 있음"으로
       if (s && !isAdmin && !teacher && userId) {
         const days = scheduleDays(s);
@@ -87,6 +96,22 @@ export default function ScheduleDetail({ id }: { id: string }) {
     return () => { off(); clearInterval(t); document.removeEventListener('visibilitychange', onShow); };
   }, [canView, load]);
 
+  // 게시 전 글 — 게시 시각에 다시 불러온다
+  useEffect(() => {
+    if (!preview) return;
+    const ms = new Date(preview.publishAt).getTime() - Date.now();
+    const t = setTimeout(load, Math.max(500, ms + 1000));
+    return () => clearTimeout(t);
+  }, [preview, load]);
+  const freeUntil = schedule ? freeCancelUntil(schedule) : null;
+  const canFreeCancel = freeUntil !== null && Date.now() < freeUntil;
+  useEffect(() => {
+    if (freeUntil === null || Date.now() >= freeUntil) return;
+    const t = setTimeout(() => setTick(n => n + 1), freeUntil - Date.now() + 200);
+    return () => clearTimeout(t);
+  }, [freeUntil]);
+  const hhmm = (ms: number) => { const d = new Date(ms); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+
   // 실시간: 이 스케쥴의 칸·신청 기록이 바뀌면 잠깐 모았다가 다시 불러온다
   useEffect(() => {
     if (!canView) return;
@@ -103,7 +128,10 @@ export default function ScheduleDetail({ id }: { id: string }) {
   }, [canView, id, load]);
 
   const handlePick = async (slot: Slot, teacher: Teacher) => {
-    if (!(await askConfirm(`${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}\n이 시간으로 신청할까요?\n(취소가 필요하면 신청완료 버튼을 눌러 취소 신청할 수 있어요)`))) return;
+    const after = canFreeCancel && freeUntil
+      ? `(${hhmm(freeUntil)}까지는 신청완료를 눌러 바로 취소할 수 있어요. 그 뒤로는 취소가 안 돼요)`
+      : '(신청한 뒤에는 화면에서 취소할 수 없어요. 취소·변경은 센터로 연락해 주세요)';
+    if (!(await askConfirm(`${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}\n이 시간으로 신청할까요?\n${after}`))) return;
     setBusySlot(slot.id);
     try {
       const r = await bookSlot(slot.id);
@@ -111,8 +139,8 @@ export default function ScheduleDetail({ id }: { id: string }) {
       if (r === 'taken') setPopup('방금 다른 분이 먼저 신청했어요.\n다른 시간을 골라 주세요.');
       if (r === 'not_approved') setPopup('센터 승인 후 신청할 수 있어요.');
       if (r === 'conflict') setPopup('그 시간에는 이미 우리 아이 수업이 있어요.\n다른 시간을 골라 주세요.');
-    } catch {
-      setPopup('신청하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } catch (e) {
+      setPopup(/not_published/.test((e as Error).message ?? '') ? '아직 게시 전이에요. 게시되면 신청할 수 있어요.' : '신청하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setBusySlot(null);
       load();
@@ -135,8 +163,20 @@ export default function ScheduleDetail({ id }: { id: string }) {
     }
   };
   const label = (slot: Slot, teacher: Teacher) => `${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}`;
-  const handleRequestCancel = (slot: Slot, teacher: Teacher) =>
-    runSlot(slot, `${label(slot, teacher)}\n취소를 신청할까요?\n(센터에서 승인하기 전까지는 다시 눌러 철회할 수 있어요)`, requestCancel, '취소 신청을 하지 못했어요.');
+  // 게시 후 10분 안 — 승인 없이 바로 취소(시간이 다시 열린다)
+  const handleFreeCancel = async (slot: Slot, teacher: Teacher) => {
+    if (!(await askConfirm(`${label(slot, teacher)}\n신청을 취소할까요?\n취소하면 다른 분이 신청할 수 있어요.`, '신청 취소'))) return;
+    setBusySlot(slot.id);
+    try {
+      const r = await freeCancelSlot(slot.id);
+      setPopup(r === 'ok' ? '신청을 취소했어요.' : r === 'too_late' ? `게시 후 ${FREE_CANCEL_MIN}분이 지나 취소할 수 없어요.\n취소·변경은 센터로 연락해 주세요.` : '취소할 수 없는 시간이에요. 화면을 새로 볼게요.');
+    } catch {
+      setPopup('취소하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setBusySlot(null);
+      load();
+    }
+  };
   const handleWithdrawCancel = (slot: Slot, teacher: Teacher) =>
     runSlot(slot, `${label(slot, teacher)}\n취소 신청을 철회할까요?`, withdrawCancel, '이미 센터에서 취소를 승인했어요.');
 
@@ -234,6 +274,13 @@ export default function ScheduleDetail({ id }: { id: string }) {
             onTeachersChanged={async () => setTeachers(await getScheduleTeachers())}
             onClose={() => { setEditing(false); load(); }}   // 수정 화면에서 취소 승인·신청 취소를 했을 수 있어 늘 새로
           />
+        ) : loaded && !schedule && preview ? (
+          <div className="bg-white rounded-[18px] shadow-[0_2px_6px_rgba(0,0,0,0.05),0_10px_24px_rgba(0,0,0,0.05)] px-6 py-10 text-center space-y-3">
+            <span className="inline-block bg-[#fef3c7] text-[#b45309] text-[12px] px-3 py-0.5 rounded-full">게시 예정</span>
+            <h2 className="text-[19px] md:text-[22px] leading-[1.4] text-[var(--brand)]">{preview.title}</h2>
+            <p className="text-[15px] text-[#27272a]">{publishLabel(preview.publishAt)}에 올라와요</p>
+            <p className="text-[12px] leading-[2] text-[#888]">이 화면을 열어 두면 게시 시각에 저절로 열려요.<br />먼저 신청한 순서로 정해져요.</p>
+          </div>
         ) : loaded && (!schedule || (schedule.hiddenAt && !isAdmin)) ? (
           <p className="text-center text-[14px] text-[#aaa] py-16">스케쥴을 찾을 수 없어요.</p>
         ) : schedule ? (
@@ -246,7 +293,8 @@ export default function ScheduleDetail({ id }: { id: string }) {
             busySlot={busySlot}
             conflicts={conflicts}
             onPick={handlePick}
-            onRequestCancel={handleRequestCancel}
+            freeCancelUntil={canFreeCancel ? freeUntil : null}
+            onFreeCancel={handleFreeCancel}
             onWithdrawCancel={handleWithdrawCancel}
             onEdit={() => { setEditing(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             onDelete={handleDelete}
