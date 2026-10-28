@@ -6,10 +6,10 @@ import { dowLabel, FREE_CANCEL_MIN, isPublished, publishLabel, scheduleDays, sch
 // 한 주 스케쥴 카드 — 공지(제목·기간·안내·휴무) + 선생님별 요일별 시간 버튼.
 // (신청·취소 기록은 DB bookings 표에 계속 남지만 화면에는 보이지 않는다)
 // 보호자: 빈 시간 = 누르면 신청, 내 신청 = "✓ 신청완료"(게시 후 10분 취소 가능 글은 그 10분 동안만 눌러서 바로 취소, 그 밖엔 못 누름),
-//         예전에 들어온 취소 신청 = "취소중"(누르면 철회) → 회색 "취소완료", 다른 분 신청 = 언제나 "마감".
+//         예전에 취소 승인된 신청 = 회색 "취소완료", 다른 분 신청 = 언제나 "마감".
 // 선생님: 관리자처럼 신청자를 보고, 내 줄에서 시간 내리기(골라서 [내리기])·더하기(+ → [저장]).
-// 관리자: 신청된 칸 = "시간 + 닉네임", 취소 신청된 칸 = "취소요청", 취소 승인된 칸 = 회색 "취소완료" — 보기만.
-//         취소 승인·신청 취소(시간 다시 열기)는 [수정](ScheduleEditor)에서 한다. 빈 칸은 그냥 보인다.
+// 관리자: 신청된 칸 = "시간 + 닉네임", 예전에 취소 승인된 칸 = 회색 "취소완료" — 보기만.
+//         신청 취소(시간 다시 열기)는 [수정](ScheduleEditor)에서 한다. 빈 칸은 그냥 보인다.
 
 interface Props {
   schedule: Schedule;
@@ -23,9 +23,8 @@ interface Props {
   onPick: (slot: Slot, teacher: Teacher) => void;
   /** 보호자: 게시 후 10분 자유 취소가 끝나는 시각(ms) — 지금 취소할 수 있을 때만, 아니면 null */
   freeCancelUntil?: number | null;
-  /** 보호자: 내 신청 바로 취소(10분 안) / 예전 취소 신청 철회 */
+  /** 보호자: 내 신청 바로 취소(10분 안) */
   onFreeCancel: (slot: Slot, teacher: Teacher) => void;
-  onWithdrawCancel: (slot: Slot, teacher: Teacher) => void;
   onEdit?: () => void;
   onDelete?: () => void;
   /** 관리자·선생님 — 칸마다 누가 신청했는지 보인다 */
@@ -53,7 +52,7 @@ const TINTS = ['#e8f1fd', '#fdf1e3', '#e8f5ee', '#f3ecfb', '#fdecef', '#eef3f5']
 const pill = 'inline-flex items-center gap-1.5 text-[11px] md:text-[12px] px-3 min-h-[32px] rounded-full border-[1.5px] transition-colors';
 
 export default function ScheduleBoard({
-  schedule, teachers, isAdmin, myId, nickname, busySlot, conflicts, onPick, freeCancelUntil, onFreeCancel, onWithdrawCancel, onEdit, onDelete,
+  schedule, teachers, isAdmin, myId, nickname, busySlot, conflicts, onPick, freeCancelUntil, onFreeCancel, onEdit, onDelete,
   staffView = isAdmin, teacherTools: tt,
 }: Props) {
   const days = scheduleDays(schedule);
@@ -172,16 +171,7 @@ export default function ScheduleBoard({
                       }
                       if (staffView) {
                         // 관리자 — 보기만. 취소 승인·신청 취소(시간 다시 열기)는 [수정]에서
-                        const hint = '취소 승인·신청 취소는 [수정]에서 해요';
-                        if (s.bookedBy && s.cancelState === 'requested') {
-                          return (
-                            <span key={s.id} title={hint} className={`${pill} pr-2.5 border-[#f59e0b] bg-[#fef3c7] text-[#b45309]`}>
-                              {s.time}
-                              <OwnerTag slot={s} className="bg-white/60" />
-                              취소요청
-                            </span>
-                          );
-                        }
+                        const hint = '신청 취소는 [수정]에서 해요';
                         if (s.bookedBy && s.cancelState === 'approved') {
                           return (
                             <span key={s.id} title={hint} className={`${pill} pr-2.5 border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa]`}>
@@ -206,15 +196,6 @@ export default function ScheduleBoard({
                             <span key={s.id} className={`${pill} border-[#e4e4e7] bg-[#f4f4f5] text-[#a1a1aa]`}>
                               <span className="line-through">{s.time}</span> 취소완료
                             </span>
-                          );
-                        }
-                        if (s.cancelState === 'requested') {
-                          return (
-                            <button key={s.id} type="button" disabled={busy} onClick={() => onWithdrawCancel(s, teacher)}
-                              title="누르면 취소 신청을 철회해요"
-                              className={`${pill} border-[#f59e0b] bg-[#fef3c7] text-[#b45309] hover:bg-[#fde68a]`}>
-                              {s.time} 취소중
-                            </button>
                           );
                         }
                         // 게시 후 10분 안 — 눌러서 바로 취소. 그 밖엔 누를 수 없다(취소는 센터로)

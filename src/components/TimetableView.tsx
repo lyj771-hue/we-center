@@ -14,7 +14,6 @@ import { addAndSendOutbox, getDayLeaves, type TeacherLeave } from '@/lib/leave';
 import { getMembers } from '@/lib/store';
 import { notifyFixedChanges, notifyLessonDay, notifyPrepaidUses, sendSummary } from '@/lib/alimtalkNotify';
 import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
-import { decideCancelWithDialogs, getCancelRequests, minutesLabel, type CancelRequest } from '@/lib/alerts';
 import {
   CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
@@ -95,11 +94,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const [holiday, setHoliday] = useState(false);
   const [picking, setPicking] = useState<Picking | null>(null);
   const [failed, setFailed] = useState('');
-  // 보호자가 마이페이지에서 한 수업 취소 신청(승인 기다리는 것) — 그날 · 이 센터. 칸에 "취소신청", 칸을 누르면 [승인]/[거절]
-  const [cancelReqs, setCancelReqs] = useState<CancelRequest[]>([]);
   // 그날 게시 중인 시간("선생님|시간") — 쉬는 시간을 연 칸은 쉬는 시간 글씨 대신 빈칸으로
   const [postedOpen, setPostedOpen] = useState<Map<string, string>>(new Map());
-  const reqOf = (side: Side, teacherId: string, time: string) => cancelReqs.find(r => r.side === side && r.teacherId === teacherId && r.time === time);
 
   const load = useCallback(async () => {
     try {
@@ -119,7 +115,6 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         setRoundPays(await getMonthRoundLessons(day, c).catch(() => []));
         setAssigns(await getDayAssigns(day, center).catch(() => ({ added: [], removed: [] })));
         setLeaves(await getDayLeaves(day, center).catch(() => []));
-        setCancelReqs((await getCancelRequests().catch(() => [] as CancelRequest[])).filter(r => r.day === day && r.center === center));
         setPostedOpen(await getPostedOpenSlots(day, center).catch(() => new Map<string, string>()));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
@@ -948,17 +943,17 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                         left={lockL ? lockedTd :
                           <td className={`${td} ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
                             {/* 빈타임에 아이가 채워지면 옆 고정 칸은 회색으로 흐리게 */}
-                            <CellText cell={left} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} requested={mode === 'day' && !!reqOf('fixed', t.id, time)} />
+                            <CellText cell={left} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} />
                           </td>
                         }
                         right={mode === 'day' ? (<>
                           {lockR ? lockedTd : <td className={`${td} ${pendR ? 'bg-[#fff6d5]' : 'bg-[#fcfcfd]'}`} onClick={e => {
                             // 보호자 신청 칸은 안내가 있는 창으로, 그 밖은 칸 아래로 아이 명단을 연다
-                            if (right.source === 'booking' || reqOf('open', t.id, time)) { setEditing({ teacher: t, time, side: 'open', cell: right }); return; }
+                            if (right.source === 'booking') { setEditing({ teacher: t, time, side: 'open', cell: right }); return; }
                             const b = e.currentTarget.getBoundingClientRect();
                             setPicking({ teacher: t, time, side: 'open', cell: right, rect: { left: b.left, top: b.top, bottom: b.bottom } });
                           }}>
-                            <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} nonMember={isNonMember(right)} requested={!!reqOf('open', t.id, time)} posted={mode === 'day' ? postedOpen.get(`${t.id}|${time}`) : undefined} />
+                            <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} nonMember={isNonMember(right)} posted={mode === 'day' ? postedOpen.get(`${t.id}|${time}`) : undefined} />
                           </td>}
                           {kindTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
@@ -1045,11 +1040,6 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           onSave={(input, weekly) => stage(editing, input, weekly)}
           onRestoreCancel={mode === 'day' ? () => restoreCancel(editing) : undefined}
           openBusy={mode === 'day' && editing.side === 'fixed' && !['empty', 'none'].includes(cellOf(view.open, editing.teacher.id, editing.time).status)}
-          cancelRequest={mode === 'day' ? reqOf(editing.side, editing.teacher.id, editing.time) : undefined}
-          onDecideCancel={async (r, approve) => {
-            // 승인·거절은 바로 저장된다(스케줄 변경 완료와 따로). 저장 안 한 다른 변경은 그대로 남는다
-            if (await decideCancelWithDialogs(r, approve, editing.teacher.name)) { setEditing(null); load(); }
-          }}
         /></Portal>
       )}
 
@@ -1074,7 +1064,7 @@ function FragmentPair({ left, right }: { left: React.ReactNode; right: React.Rea
 }
 
 /** 칸 글자 — 3김채현 처럼 (숫자 + 이름) */
-function CellText({ cell, label, muted, nonMember, requested, posted }: { cell: CellView; label?: string; muted?: boolean; nonMember?: boolean; requested?: boolean; posted?: string }) {
+function CellText({ cell, label, muted, nonMember, posted }: { cell: CellView; label?: string; muted?: boolean; nonMember?: boolean; posted?: string }) {
   // 수업스케쥴 게시글에 올라가 있고 아직 신청 없는 빈타임 — 선생님 시간표 보기와 똑같이 "게시 중"
   if (posted && (cell.status === 'empty' || cell.status === 'none' || cell.status === 'off'))
     return <span className={`text-[10px] px-1 rounded ${posted === '게시 중' ? 'bg-[#ecfdf5] text-[#047857]' : 'bg-[#fef3c7] text-[#b45309]'}`}>{posted}</span>;
@@ -1089,8 +1079,6 @@ function CellText({ cell, label, muted, nonMember, requested, posted }: { cell: 
       {cell.name}{cell.number ?? ''}
       {cell.absent && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">결석</span>}
       {cell.source === 'booking' && <span className="ml-0.5 text-[9px] text-[#a1a1aa]">신청</span>}
-      {/* 보호자가 마이페이지에서 취소 신청 — 승인 기다림 */}
-      {requested && <span className="ml-0.5 text-[9px] px-0.5 rounded bg-[#fef3c7] text-[#b45309] no-underline inline-block">취소신청</span>}
       {cell.subName && <span className="block text-[9px] leading-[1.2] text-[#a1a1aa]">{cell.subName}</span>}
       {/* 선생님 휴무로 취소된 수업 — 줄 + 휴무 */}
       {cell.moved && (cell.note?.startsWith('휴무') || cell.note?.startsWith('취소'))
@@ -1216,7 +1204,7 @@ function ChildPicker({ picking, kids, onPick, onSave, onMore, onClose }: {
   );
 }
 
-function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, onRestoreCancel, openBusy, cancelRequest, onDecideCancel }: {
+function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, onRestoreCancel, openBusy }: {
   editing: Editing;
   /** 이 센터에서 쓰는 결제 (수색 굳센 / 의정부 장맞춤) */
   methods: typeof PAY_METHODS;
@@ -1230,9 +1218,6 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
   onRestoreCancel?: () => void;
   /** 날짜별 고정 칸 — 같은 시간 빈타임에 이미 수업(아이·?·x)이 있으면 고정 아이를 다시 살릴 수 없다 */
   openBusy?: boolean;
-  /** 보호자가 마이페이지에서 이 수업 취소를 신청함 (승인 기다림) */
-  cancelRequest?: CancelRequest;
-  onDecideCancel?: (r: CancelRequest, approve: boolean) => Promise<void>;
 }) {
   // 빈타임에 수업이 있는데 고정 아이를 살리려 할 때
   const blockedByOpen = () => showAlert('같은 시간 빈타임에 다른 수업이 있어서 고정 아이 수업을 살릴 수 없어요.\n먼저 빈타임 칸을 비운 뒤 다시 해 주세요.');
@@ -1243,24 +1228,6 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
     <div className="rounded-lg bg-[#fef2f2] px-3 py-2.5 space-y-2">
       <p className="text-[12px] leading-[1.7] text-[#b91c1c]">{cell.note?.includes('보호자') ? '보호자가 마이페이지에서 취소한 수업이에요.' : '취소된 수업이에요(빈타임에 다른 수업을 넣어 취소됨).'} 되돌린 뒤 [스케줄 변경 완료]를 눌러야 반영돼요. (취소할 때 지워진 '선택' 결제방식은 다시 골라 주세요)</p>
       <button onClick={() => (openBusy ? blockedByOpen() : onRestoreCancel?.())} className="text-[13px] px-3 py-1.5 rounded-full border border-[#b91c1c] text-[#b91c1c] bg-white hover:bg-[#fff5f5]">취소 되돌리기 (취소 전으로)</button>
-    </div>
-  ) : null;
-  const [deciding, setDeciding] = useState(false);
-  const decide = async (approve: boolean) => {
-    if (!cancelRequest || !onDecideCancel) return;
-    setDeciding(true);
-    try { await onDecideCancel(cancelRequest, approve); } finally { setDeciding(false); }
-  };
-  const requestBox = cancelRequest && onDecideCancel ? (
-    <div className="rounded-lg bg-[#fffbeb] px-3 py-2.5 space-y-2">
-      <p className="text-[12px] leading-[1.7] text-[#92400e]">
-        보호자가 마이페이지에서 이 수업 취소를 신청했어요 (수업 {minutesLabel(cancelRequest.minutesBefore)} 전 신청{cancelRequest.late ? ' · 늦은 취소' : ''}).<br />
-        승인하면 바로 취소되고 관리자·보호자에게 알림톡이 가요. [스케줄 변경 완료]를 누르지 않아도 돼요.
-      </p>
-      <div className="flex gap-2">
-        <button onClick={() => decide(true)} disabled={deciding} className="text-[13px] px-3 py-1.5 rounded-full bg-[#e11d48] text-white disabled:opacity-40">{deciding ? '처리 중…' : '취소 승인'}</button>
-        <button onClick={() => decide(false)} disabled={deciding} className="text-[13px] px-3 py-1.5 rounded-full border border-[#ddd] bg-white text-[#555] disabled:opacity-40">거절</button>
-      </div>
     </div>
   ) : null;
   // 이름 칸은 "이름숫자"(동명이인 구분)로 보여 주고 고른다 — 저장할 땐 이름과 숫자를 나눠 둔 명단 아이로
@@ -1311,7 +1278,6 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
       <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
           <p className="text-[13px] text-[#888]">{dayLabel} · {time} · {teacher.name} 선생님 · 고정 자리</p>
-          {requestBox}
           {restoreBox}
           <label className="block">
             <span className="block text-[11px] text-[#999] mb-1">아이 (명단에서 검색)</span>
@@ -1363,7 +1329,6 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
         <p className="text-[13px] text-[#888]">
           {dayLabel} · {time} · {teacher.name} 선생님 · 빈타임 칸
         </p>
-        {requestBox}
         {restoreBox}
         {isBooking && (
           <p className="text-[12px] leading-[1.8] text-[#b45309] bg-[#fef3c7] rounded-lg px-3 py-2">

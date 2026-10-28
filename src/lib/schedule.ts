@@ -357,17 +357,6 @@ export function getHolidayNames(year: string): Promise<Record<string, string>> {
   return p;
 }
 
-/** 보호자: 내 신청 취소 신청 / 철회. 관리자: 취소 승인 */
-async function slotRpc(fn: 'request_cancel' | 'withdraw_cancel' | 'approve_cancel', slotId: string): Promise<string> {
-  const { data, error } = await supabase.rpc(fn, { p_slot: slotId });
-  if (error) throw error;
-  notifyScheduleChanged();
-  return data;
-}
-export const requestCancel = (slotId: string) => slotRpc('request_cancel', slotId);
-export const withdrawCancel = (slotId: string) => slotRpc('withdraw_cancel', slotId);
-export const approveCancel = (slotId: string) => slotRpc('approve_cancel', slotId);
-
 /** 게시됐는지 — 예약 게시 시각이 지났거나 예약이 없으면 */
 export const isPublished = (s: Pick<Schedule, 'publishAt'>, now = Date.now()) => !s.publishAt || new Date(s.publishAt).getTime() <= now;
 /** 자유 취소가 끝나는 시각(ms) — 게시(없으면 만든) 시각 + 10분. 자유 취소 글이 아니면 null */

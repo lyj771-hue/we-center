@@ -14,7 +14,7 @@ import type { Schedule, Slot, Teacher } from '@/lib/schedule';
 import { onScheduleChanged } from '@/lib/sync';
 import {
   bookSlot, FREE_CANCEL_MIN, freeCancelSlot, freeCancelUntil, getSchedulePreview, notifyBooked, publishLabel, setScheduleHidden, getSchedule, scheduleDays,
-  getScheduleTeachers, shortDay, withdrawCancel,
+  getScheduleTeachers, shortDay,
 } from '@/lib/schedule';
 import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -148,20 +148,6 @@ export default function ScheduleDetail({ id }: { id: string }) {
   };
 
 
-  // 보호자 취소 신청 · 철회 — 끝나면 새로 불러온다 (관리자 승인·신청 취소는 수정 화면에서)
-  const runSlot = async (slot: Slot, ask: string, fn: (id: string) => Promise<string>, fail: string) => {
-    if (!(await askConfirm(ask))) return;
-    setBusySlot(slot.id);
-    try {
-      const r = await fn(slot.id);
-      if (r !== 'ok') setPopup(fail);
-    } catch {
-      setPopup('처리하지 못했어요. 잠시 후 다시 시도해 주세요.');
-    } finally {
-      setBusySlot(null);
-      load();
-    }
-  };
   const label = (slot: Slot, teacher: Teacher) => `${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}`;
   // 게시 후 10분 안 — 승인 없이 바로 취소(시간이 다시 열린다)
   const handleFreeCancel = async (slot: Slot, teacher: Teacher) => {
@@ -177,8 +163,6 @@ export default function ScheduleDetail({ id }: { id: string }) {
       load();
     }
   };
-  const handleWithdrawCancel = (slot: Slot, teacher: Teacher) =>
-    runSlot(slot, `${label(slot, teacher)}\n취소 신청을 철회할까요?`, withdrawCancel, '이미 센터에서 취소를 승인했어요.');
 
 
   // ── 선생님 — 내 시간 내리기 · 더하기 ─────────────────────────────
@@ -295,7 +279,6 @@ export default function ScheduleDetail({ id }: { id: string }) {
             onPick={handlePick}
             freeCancelUntil={canFreeCancel ? freeUntil : null}
             onFreeCancel={handleFreeCancel}
-            onWithdrawCancel={handleWithdrawCancel}
             onEdit={() => { setEditing(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
             onDelete={handleDelete}
             staffView={isAdmin || !!teacher}

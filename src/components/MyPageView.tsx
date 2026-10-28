@@ -1,7 +1,7 @@
 'use client';
 
 import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
-import { cancelKey, getMyCancelRequests, getMyLessons, isRealLesson } from '@/lib/mypage';
+import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import UsageCard from '@/components/UsageCard';
 import type { LedgerRow } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
@@ -119,9 +119,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
     return !t || worksAt(t, l.center, weekday);
   };
 
-  // 수업 취소는 센터로 연락 — 보호자 화면엔 [취소] 버튼이 없다. 센터에 들어온 취소 신청은 "취소 신청 중"으로 보인다
-  const [requested, setRequested] = useState<Set<string>>(new Set());
-  useEffect(() => { if (approved) getMyCancelRequests().then(setRequested).catch(() => {}); }, [approved, weekLessons]);
+  // 수업 취소는 센터로 연락 — 보호자 화면엔 [취소] 버튼이 없다
 
   // 이 지점 승인 전 — 칸마다 내용 대신 "승인 대기 중"
   if (!approved) return (
@@ -187,11 +185,9 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                       <span>{l.teacher} 선생님</span>
                       {l.oral && <span className="text-[11px] text-[#8b5cf6]">구강</span>}
                       {l.payment.replace(/[x~]/gi, '') && <span className="text-[11px] text-[#999]">{payName(payKind(l.payment))}</span>}
-                      {l.status === 'cancel_requested' && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded">취소 신청 중</span>}
                       {l.status === 'cancelled' && <span className="text-[11px] no-underline">취소</span>}
                       {((l.moved && l.note?.startsWith('취소')) || l.absent) && <span className="text-[11px] text-[#e11d48]">취소</span>}
                       {l.moved && l.note?.startsWith('휴무') && <span className="text-[11px] text-[#e11d48]">휴무</span>}
-                      {requested.has(cancelKey(l)) && l.status !== 'cancel_requested' && !l.moved && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded">취소 신청 중</span>}
                     </div>
                     );
                   })}

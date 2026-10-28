@@ -68,33 +68,6 @@ export async function getMyLessons(from: string, to: string): Promise<MyLesson[]
   }));
 }
 
-/** 보호자 수업 취소 신청 — 관리자가 승인해야 취소된다 (supabase/lesson-cancel-approval.sql). ok / ok_late(2시간 안 남음) / already / not_found / too_late / no_login */
-export async function cancelMyLesson(l: MyLesson): Promise<string> {
-  const { data, error } = await supabase.rpc('cancel_my_lesson', { p_day: l.day, p_time: l.time, p_teacher: l.teacherId, p_side: l.side });
-  if (error) throw error;
-  return data as string;
-}
-
-/** 내 취소 신청(승인 기다리는 것) — 'day|time|teacherId|side' 모음 */
-export const cancelKey = (l: { day: string; time: string; teacherId: string; side: string }) => `${l.day}|${l.time}|${l.teacherId}|${l.side}`;
-export async function getMyCancelRequests(): Promise<Set<string>> {
-  const { data, error } = await supabase.rpc('my_cancel_requests');
-  if (error) return new Set();
-  return new Set((data ?? []).map((r: Record<string, string>) => cancelKey({ day: r.day, time: r.lesson_time, teacherId: r.teacher_id, side: r.side })));
-}
-
-/** 취소 신청 철회 */
-export async function withdrawMyLessonCancel(l: MyLesson): Promise<string> {
-  const { data, error } = await supabase.rpc('withdraw_my_lesson_cancel', { p_day: l.day, p_time: l.time, p_teacher: l.teacherId, p_side: l.side });
-  if (error) throw error;
-  return data as string;
-}
-
-/** 마이페이지에서 취소할 수 있는 수업 — 진행할 수업이고 아직 시작 전 */
-export const canCancel = (l: MyLesson, now = new Date()) =>
-  (l.status === 'child' || l.status === 'cancel_requested') && !l.moved && !l.absent
-  && new Date(`${l.day}T${l.time.length === 4 ? `0${l.time}` : l.time}:00`) > now;
-
 /** 실제로 하는 수업인지 — 비움·미정·안 함·옮김·취소 승인은 뺀다 */
 export const isRealLesson = (l: MyLesson) => (l.status === 'child' || l.status === 'cancel_requested') && !l.moved;
 

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAdmin } from '@/components/AdminContext';
 import KakaoPreview from '@/components/KakaoPreview';
-import type { AdminAlert, AlertKind, CancelRequest } from '@/lib/alerts';
-import { ALERTS_CHANGED, ALERT_KINDS, alertLink, cancelRequestLabel, decideCancelWithDialogs, getAdminAlerts, getCancelRequests, markAlertsRead, minutesLabel } from '@/lib/alerts';
+import type { AdminAlert, AlertKind } from '@/lib/alerts';
+import { ALERTS_CHANGED, ALERT_KINDS, alertLink, getAdminAlerts, markAlertsRead } from '@/lib/alerts';
 import type { OutboxMessage, OutboxStatus } from '@/lib/leave';
 import { deleteOutbox, getOutbox } from '@/lib/leave';
 import { getTeachers } from '@/lib/schedule';
@@ -54,45 +54,8 @@ export default function AlertsPage() {
         {tabBtn('sent', '보호자 알림 내역')}
         {tabBtn('log', '관리 내역')}
       </div>
-      {tab === 'admin' && <CancelRequests />}
       {tab === 'admin' ? <AdminAlerts /> : tab === 'sent' ? <SentLog /> : <AdminLogs />}
     </div>
-  );
-}
-
-/** 승인 기다리는 수업 취소 — 보호자가 마이페이지에서 신청. 승인하면 시간표에서 취소 + 관리자·보호자에게 알림톡 */
-function CancelRequests() {
-  const [list, setList] = useState<CancelRequest[]>([]);
-  const [teachers, setTeachers] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-  const load = useCallback(() => { getCancelRequests().then(setList).catch(() => setList([])); }, []);
-  useEffect(() => { load(); getTeachers().then(t => setTeachers(Object.fromEntries(t.map(x => [x.id, x.name])))).catch(() => {}); }, [load]);
-  if (!list.length) return null;
-
-  const decide = async (r: CancelRequest, approve: boolean) => {
-    setBusy(r.id);
-    try { if (await decideCancelWithDialogs(r, approve, teachers[r.teacherId] ?? '')) load(); }
-    finally { setBusy(null); }
-  };
-  return (
-    <section className="mb-6 rounded-xl border border-[#fde68a] bg-[#fffbeb] p-4">
-      <h2 className="text-[14px] text-[#92400e] mb-2">승인 기다리는 수업 취소 {list.length}건</h2>
-      <ul className="divide-y divide-[#fde68a]">
-        {list.map(r => (
-          <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[13px]">
-            <span className="text-[11px] px-1.5 rounded border border-[#e5e5e5] bg-white text-[#666]">{CENTER_LABEL[r.center]}</span>
-            <span className="font-medium text-[#27272a]">{r.childName}</span>
-            <span className="text-[#555]">{cancelRequestLabel(r, teachers[r.teacherId] ?? '')}</span>
-            <span className="text-[12px] text-[#888]">수업 {minutesLabel(r.minutesBefore)} 전 신청</span>
-            {r.late && <span className="text-[11px] px-1.5 rounded bg-[#fee2e2] text-[#b91c1c]">늦은 취소</span>}
-            <span className="ml-auto flex gap-1.5">
-              <button onClick={() => decide(r, false)} disabled={busy === r.id} className="text-[12px] px-3 h-7 rounded-full border border-[#ddd] bg-white text-[#555] disabled:opacity-40">거절</button>
-              <button onClick={() => decide(r, true)} disabled={busy === r.id} className="text-[12px] px-3 h-7 rounded-full bg-[#e11d48] text-white disabled:opacity-40">{busy === r.id ? '처리 중…' : '승인'}</button>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
 
