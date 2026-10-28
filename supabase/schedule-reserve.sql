@@ -143,6 +143,7 @@ begin
     insert into outbox_messages (template_id, ref_id, child_id, user_id, child_name, phone, vars, batch_id)
     select 'schedule_reserved', sc.id, ch.id, p.user_id, coalesce(ch.name, p.nickname), p.phone,
            jsonb_build_object('이름', coalesce(ch.name, p.nickname), '센터', case sc.center when 'uijeongbu' then '의정부점' else '수색점' end,
+                              '스케줄', case when sc.days is null then '다음주' else '공휴일' end,
                               '제목', sc.title, '게시시간', v_when, '글번호', sc.id),
            v_batch
     from profiles p
