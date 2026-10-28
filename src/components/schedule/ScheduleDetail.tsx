@@ -110,7 +110,6 @@ export default function ScheduleDetail({ id }: { id: string }) {
     const t = setTimeout(() => setTick(n => n + 1), freeUntil - Date.now() + 200);
     return () => clearTimeout(t);
   }, [freeUntil]);
-  const hhmm = (ms: number) => { const d = new Date(ms); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
   // 실시간: 이 스케쥴의 칸·신청 기록이 바뀌면 잠깐 모았다가 다시 불러온다
   useEffect(() => {
@@ -127,11 +126,8 @@ export default function ScheduleDetail({ id }: { id: string }) {
     return () => { supabase.removeChannel(ch); };
   }, [canView, id, load]);
 
-  const handlePick = async (slot: Slot, teacher: Teacher) => {
-    const after = canFreeCancel && freeUntil
-      ? `(${hhmm(freeUntil)}까지는 신청완료를 눌러 바로 취소할 수 있어요. 그 뒤로는 취소가 안 돼요)`
-      : '(신청한 뒤에는 화면에서 취소할 수 없어요. 취소·변경은 센터로 연락해 주세요)';
-    if (!(await askConfirm(`${teacher.name} 선생님 ${shortDay(slot.day)} ${slot.time}\n이 시간으로 신청할까요?\n${after}`))) return;
+  // 누르면 묻지 않고 바로 신청 (선착순이라 한 번에). 안 되면 그 까닭만 팝업
+  const handlePick = async (slot: Slot) => {
     setBusySlot(slot.id);
     try {
       const r = await bookSlot(slot.id);
