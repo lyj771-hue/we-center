@@ -8,9 +8,8 @@ import { useMember } from './MemberContext';
 import type { Profile } from '@/lib/types';
 import { askConfirm } from '@/lib/dialog';
 import { ALERTS_CHANGED, getUnreadAlertCount } from '@/lib/alerts';
+import ContactButton from './ContactButton';
 
-// 카카오톡 채널 주소 (채널 홈 → 공유 → 링크 복사). 비어 있으면 아이콘만 보이고 눌러도 아무 일 없다
-const KAKAO_CHANNEL_URL = '';
 
 const NAV = [
   { href: '/',               label: '에이치오엠이' },
@@ -157,8 +156,8 @@ export default function Header() {
             <img src="/logo-we-heart.png" alt="We 소아재활센터" className="w-full h-full object-contain" />
           </Link>
 
-          {/* 보호자 로그인 + 카카오톡 채널 — PC는 둘 다 오른쪽.
-              휴대폰은 로그인 버튼을 왼쪽, 채널 아이콘은 펼친 메뉴 맨 아래에 두고, 로그인 뒤 인사는 로고 아래 한 줄로(로고와 겹치지 않게) */}
+          {/* 보호자 로그인 + 문의하기 — PC는 둘 다 오른쪽.
+              휴대폰은 로그인 버튼을 왼쪽, 문의하기는 펼친 메뉴 맨 아래에 두고, 로그인 뒤 인사는 로고 아래 한 줄로(로고와 겹치지 않게) */}
           <div className="absolute left-4 md:left-auto md:right-14 top-1/2 -translate-y-1/2 flex items-center gap-2">
             {!isAdmin && (userId ? (
               <span className="hidden md:flex"><Greeting profile={profile} teacherName={teacher?.name} onLogout={memberLogout} /></span>
@@ -168,7 +167,7 @@ export default function Header() {
                 로그인
               </button>
             ))}
-            <span className="hidden md:flex"><KakaoChannelIcon /></span>
+            <ContactButton className="hidden md:inline-flex rounded-full border border-[var(--brand)] px-3 py-1.5 text-[12px] tracking-[0.1em] text-[var(--brand)] transition hover:bg-[#eef5fe]" />
           </div>
 
           {/* Hamburger — mobile only */}
@@ -273,12 +272,10 @@ export default function Header() {
               ))}
             </ul>
           </nav>
-          {/* 카카오톡 채널 — 휴대폰은 메뉴 맨 아래에 */}
+          {/* 문의하기 — 휴대폰은 메뉴 맨 아래에 */}
           <div className="mt-auto pt-6 border-t border-[#f0f0f0] space-y-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--brand)]">
-              <KakaoChannelIcon />
-              카카오톡 채널
-            </div>
+            <ContactButton onOpen={() => setMobileOpen(false)}
+              className="inline-flex rounded-full border border-[var(--brand)] px-4 py-1.5 text-[13px] text-[var(--brand)]" />
             {!isAdmin && userId && (
               <button onClick={async () => { if (await askConfirm('로그아웃할까요?')) { setMobileOpen(false); memberLogout(); } }}
                 className="text-[13px] text-[#888] underline underline-offset-2 hover:text-[#0a0a0a]">로그아웃</button>
@@ -287,22 +284,6 @@ export default function Header() {
         </div>
       </div>
     </>
-  );
-}
-
-/** 카카오톡 채널 아이콘 — 파란 말풍선에 흰 Ch. 채널 주소가 없으면 눌러도 반응 없음 */
-function KakaoChannelIcon() {
-  const icon = (
-    <svg width="40" height="40" viewBox="0 0 24 24" aria-hidden="true">
-      <path fill="#087BEA" d="M12 3.5c-5.25 0-9.5 3.3-9.5 7.38 0 2.62 1.75 4.92 4.38 6.22l-.9 3.3c-.08.3.26.54.52.37l3.92-2.6c.52.07 1.05.1 1.58.1 5.25 0 9.5-3.3 9.5-7.39S17.25 3.5 12 3.5z"/>
-      <text x="12" y="13.6" textAnchor="middle" fill="#ffffff" fontSize="7.5" fontWeight="700" fontFamily="Arial, Helvetica, sans-serif" style={{ WebkitTextStroke: 0 }}>Ch</text>
-    </svg>
-  );
-  const cls = 'w-10 h-10 flex items-center justify-center';
-  return KAKAO_CHANNEL_URL ? (
-    <a href={KAKAO_CHANNEL_URL} target="_blank" rel="noopener noreferrer" aria-label="카카오톡 채널" className={`${cls} transition hover:opacity-80`}>{icon}</a>
-  ) : (
-    <span role="img" aria-label="카카오톡 채널 (준비 중)" className={cls}>{icon}</span>
   );
 }
 

@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { useState } from 'react';
 import type { Post } from '@/lib/types';
 import { excerpt, extractImages, toText } from '@/lib/postText';
-import { showAlert } from '@/lib/dialog';
+import { ContactDialog } from './ContactButton';
 
 // We당근당근 — 당근마켓 목록 모양. 왼쪽 네모 사진(본문 첫 사진) · 오른쪽 제목(두 줄) · 회색 한 줄(센터 · 언제) · 본문 앞부분.
 // 거래완료 — 관리자 ⋮ → [거래완료로 표시]. 목록에선 사진 위 "거래완료"·제목 앞 회색 표시, 글에서도 제목 앞에.
-// 주황 [+ 센터에게] — 누구나 보인다(휴대폰에선 오른쪽 아래에 떠 있다). 관리자는 새 글, 그 밖엔 "올리는건 저희가 해요^^" 팝업. 관리자: 오른쪽 위 ⋮ → 삭제
+// 주황 [+ 센터에게] — 누구나 보인다(휴대폰에선 오른쪽 아래에 떠 있다). 관리자는 새 글, 그 밖엔 센터폰 번호 창("올리실 제품 정보와 사진을 센터폰으로 보내 주세요"). 관리자: 오른쪽 위 ⋮ → 삭제
 
 const CARROT = '#ff6f0f';
 /** 한 쪽에 보이는 글 수 */
@@ -35,12 +35,13 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
 }) {
   const [menu, setMenu] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [contact, setContact] = useState(false);
   const pages = Math.max(1, Math.ceil(posts.length / PER_PAGE));
   const cur = Math.min(page, pages - 1);
   const shown = posts.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
   const go = (p: number) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const writeBtn = (cls: string) => (
-    <button type="button" onClick={() => (isAdmin ? onWrite() : showAlert('올리는건 저희가 해요^^'))} style={{ background: CARROT }}
+    <button type="button" onClick={() => (isAdmin ? onWrite() : setContact(true))} style={{ background: CARROT }}
       className={`inline-flex items-center gap-1 rounded-full text-white font-semibold shadow-[0_3px_8px_rgba(255,111,15,0.35)] hover:brightness-95 transition ${cls}`}>
       <span aria-hidden="true" className="text-[1.2em] leading-none">+</span>센터에게
     </button>
@@ -48,6 +49,7 @@ export default function CarrotBoard({ posts, basePath, isAdmin, onDelete, onWrit
 
   return (
     <div>
+      {contact && <ContactDialog title="센터에게" note="올리실 제품 정보와 사진을 센터폰으로 보내 주세요" onClose={() => setContact(false)} />}
       {posts.length === 0 ? (
         <div className="py-24 text-center text-sm text-[#ccc] tracking-widest">등록된 게시물이 없습니다</div>
       ) : (
