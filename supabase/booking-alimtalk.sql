@@ -22,14 +22,15 @@ declare
   v_id uuid;
   v_dow text[] := array['일', '월', '화', '수', '목', '금', '토'];
 begin
-  select s.id, s.day, s.time, t.name as teacher, coalesce(sc.center, 'eunpyeong') as center into v
+  select s.id, s.day, s.time, s.booked_at, t.name as teacher, coalesce(sc.center, 'eunpyeong') as center into v
   from slots s join teachers t on t.id = s.teacher_id left join schedules sc on sc.id = s.schedule_id
   where s.id = p_slot and s.booked_by = auth.uid() and s.cancel_state is null;
   if not found then
     return null;
   end if;
-  -- 같은 신청에 두 번 만들지 않는다
-  if exists (select 1 from outbox_messages where ref_id = p_slot and template_id = 'booking_result' and user_id = auth.uid() and vars->>'신청결과' = '확정') then
+  -- 같은 신청에 두 번 만들지 않는다 — 이번에 잡은 뒤(booked_at 이후)에 만든 것만 본다. 취소했다가 다시 잡으면 다시 보낸다
+  if exists (select 1 from outbox_messages where ref_id::text = p_slot::text and template_id = 'booking_result' and user_id = auth.uid()
+             and vars->>'신청결과' = '확정' and created_at >= coalesce(v.booked_at, now())) then
     return null;
   end if;
   select template_id into v_tid from alimtalk_templates where id = 'booking_result';
