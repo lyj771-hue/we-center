@@ -1,8 +1,7 @@
 'use client';
 
 import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
-import { canCancel, cancelKey, cancelMyLesson, getMyCancelRequests, getMyLessons, isRealLesson, withdrawMyLessonCancel } from '@/lib/mypage';
-import { askConfirm, showAlert } from '@/lib/dialog';
+import { cancelKey, getMyCancelRequests, getMyLessons, isRealLesson } from '@/lib/mypage';
 import UsageCard from '@/components/UsageCard';
 import type { LedgerRow } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
@@ -56,7 +55,7 @@ const inBranch = (method: string, center?: string) => methodInCenter(method, cen
 // 년/월/일 (주별 시간표 날짜 넘기기)
 const ymd = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, center, failed, top, bottom, onChanged }: MyPageViewProps) {
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, center, failed, top, bottom }: MyPageViewProps) {
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
   const payRows = payments.filter(p => inBranch(p.method, center)).sort((a, b) => (a.method === 'prepaid' ? -1 : b.method === 'prepaid' ? 1 : 0));   // 선결제를 맨 위로
 
@@ -120,41 +119,9 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
     return !t || worksAt(t, l.center, weekday);
   };
 
-  // 수업 취소 신청 — 센터(관리자)가 승인해야 취소된다(supabase/lesson-cancel-approval.sql). 승인 전에는 [철회]할 수 있다
-  const [cancelling, setCancelling] = useState<string | null>(null);
+  // 수업 취소는 센터로 연락 — 보호자 화면엔 [취소] 버튼이 없다. 센터에 들어온 취소 신청은 "취소 신청 중"으로 보인다
   const [requested, setRequested] = useState<Set<string>>(new Set());
-  const loadRequested = () => { getMyCancelRequests().then(setRequested).catch(() => {}); };
-  useEffect(() => { if (approved) loadRequested(); }, [approved, weekLessons]);
-  const label = (l: MyLesson) => { const dd = parseYmd(l.day); return `${dd.getMonth() + 1}/${dd.getDate()}(${DOW[dd.getDay()]}) ${l.time.replace(/^0/, '')} ${l.teacher} 선생님 수업`; };
-  const cancel = async (l: MyLesson) => {
-    if (!(await askConfirm(`${label(l)} 취소를 신청할까요?\n센터에서 승인하면 취소돼요.`, '취소 신청'))) return;
-    setCancelling(cancelKey(l));
-    try {
-      const r = await cancelMyLesson(l);
-      if (r === 'ok') await showAlert('취소를 신청했어요.\n센터에서 승인하면 알림톡으로 알려 드려요.');
-      else if (r === 'ok_late') await showAlert('취소를 신청했어요.\n\n수업 시작까지 2시간이 남지 않아 늦은 취소로 접수돼요.\n다음부터는 수업 시작 최소 2시간 전에 취소해 주세요.');
-      else if (r === 'already') await showAlert('이미 취소를 신청한 수업이에요.');
-      else await showAlert(r === 'too_late' ? '이미 시작한 수업이라 취소할 수 없어요. 센터로 연락해 주세요.' : '취소할 수 없는 수업이에요. 화면을 새로고침해 주세요.');
-      loadRequested();
-    } catch (e) {
-      showAlert(`신청하지 못했어요. 잠시 후 다시 시도해 주세요.\n${(e as Error).message}`);
-    } finally {
-      setCancelling(null);
-    }
-  };
-  const withdraw = async (l: MyLesson) => {
-    if (!(await askConfirm(`${label(l)} 취소 신청을 철회할까요?\n수업은 그대로 진행돼요.`, '신청 철회'))) return;
-    setCancelling(cancelKey(l));
-    try {
-      const r = await withdrawMyLessonCancel(l);
-      await showAlert(r === 'ok' ? '취소 신청을 철회했어요.' : '이미 처리된 신청이에요. 화면을 새로고침해 주세요.');
-      loadRequested(); onChanged?.();
-    } catch (e) {
-      showAlert(`철회하지 못했어요.\n${(e as Error).message}`);
-    } finally {
-      setCancelling(null);
-    }
-  };
+  useEffect(() => { if (approved) getMyCancelRequests().then(setRequested).catch(() => {}); }, [approved, weekLessons]);
 
   // 이 지점 승인 전 — 칸마다 내용 대신 "승인 대기 중"
   if (!approved) return (
@@ -225,17 +192,6 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                       {((l.moved && l.note?.startsWith('취소')) || l.absent) && <span className="text-[11px] text-[#e11d48]">취소</span>}
                       {l.moved && l.note?.startsWith('휴무') && <span className="text-[11px] text-[#e11d48]">휴무</span>}
                       {requested.has(cancelKey(l)) && l.status !== 'cancel_requested' && !l.moved && <span className="text-[11px] text-[#b45309] bg-[#fef3c7] px-1.5 rounded">취소 신청 중</span>}
-                      {canCancel(l) && (requested.has(cancelKey(l)) ? (
-                        <button type="button" onClick={() => withdraw(l)} disabled={cancelling === cancelKey(l)}
-                          className="ml-auto text-[11px] px-2 py-0.5 rounded-full border border-[#e5e5e5] text-[#888] hover:border-[#2563eb] hover:text-[#2563eb] disabled:opacity-40">
-                          {cancelling === cancelKey(l) ? '철회 중…' : '신청 철회'}
-                        </button>
-                      ) : (
-                        <button type="button" onClick={() => cancel(l)} disabled={cancelling === cancelKey(l)}
-                          className="ml-auto text-[11px] px-2 py-0.5 rounded-full border border-[#e5e5e5] text-[#888] hover:border-[#e11d48] hover:text-[#e11d48] disabled:opacity-40">
-                          {cancelling === cancelKey(l) ? '신청 중…' : '취소'}
-                        </button>
-                      ))}
                     </div>
                     );
                   })}
