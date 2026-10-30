@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import type { PrepaidKey } from './timetable';
+import { countExcluder } from './timetable';
 
 // 선결제 카드 — 충전(prepaid_charges)과 [결제 완료]로 확정된 선결제 사용(lesson_payments)을 날짜 순으로 늘어놓고 남은 횟수를 붙인다.
 // 카드는 선결제A·B·C(method)마다 따로다. 표 구조는 supabase/prepaid-charges.sql, prepaid-abc.sql 참고.
@@ -32,15 +33,17 @@ export function buildLedger(rows: Raw[]): LedgerRow[] {
 
 /** 관리자: 아이 한 명의 그 종류 카드 내역 */
 export async function getChildLedger(childId: string, method: PrepaidKey = 'prepaid'): Promise<LedgerRow[]> {
-  const [charges, uses] = await Promise.all([
+  const [charges, uses, skip] = await Promise.all([
     supabase.from('prepaid_charges').select('*').eq('child_id', childId),
-    supabase.from('lesson_payments').select('day, created_at').eq('child_id', childId).eq('method', method).eq('confirmed', true),
+    supabase.from('lesson_payments').select('day, created_at, teacher_id').eq('child_id', childId).eq('method', method).eq('confirmed', true),
+    countExcluder(),
   ]);
   if (charges.error) throw charges.error;
   if (uses.error) throw uses.error;
   // 사용은 날짜마다 한 줄 — 시각은 그날 마지막 확정 시각
   const perDay = new Map<string, { count: number; at: string }>();
   for (const u of uses.data ?? []) {
+    if (skip(u.teacher_id as string | null, u.day as string)) continue;   // 휴직 중인 이원재 선생님 수업은 세지 않는다
     const p = perDay.get(u.day as string) ?? { count: 0, at: '' };
     perDay.set(u.day as string, { count: p.count + 1, at: (u.created_at as string) > p.at ? (u.created_at as string) : p.at });
   }

@@ -480,8 +480,10 @@ async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ dat
 
 /** 횟수에서 빼는 선생님 수업 — 이원재 선생님은 휴직 중이라 날짜 상관없이 수업을 하나도 세지 않는다(시간표에는 그대로 보임). 복직하면 to 를 복직 전날로 */
 const COUNT_EXCLUDE = [{ name: '이원재', from: '0000-01-01', to: '9999-12-31' }];
+/** 선생님 이름으로 — 마이페이지처럼 이름만 아는 곳에서 */
+export const isCountExcludedName = (name: string | undefined, day: string) => COUNT_EXCLUDE.some(x => x.name === name && day >= x.from && day <= x.to);
 let excludeIds: Promise<Map<string, { from: string; to: string }[]>> | null = null;
-async function countExcluder(): Promise<(teacherId: string | null | undefined, day: string) => boolean> {
+export async function countExcluder(): Promise<(teacherId: string | null | undefined, day: string) => boolean> {
   excludeIds ??= (async () => {
     const { data } = await supabase.from('teachers').select('id, name').in('name', COUNT_EXCLUDE.map(x => x.name));
     const m = new Map<string, { from: string; to: string }[]>();
@@ -496,10 +498,10 @@ async function countExcluder(): Promise<(teacherId: string | null | undefined, d
 export async function getPaymentCounts(monthStart: string, monthEnd: string): Promise<Map<string, PayCount>> {
   const [monthRows, prepaidRows] = await Promise.all([
     fetchAll<{ child_id: string; method: string; teacher_id: string | null; day: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method, teacher_id, day').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'woojin_ext', 'woojin_self', 'subsidy']).order('id').range(a, b)),
-    fetchAll<{ child_id: string; method: PrepaidKey }>((a, b) => supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).in('method', ['prepaid', 'prepaid_b', 'prepaid_c']).order('id').range(a, b)),
+    fetchAll<{ child_id: string; method: PrepaidKey; teacher_id: string | null; day: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method, teacher_id, day').eq('confirmed', true).in('method', ['prepaid', 'prepaid_b', 'prepaid_c']).order('id').range(a, b)),
   ]);
   const skip = await countExcluder();
-  const month = { data: monthRows.filter(r => !skip(r.teacher_id, r.day)) }, prepaid = { data: prepaidRows };
+  const month = { data: monthRows.filter(r => !skip(r.teacher_id, r.day)) }, prepaid = { data: prepaidRows.filter(r => !skip(r.teacher_id, r.day)) };
   const m = new Map<string, PayCount>();
   const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, woojin_ext: 0, woojin_self: 0, subsidy: 0, prepaid: 0, prepaid_b: 0, prepaid_c: 0 }; m.set(id, c); return c; };
   for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy']++;
@@ -653,22 +655,17 @@ export async function clearChildTestData(childId: string): Promise<{ deleted: nu
 
 export interface MonthUse { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; woojin_ext: number; woojin_self: number; subsidy: number; prepaid: number; prepaid_b: number; prepaid_c: number }
 
-/** 2026년 9월 의정부 이원재 선생님 수업은 결제내역·마이페이지 횟수에서 뺀다 (시간표 회차·수업 현황은 COUNT_EXCLUDE 로 이미 빠진다) */
-export const isSepUijeongbuExcluded = (teacherName: string | undefined, center: string | null | undefined, day: string) =>
-  teacherName === '이원재' && center === 'uijeongbu' && day >= '2026-09-01' && day <= '2026-09-30';
-
 /** 그 달 아이마다 결제별 사용 횟수(확정된 것) — 선결제는 결제 완료 + 선결제 카드의 직접 차감 */
 export async function getMonthUses(month: string): Promise<Map<string, MonthUse>> {
   const [y, m] = month.split('-').map(Number);
   const start = `${month}-01`;
   const end = `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
-  const [lpRows, pc, ts] = await Promise.all([
+  const [lpRows, pc, skip] = await Promise.all([
     fetchAll<{ child_id: string; method: string; teacher_id: string | null; center: string | null; day: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method, teacher_id, center, day').eq('confirmed', true).gte('day', start).lte('day', end).order('id').range(a, b)),
     supabase.from('prepaid_charges').select('*').gte('day', start).lte('day', end).lt('count', 0),
-    supabase.from('teachers').select('id, name'),
+    countExcluder(),
   ]);
-  const teacherName = new Map((ts.data ?? []).map(t => [t.id as string, t.name as string]));
-  const lp = { data: lpRows.filter(r => !isSepUijeongbuExcluded(r.teacher_id ? teacherName.get(r.teacher_id) : undefined, r.center, r.day)) };
+  const lp = { data: lpRows.filter(r => !skip(r.teacher_id, r.day)) };
   const map = new Map<string, MonthUse>();
   const get = (id: string) => { const c = map.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, woojin_ext: 0, woojin_self: 0, subsidy: 0, prepaid: 0, prepaid_b: 0, prepaid_c: 0 }; map.set(id, c); return c; };
   for (const r of lp.data ?? []) if (r.method in get(r.child_id)) (get(r.child_id) as unknown as Record<string, number>)[r.method]++;
