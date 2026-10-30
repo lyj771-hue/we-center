@@ -19,7 +19,7 @@ const ALL_SUPPORT: { key: PayMethod; label: string }[] = [
   { key: 'subsidy', label: '지원금' }, { key: 'woojin_ext', label: '학교외부' }, { key: 'woojin_self', label: '학교자율' },
 ];
 const PRIVATE: { key: PayMethod; label: string }[] = [
-  { key: 'prepaid', label: '선결제' }, { key: 'card', label: '신용카드' }, { key: 'cash', label: '현금' }, { key: 'other', label: '직접 작성' },
+  { key: 'prepaid', label: '선결제A' }, { key: 'prepaid_b', label: '선결제B' }, { key: 'prepaid_c', label: '선결제C' }, { key: 'card', label: '신용카드' }, { key: 'cash', label: '현금' }, { key: 'other', label: '직접 작성' },
 ];
 
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -165,7 +165,7 @@ export default function DashboardPage() {
                 <th className={`${th} text-left sticky left-0 bg-[#fafafa]`}>선생님</th>
                 {SUPPORT.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
                 <th className={`${th} text-center bg-[#f1f5fb] text-[#555]`}>지원 합계</th>
-                <th className={`${th} text-center bg-[#f7f7f7] text-[#555]`} title="선결제·신용카드·현금·직접 작성">사설</th>
+                <th className={`${th} text-center bg-[#f7f7f7] text-[#555]`} title="선결제A·B·C·신용카드·현금·직접 작성">사설</th>
                 <th className={`${th} text-center text-[#27272a]`}>전체 합계</th>
               </tr>
             </thead>

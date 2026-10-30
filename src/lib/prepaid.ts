@@ -1,7 +1,8 @@
 import { supabase } from './supabaseClient';
+import type { PrepaidKey } from './timetable';
 
 // 선결제 카드 — 충전(prepaid_charges)과 [결제 완료]로 확정된 선결제 사용(lesson_payments)을 날짜 순으로 늘어놓고 남은 횟수를 붙인다.
-// 표 구조는 supabase/prepaid-charges.sql 참고.
+// 카드는 선결제A·B·C(method)마다 따로다. 표 구조는 supabase/prepaid-charges.sql, prepaid-abc.sql 참고.
 
 export interface LedgerRow {
   day: string;
@@ -29,11 +30,11 @@ export function buildLedger(rows: Raw[]): LedgerRow[] {
   });
 }
 
-/** 관리자: 아이 한 명의 카드 내역 */
-export async function getChildLedger(childId: string): Promise<LedgerRow[]> {
+/** 관리자: 아이 한 명의 그 종류 카드 내역 */
+export async function getChildLedger(childId: string, method: PrepaidKey = 'prepaid'): Promise<LedgerRow[]> {
   const [charges, uses] = await Promise.all([
     supabase.from('prepaid_charges').select('*').eq('child_id', childId),
-    supabase.from('lesson_payments').select('day, created_at').eq('child_id', childId).eq('method', 'prepaid').eq('confirmed', true),
+    supabase.from('lesson_payments').select('day, created_at').eq('child_id', childId).eq('method', method).eq('confirmed', true),
   ]);
   if (charges.error) throw charges.error;
   if (uses.error) throw uses.error;
@@ -45,7 +46,7 @@ export async function getChildLedger(childId: string): Promise<LedgerRow[]> {
   }
   return buildLedger([
     // 충전 기록: adjust = [수정](남은 횟수 맞춤, ±), − 횟수 = 관리자가 직접 넣은 차감(임시) — 사용 줄로
-    ...(charges.data ?? []).map(c => {
+    ...(charges.data ?? []).filter(c => ((c.method as PrepaidKey | null) ?? 'prepaid') === method).map(c => {
       const n = c.count as number;
       const base = { day: c.day as string, memo: (c.memo as string | null) ?? undefined, chargeId: c.id as string, at: c.created_at as string };
       if (c.adjust) return { ...base, kind: 'adjust' as const, count: n };
@@ -56,8 +57,8 @@ export async function getChildLedger(childId: string): Promise<LedgerRow[]> {
 }
 
 /** 관리자: 충전 기록 넣기 / 지우기 (아이의 충전 총 횟수는 디비가 자동으로 맞춘다) */
-export async function addCharge(childId: string, day: string, count: number, memo?: string, adjust = false): Promise<void> {
-  const { error } = await supabase.from('prepaid_charges').insert({ child_id: childId, day, count, memo: memo?.trim() || null, ...(adjust ? { adjust: true } : {}) });
+export async function addCharge(childId: string, day: string, count: number, memo?: string, adjust = false, method: PrepaidKey = 'prepaid'): Promise<void> {
+  const { error } = await supabase.from('prepaid_charges').insert({ child_id: childId, day, count, memo: memo?.trim() || null, ...(adjust ? { adjust: true } : {}), ...(method !== 'prepaid' ? { method } : {}) });
   if (error) throw error;
 }
 export async function deleteCharge(id: string): Promise<void> {
@@ -65,12 +66,16 @@ export async function deleteCharge(id: string): Promise<void> {
   if (error) throw error;
 }
 
-/** 보호자: 내 아이 카드 내역 — 선결제는 지점마다 따로(center = 그 지점 아이) */
-export async function getMyLedger(center?: string): Promise<LedgerRow[]> {
+/** 보호자: 내 아이 카드 내역, 종류마다 — 선결제는 지점마다 따로(center = 그 지점 아이) */
+export type MyLedgers = Record<PrepaidKey, LedgerRow[]>;
+export const NO_LEDGERS: MyLedgers = { prepaid: [], prepaid_b: [], prepaid_c: [] };
+export async function getMyLedger(center?: string): Promise<MyLedgers> {
   const { data, error } = await supabase.rpc('my_prepaid_ledger', center ? { p_center: center } : {});
   if (error) throw error;
-  return buildLedger((data ?? []).map((r: { day: string; kind: 'charge' | 'use' | 'adjust'; count: number; memo: string | null; at?: string | null }) =>
+  type Row = { day: string; kind: 'charge' | 'use' | 'adjust'; count: number; memo: string | null; at?: string | null; method?: PrepaidKey | null };
+  const of = (key: PrepaidKey) => buildLedger(((data ?? []) as Row[]).filter(r => (r.method ?? 'prepaid') === key).map(r =>
     r.kind === 'charge' && r.count < 0
       ? { day: r.day, kind: 'use' as const, count: -r.count, memo: r.memo ?? undefined, at: r.at ?? undefined }   // 관리자가 직접 넣은 차감
       : { day: r.day, kind: r.kind, count: r.count, memo: r.memo ?? undefined, at: r.at ?? undefined }));
+  return { prepaid: of('prepaid'), prepaid_b: of('prepaid_b'), prepaid_c: of('prepaid_c') };
 }

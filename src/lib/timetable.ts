@@ -25,6 +25,8 @@ export interface Child {
   gusenLimit?: number;
   kkumideunLimit?: number;
   prepaidTotal?: number;
+  prepaidBTotal?: number;
+  prepaidCTotal?: number;
   number?: number;
   memo?: string;
   /** 연결된 보호자 계정 — 계정 하나 = 아이 한 명 (홈페이지 가입 안 한 아이는 없음) */
@@ -48,7 +50,7 @@ export const kindLabel = (k?: LessonKind) => (k === 'exercise' ? '운동' : k ==
 /** 칸·고정 수업 줄 → 수업 종류 (kind 가 없던 예전 줄은 구강 체크로) */
 const kindOf = (r: Record<string, unknown>): LessonKind => (r.kind === 'exercise' || r.kind === 'oral' ? r.kind : r.oral ? 'oral' : null);
 
-export type UsesKey = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid';
+export type UsesKey = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'prepaid_b' | 'prepaid_c';
 /** 남은 금액(원)을 적는 결제 */
 export type BalanceKey = 'woojin_ext' | 'woojin_self' | 'subsidy';
 /** 우진학교 한 번 수업 금액 — 남은 금액이 이보다 적으면 고를 수 없다 */
@@ -138,13 +140,13 @@ export async function getChildren(): Promise<Child[]> {
   if (error) throw error;
   return (data ?? []).map(r => ({
     id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral, lessonKind: r.lesson_kind === 'exercise' || r.lesson_kind === 'oral' ? r.lesson_kind : r.oral ? 'oral' : null, phoneLast4: r.phone_last4 ?? undefined, phones: (r.phones as string[] | null) ?? undefined, phoneRelations: (r.phone_relations as string[] | null) ?? undefined,
-    voucherLimit: r.voucher_limit ?? 0, gusenLimit: r.gusen_limit ?? 0, kkumideunLimit: r.kkumideun_limit ?? 0, prepaidTotal: r.prepaid_total ?? 0,
+    voucherLimit: r.voucher_limit ?? 0, gusenLimit: r.gusen_limit ?? 0, kkumideunLimit: r.kkumideun_limit ?? 0, prepaidTotal: r.prepaid_total ?? 0, prepaidBTotal: r.prepaid_b_total ?? 0, prepaidCTotal: r.prepaid_c_total ?? 0,
     number: r.number ?? undefined, memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
     woojinBalance: r.woojin_balance ?? 0, subsidyBalance: r.subsidy_balance ?? 0,
     woojinExtBalance: r.woojin_ext_balance ?? 0, woojinSelfBalance: r.woojin_self_balance ?? 0,
     center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
-    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, jangmatchum: !!r.uses_jangmatchum, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, woojin_ext: !!r.uses_woojin_ext, woojin_self: !!r.uses_woojin_self, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
+    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, jangmatchum: !!r.uses_jangmatchum, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, woojin_ext: !!r.uses_woojin_ext, woojin_self: !!r.uses_woojin_self, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid, prepaid_b: !!r.uses_prepaid_b, prepaid_c: !!r.uses_prepaid_c },
   }));
 }
 
@@ -381,7 +383,7 @@ export async function saveFixedFrom(body: FixedFromBody): Promise<void> {
 
 // ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
 
-export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'card' | 'cash' | 'other'
+export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'prepaid_b' | 'prepaid_c' | 'card' | 'cash' | 'other'
   | 'voucher_retro' | 'gusen_retro' | 'jangmatchum_retro' | 'kkumideun_retro' | 'unpaid';
 /** cell = 시간표 결제 칸에 보이는 짧은 이름 (없으면 label) */
 export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?: string }[] = [
@@ -394,7 +396,10 @@ export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?:
   { key: 'woojin_self', label: '우진학교자율', short: '자', cell: '우자' },
   { key: 'woojin', label: '우진학교', short: '우' },
   { key: 'subsidy', label: '지원금', short: '지' },
-  { key: 'prepaid', label: '선결제', short: '선' },
+  // 선결제 — A·B·C로 나눴다. 예전 선결제 기록(prepaid, 글자 '선')은 그대로 선결제A
+  { key: 'prepaid', label: '선결제A', short: '선' },
+  { key: 'prepaid_b', label: '선결제B', short: '비' },
+  { key: 'prepaid_c', label: '선결제C', short: '씨' },
   { key: 'card', label: '신용카드', short: '카' },
   { key: 'cash', label: '현금', short: '현' },
   // 나중에 결제(소급·미결) — 빨간 글씨. [결제 완료]로 확정되지 않고, 실제 결제한 뒤 결제방식을 바꿔 확정한다. 기본 결제 글자로는 안 쓴다(short 두 글자)
@@ -404,6 +409,15 @@ export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?:
   { key: 'kkumideun_retro', label: '꿈이든소급', short: '꿈소' },
   { key: 'unpaid', label: '미결', short: '미결' },
 ];
+
+/** 선결제 종류 — 횟수·충전 기록·카드가 종류마다 따로다 */
+export type PrepaidKey = 'prepaid' | 'prepaid_b' | 'prepaid_c';
+export const PREPAID_KINDS: { key: PrepaidKey; letter: string; label: string }[] = [
+  { key: 'prepaid', letter: 'A', label: '선결제A' }, { key: 'prepaid_b', letter: 'B', label: '선결제B' }, { key: 'prepaid_c', letter: 'C', label: '선결제C' },
+];
+export const isPrepaid = (m?: string): m is PrepaidKey => m === 'prepaid' || m === 'prepaid_b' || m === 'prepaid_c';
+/** 그 종류로 지금까지 충전한 횟수 */
+export const prepaidTotalOf = (c: Child, key: PrepaidKey) => (key === 'prepaid' ? c.prepaidTotal : key === 'prepaid_b' ? c.prepaidBTotal : c.prepaidCTotal) ?? 0;
 
 /** 소급 → 나중에 할 결제. 월 회차는 이 결제로 센다(결제를 미뤘을 뿐 그 달 수업이라서) */
 export const RETRO_BASE: Partial<Record<PayMethod, PayMethod>> = {
@@ -451,7 +465,7 @@ export async function setLessonPayment(childId: string, day: string, time: strin
   if (error) throw error;
 }
 
-export interface PayCount { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; woojin_ext: number; woojin_self: number; subsidy: number; prepaid: number }
+export interface PayCount { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; woojin_ext: number; woojin_self: number; subsidy: number; prepaid: number; prepaid_b: number; prepaid_c: number }
 
 /** 1000줄 넘게 — 디비가 한 번에 1000줄까지만 주니 나눠서 다 받는다 (range 로 쪼갤 수 있는 select 를 넘긴다) */
 async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
@@ -482,14 +496,14 @@ async function countExcluder(): Promise<(teacherId: string | null | undefined, d
 export async function getPaymentCounts(monthStart: string, monthEnd: string): Promise<Map<string, PayCount>> {
   const [monthRows, prepaidRows] = await Promise.all([
     fetchAll<{ child_id: string; method: string; teacher_id: string | null; day: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method, teacher_id, day').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'woojin_ext', 'woojin_self', 'subsidy']).order('id').range(a, b)),
-    fetchAll<{ child_id: string }>((a, b) => supabase.from('lesson_payments').select('child_id').eq('confirmed', true).eq('method', 'prepaid').order('id').range(a, b)),
+    fetchAll<{ child_id: string; method: PrepaidKey }>((a, b) => supabase.from('lesson_payments').select('child_id, method').eq('confirmed', true).in('method', ['prepaid', 'prepaid_b', 'prepaid_c']).order('id').range(a, b)),
   ]);
   const skip = await countExcluder();
   const month = { data: monthRows.filter(r => !skip(r.teacher_id, r.day)) }, prepaid = { data: prepaidRows };
   const m = new Map<string, PayCount>();
-  const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, woojin_ext: 0, woojin_self: 0, subsidy: 0, prepaid: 0 }; m.set(id, c); return c; };
+  const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, woojin_ext: 0, woojin_self: 0, subsidy: 0, prepaid: 0, prepaid_b: 0, prepaid_c: 0 }; m.set(id, c); return c; };
   for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy']++;
-  for (const r of prepaid.data ?? []) get(r.child_id).prepaid++;
+  for (const r of prepaid.data ?? []) get(r.child_id)[r.method]++;
   return m;
 }
 
@@ -637,7 +651,7 @@ export async function clearChildTestData(childId: string): Promise<{ deleted: nu
 
 // ── 결제내역(월별) ──────────────────────────────────────────────────
 
-export interface MonthUse { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; woojin_ext: number; woojin_self: number; subsidy: number; prepaid: number }
+export interface MonthUse { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; woojin_ext: number; woojin_self: number; subsidy: number; prepaid: number; prepaid_b: number; prepaid_c: number }
 
 /** 그 달 아이마다 결제별 사용 횟수(확정된 것) — 선결제는 결제 완료 + 선결제 카드의 직접 차감 */
 export async function getMonthUses(month: string): Promise<Map<string, MonthUse>> {
@@ -650,9 +664,9 @@ export async function getMonthUses(month: string): Promise<Map<string, MonthUse>
   ]);
   const lp = { data: lpRows };
   const map = new Map<string, MonthUse>();
-  const get = (id: string) => { const c = map.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, woojin_ext: 0, woojin_self: 0, subsidy: 0, prepaid: 0 }; map.set(id, c); return c; };
+  const get = (id: string) => { const c = map.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, woojin_ext: 0, woojin_self: 0, subsidy: 0, prepaid: 0, prepaid_b: 0, prepaid_c: 0 }; map.set(id, c); return c; };
   for (const r of lp.data ?? []) if (r.method in get(r.child_id)) (get(r.child_id) as unknown as Record<string, number>)[r.method]++;
-  for (const r of pc.data ?? []) if (!r.adjust) get(r.child_id as string).prepaid += -(r.count as number);
+  for (const r of pc.data ?? []) if (!r.adjust) get(r.child_id as string)[((r.method as PrepaidKey | null) ?? 'prepaid')] += -(r.count as number);
   return map;
 }
 

@@ -3,17 +3,19 @@
 import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
 import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import UsageCard from '@/components/UsageCard';
-import type { LedgerRow } from '@/lib/prepaid';
+import type { MyLedgers } from '@/lib/prepaid';
+import { NO_LEDGERS } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import { useEffect, useState } from 'react';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday, toYmd, tomorrowsMonday, mondayOf } from '@/lib/schedule';
-import { methodInCenter, worksAt } from '@/lib/timetable';
+import type { PrepaidKey } from '@/lib/timetable';
+import { isPrepaid, methodInCenter, PREPAID_KINDS, worksAt } from '@/lib/timetable';
 
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', jangmatchum: '장맞춤', kkumideun: '꿈이든', woojin: '우진학교', woojin_ext: '우진학교외부', woojin_self: '우진학교자율', subsidy: '지원금', prepaid: '선결제' };
+const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', jangmatchum: '장맞춤', kkumideun: '꿈이든', woojin: '우진학교', woojin_ext: '우진학교외부', woojin_self: '우진학교자율', subsidy: '지원금', prepaid: '선결제A', prepaid_b: '선결제B', prepaid_c: '선결제C' };
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', 장: '장맞춤', c: '꿈이든' };
 const payKind = (p: string) => {
   const code = p.toLowerCase().replace(/[x~]/g, '');
@@ -31,7 +33,7 @@ export interface MyPageViewProps {
   weekLessons: MyLesson[];
   payments: MyPayment[];
   /** 선결제 카드 내역 (충전·사용) */
-  ledger?: LedgerRow[];
+  ledger?: MyLedgers;
   /** 결제별 사용 기록 (바우처·굳센·꿈이든·지원금) — 지난 달도 쌓인다 */
   history?: MyPaymentUse[];
   today: string;
@@ -55,9 +57,15 @@ const inBranch = (method: string, center?: string) => methodInCenter(method, cen
 // 년/월/일 (주별 시간표 날짜 넘기기)
 const ymd = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = [], history = [], today, center, failed, top, bottom }: MyPageViewProps) {
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = NO_LEDGERS, history = [], today, center, failed, top, bottom }: MyPageViewProps) {
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
-  const payRows = payments.filter(p => inBranch(p.method, center)).sort((a, b) => (a.method === 'prepaid' ? -1 : b.method === 'prepaid' ? 1 : 0));   // 선결제를 맨 위로
+  // 가지고 있는 선결제 — 체크했거나 카드 내역이 있는 종류. 하나도 없으면 A 칸 하나만, 한 종류뿐이면 A·B·C를 나눠 보이지 않는다
+  const held = PREPAID_KINDS.filter(x => child?.uses?.[x.key] || ledger[x.key].length > 0);
+  const kinds = held.length ? held : PREPAID_KINDS.slice(0, 1);
+  const [tab, setTab] = useState<PrepaidKey>('prepaid');
+  const shownKind = kinds.find(x => x.key === tab)?.key ?? kinds[0].key;
+  const payRows = payments.filter(p => inBranch(p.method, center) && (!isPrepaid(p.method) || kinds.some(x => x.key === p.method)))
+    .sort((a, b) => Number(isPrepaid(b.method)) - Number(isPrepaid(a.method)));   // 선결제를 맨 위로
 
   const card = MYPAGE_CARD;
 
@@ -223,13 +231,13 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
               </tr>
               {payRows.map(p => (
                 <tr key={p.method} className="border-t border-[#f0f0f0] first:border-t-0">
-                  <td className="py-2.5">{PAY_ROW_LABEL[p.method]}</td>
+                  <td className="py-2.5">{isPrepaid(p.method) && kinds.length === 1 ? '선결제' : PAY_ROW_LABEL[p.method]}</td>
                   {p.method === 'woojin' || p.method === 'woojin_ext' || p.method === 'woojin_self' || p.method === 'subsidy' ? (
                     <td className="py-2.5 text-right tabular-nums text-[var(--brand)]">
                       {/* 우진학교외부·자율·지원금은 남은 금액 */}
                       <span className="text-[12px] text-[#999] mr-1">{payMonth === thisMonth ? '' : '지금 '}남은 금액</span>{p.total.toLocaleString('ko-KR')}<span className="text-[12px] text-[#999] ml-0.5">원</span>
                     </td>
-                  ) : p.method === 'prepaid' ? (
+                  ) : isPrepaid(p.method) ? (
                     <td className={`py-2.5 text-right tabular-nums ${p.total - p.used <= 0 ? 'text-[#e11d48]' : 'text-[var(--brand)]'}`}>
                       <span className="text-[12px] text-[#999] mr-1">{payMonth === thisMonth ? '' : '지금 '}남은</span>{p.total - p.used}<span className="text-[12px] text-[#999] ml-1">회</span>
                     </td>
@@ -248,8 +256,19 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
 
       {/* 선결제 카드 — 센터 종이 카드처럼 충전·사용 내역과 남은 횟수 (선결제를 쓰는 아이만) */}
       <section id="prepaid" className={card}>
-        <h2 className="text-[17px] text-[#27272a] mb-4">선결제 카드</h2>
-        <PrepaidCard rows={ledger} name={child?.childName} />
+        {/* 두 종류 이상 가지고 있을 때만 제목 옆에 탭 */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-4">
+          <h2 className="text-[17px] text-[#27272a]">선결제 카드</h2>
+          {kinds.length > 1 && (
+            <div role="tablist" className="flex gap-1">
+              {kinds.map(x => (
+                <button key={x.key} type="button" role="tab" aria-selected={shownKind === x.key} onClick={() => setTab(x.key)}
+                  className={`min-w-8 h-8 px-2.5 rounded-full text-[13px] ${shownKind === x.key ? 'bg-[var(--brand)] text-white' : 'bg-[#f4f4f5] text-[#666]'}`}>{x.letter}</button>
+              ))}
+            </div>
+          )}
+        </div>
+        <PrepaidCard key={shownKind} rows={ledger[shownKind]} name={child?.childName} />
       </section>
 
       {/* 결제별 사용 카드 — 바우처·굳센·꿈이든·지원금: 일자 · 그 달 회차 · 메모 (지난 달도 쌓인다) */}

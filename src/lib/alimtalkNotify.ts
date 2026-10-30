@@ -1,5 +1,5 @@
 import { getMembers } from './store';
-import { getChildren, getPaymentCounts, childLabel, type Center, type Child } from './timetable';
+import { getChildren, getPaymentCounts, childLabel, PREPAID_KINDS, prepaidTotalOf, type Center, type Child, type PrepaidKey } from './timetable';
 import { addAndSendOutbox, newBatchId } from './leave';
 import type { Member } from './types';
 
@@ -43,28 +43,31 @@ export async function notifyMemberApproved(m: Member, center: Center, requestedA
 
 // ── 선결제 ─────────────────────────────────────────────────────
 
+/** #{구분} 앞에 붙는 종류 글자 — "선결제 A 사용" */
+const letterOf = (method: PrepaidKey) => PREPAID_KINDS.find(x => x.key === method)!.letter;
+
 /** 선결제 카드에서 충전·차감·수정 — 아이 하나 */
-export async function notifyPrepaid(child: Child, kind: '사용' | '충전' | '변경', day: string, before: number, delta: number): Promise<SendResult> {
+export async function notifyPrepaid(child: Child, kind: '사용' | '충전' | '변경', day: string, before: number, delta: number, method: PrepaidKey = 'prepaid'): Promise<SendResult> {
   const g = (await guardianOf([child.id])).get(child.id);
   if (!g?.kid?.guardianUserId) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };   // 보호자 계정과 안 이어진 아이
   return addAndSendOutbox([{
     templateId: 'prepaid_use', childId: child.id, userId: g.kid.guardianUserId, childName: childLabel(child), phone: g.m?.phone,
-    vars: { 이름: child.name, 구분: kind, 날짜: slash(day), 기존횟수: String(before), 변동: `${delta > 0 ? '+' : ''}${delta}회`, 남은횟수: String(before + delta) },
+    vars: { 이름: child.name, 구분: `${letterOf(method)} ${kind}`, 날짜: slash(day), 기존횟수: String(before), 변동: `${delta > 0 ? '+' : ''}${delta}회`, 남은횟수: String(before + delta) },
   }]);
 }
 
 /** [결제 완료]로 선결제 수업을 확정한 뒤 — 아이마다 그날 한 번(그날 확정한 횟수를 합쳐서). 남은 횟수는 확정 뒤 디비 기준 */
-export async function notifyPrepaidUses(day: string, uses: { childId: string; count: number }[]): Promise<SendResult> {
+export async function notifyPrepaidUses(day: string, uses: { childId: string; count: number; method: PrepaidKey }[]): Promise<SendResult> {
   const list = uses.filter(u => u.count > 0);
   if (!list.length) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };
   const [g, counts] = await Promise.all([guardianOf(list.map(u => u.childId)), getPaymentCounts('2000-01-01', '2999-12-31')]);
   return addAndSendOutbox(list.flatMap(u => {
     const x = g.get(u.childId);
     if (!x?.kid?.guardianUserId) return [];
-    const after = (x.kid.prepaidTotal ?? 0) - (counts.get(u.childId)?.prepaid ?? 0);
+    const after = prepaidTotalOf(x.kid, u.method) - (counts.get(u.childId)?.[u.method] ?? 0);
     return [{
       templateId: 'prepaid_use', childId: u.childId, userId: x.kid.guardianUserId, childName: childLabel(x.kid), phone: x.m?.phone,
-      vars: { 이름: x.kid.name, 구분: '사용', 날짜: slash(day), 기존횟수: String(after + u.count), 변동: `-${u.count}회`, 남은횟수: String(after) },
+      vars: { 이름: x.kid.name, 구분: `${letterOf(u.method)} 사용`, 날짜: slash(day), 기존횟수: String(after + u.count), 변동: `-${u.count}회`, 남은횟수: String(after) },
     }];
   }));
 }

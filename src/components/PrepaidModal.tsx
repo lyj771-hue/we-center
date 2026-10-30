@@ -2,16 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { showAlert } from '@/lib/dialog';
-import type { Child } from '@/lib/timetable';
+import type { Child, PrepaidKey } from '@/lib/timetable';
+import { PREPAID_KINDS } from '@/lib/timetable';
 import type { LedgerRow } from '@/lib/prepaid';
 import { addCharge, getChildLedger } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import { notifyPrepaid, sendSummary } from '@/lib/alimtalkNotify';
 
-// 회원 관리 "결제내역" 탭에서 여는 선결제 카드 창. 선결제는 아이(=센터)마다 따로다.
+// 회원 관리 "결제내역" 탭에서 여는 선결제 카드 창. 선결제는 아이(=센터)마다, A·B·C 종류마다 따로다.
 
 /** 선결제 카드 창 — 카드 내역(충전·사용·남은 횟수·메모)과 [충전] · [차감] · [수정] */
-export default function PrepaidModal({ child, onClose }: { child: Child; onClose: () => void }) {
+export default function PrepaidModal({ child, method: first = 'prepaid', onClose }: { child: Child; method?: PrepaidKey; onClose: () => void }) {
+  const [method, setMethod] = useState<PrepaidKey>(first);
+  const kindLabel = PREPAID_KINDS.find(x => x.key === method)!.label;
   const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
   const [rows, setRows] = useState<LedgerRow[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -29,8 +32,9 @@ export default function PrepaidModal({ child, onClose }: { child: Child; onClose
   const [fixMemo, setFixMemo] = useState('');
 
   const load = useCallback(() => {
-    getChildLedger(child.id).then(setRows).catch(e => { setRows([]); showAlert(`불러오지 못했어요 — 선결제 SQL(supabase/prepaid-charges.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); });
-  }, [child.id]);
+    setRows(null);
+    getChildLedger(child.id, method).then(setRows).catch(e => { setRows([]); showAlert(`불러오지 못했어요 — 선결제 SQL(supabase/prepaid-charges.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); });
+  }, [child.id, method]);
   useEffect(() => { load(); }, [load]);
 
   const left = rows?.length ? rows[rows.length - 1].balance : 0;
@@ -44,25 +48,25 @@ export default function PrepaidModal({ child, onClose }: { child: Child; onClose
   const charge = () => {
     const n = Number(count);
     if (!n || n < 0) { showAlert('충전 횟수를 적어 주세요.'); return; }
-    run(async () => { await addCharge(child.id, day, n, memo); setCount(''); setMemo(''); await tell('충전', day, n); }, '충전하지 못했어요.');
+    run(async () => { await addCharge(child.id, day, n, memo, false, method); setCount(''); setMemo(''); await tell('충전', day, n); }, '충전하지 못했어요.');
   };
   // 저장한 뒤 보호자에게 '선결제 사용·충전·변경' 알림톡 (보호자 계정과 이어진 아이만)
   const tell = async (kind: '사용' | '충전' | '변경', d: string, delta: number) => {
     try {
-      const r = await notifyPrepaid(child, kind, d, left, delta);
-      if (r.sent + r.failed + r.skipped + r.waiting) await showAlert(`선결제 ${kind} 알림톡 — ${sendSummary(r)}`);
+      const r = await notifyPrepaid(child, kind, d, left, delta, method);
+      if (r.sent + r.failed + r.skipped + r.waiting) await showAlert(`${kindLabel} ${kind} 알림톡 — ${sendSummary(r)}`);
     } catch (e) { await showAlert(`저장했지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
   };
   const deduct = () => {
     const n = Number(useCount);
     if (!n || n < 0) { showAlert('차감 횟수를 적어 주세요.'); return; }
-    run(async () => { await addCharge(child.id, useDay, -n, useMemo); setUseCount('1'); setUseMemo(''); await tell('사용', useDay, -n); }, '차감하지 못했어요.');
+    run(async () => { await addCharge(child.id, useDay, -n, useMemo, false, method); setUseCount('1'); setUseMemo(''); await tell('사용', useDay, -n); }, '차감하지 못했어요.');
   };
   const fix = () => {
     if (fixLeft === '') { showAlert('남은 횟수를 적어 주세요.'); return; }
     const diff = Number(fixLeft) - left;
     if (!diff) { showAlert(`지금 남은 횟수(${left}회)와 같아요.`); return; }
-    run(async () => { await addCharge(child.id, fixDay, diff, fixMemo, true); setFixLeft(''); setFixMemo(''); await tell('변경', fixDay, diff); }, '수정하지 못했어요.');
+    run(async () => { await addCharge(child.id, fixDay, diff, fixMemo, true, method); setFixLeft(''); setFixMemo(''); await tell('변경', fixDay, diff); }, '수정하지 못했어요.');
   };
 
   const input = 'border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]';
@@ -74,8 +78,14 @@ export default function PrepaidModal({ child, onClose }: { child: Child; onClose
     <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
       <div className="bg-[#f7f7f8] rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <p className="text-[15px] text-[#27272a]">{child.name}{child.number ?? ''} · 선결제 카드</p>
+          <p className="text-[15px] text-[#27272a]">{child.name}{child.number ?? ''} · {kindLabel} 카드</p>
           <button onClick={onClose} className="text-[13px] text-[#888]">닫기 ✕</button>
+        </div>
+        <div className="flex gap-1.5">
+          {PREPAID_KINDS.map(x => (
+            <button key={x.key} type="button" onClick={() => setMethod(x.key)} disabled={busy}
+              className={`text-[12px] px-3 py-1 rounded-full border ${method === x.key ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#ddd] bg-white text-[#666]'}`}>{x.label}</button>
+          ))}
         </div>
         {rows === null ? <p className="text-[13px] text-[#aaa]">불러오는 중…</p> : <PrepaidCard rows={rows} name={child.name} />}
 
@@ -107,7 +117,7 @@ export default function PrepaidModal({ child, onClose }: { child: Child; onClose
             <button onClick={fix} disabled={busy} className="text-[12px] border border-[#0a0a0a] bg-[#0a0a0a] text-white px-3.5 py-1.5 rounded-full disabled:opacity-50">수정</button>
           </div>
 
-          <p className="text-[11px] text-[#aaa] leading-[1.7]">시간표 [결제 완료]에서 선결제로 확정한 수업도 사용으로 자동으로 들어가요(이건 시간표에서 고쳐요). 종이 카드에서 옮길 때는 지금 남은 횟수를 오늘 날짜로 충전하면 돼요.</p>
+          <p className="text-[11px] text-[#aaa] leading-[1.7]">시간표 [결제 완료]에서 {kindLabel}(으)로 확정한 수업도 사용으로 자동으로 들어가요(이건 시간표에서 고쳐요). 종이 카드에서 옮길 때는 지금 남은 횟수를 오늘 날짜로 충전하면 돼요.</p>
         </div>
       </div>
     </div>

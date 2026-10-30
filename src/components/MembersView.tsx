@@ -8,7 +8,8 @@ import { askConfirm, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
 import PaymentsTab from '@/components/PaymentsTab';
 import type { Center, Child } from '@/lib/timetable';
-import { getChildren, getPaymentCounts, linkChild, methodInCenter, setChildBalance, setChildUses } from '@/lib/timetable';
+import { getChildren, getPaymentCounts, linkChild, methodInCenter, PREPAID_KINDS, prepaidTotalOf, setChildBalance, setChildUses } from '@/lib/timetable';
+import type { PayCount } from '@/lib/timetable';
 import { addCharge } from '@/lib/prepaid';
 import { notifyMemberApproved, sendSummary } from '@/lib/alimtalkNotify';
 
@@ -39,7 +40,9 @@ const ALL_SUPPORTS: { key: SupportKey; label: string }[] = [
 
 // 미승인 탭 — 승인할 때 꼭 적는 칸(없으면 0). 선결제는 남은 횟수, 우진학교외부·자율·지원금은 남은 금액(원)
 const APPROVE_FIELDS = [
-  { key: 'prepaid', label: '선결제', unit: '회' },
+  { key: 'prepaid', label: '선결제A', unit: '회' },
+  { key: 'prepaid_b', label: '선결제B', unit: '회' },
+  { key: 'prepaid_c', label: '선결제C', unit: '회' },
   { key: 'woojin_ext', label: '우진학교외부', unit: '원' },
   { key: 'woojin_self', label: '우진학교자율', unit: '원' },
   { key: 'subsidy', label: '지원금', unit: '원' },
@@ -100,8 +103,8 @@ export default function MembersView({ center }: { center: Center }) {
   const autoLink = useRef<() => void>(() => {});
   useEffect(() => { autoLink.current(); }, [kids, members, extraCenters, center]);
   // 미승인 — 이름·뒷번호가 같은 기존 아이가 있으면 선결제·우진학교·지원금 칸을 그 아이 값으로 미리 채운다(아래 prefill.current)
-  const [prepaidUsed, setPrepaidUsed] = useState<Map<string, number> | null>(null);
-  useEffect(() => { if (isAdmin) getPaymentCounts('2000-01-01', '2999-12-31').then(m => setPrepaidUsed(new Map([...m].map(([k, v]) => [k, v.prepaid])))).catch(() => setPrepaidUsed(new Map())); }, [isAdmin, kids]);
+  const [prepaidUsed, setPrepaidUsed] = useState<Map<string, PayCount> | null>(null);
+  useEffect(() => { if (isAdmin) getPaymentCounts('2000-01-01', '2999-12-31').then(setPrepaidUsed).catch(() => setPrepaidUsed(new Map())); }, [isAdmin, kids]);
   const prefillDone = useRef(new Set<string>());
   const prefill = useRef<() => void>(() => {});
   useEffect(() => { prefill.current(); }, [kids, members, extraCenters, center, prepaidUsed]);
@@ -232,15 +235,17 @@ export default function MembersView({ center }: { center: Center }) {
   // 승인할 때 적은 값을 이어진 아이에게 — 선결제는 지금 잔여(충전 합 − 확정된 사용)와의 차이를 카드의 [수정] 기록으로, 우진학교·지원금은 남은 금액 그대로
   const saveApproveInput = async (m: Member, k?: Child) => {
     if (!filled(m)) return;
-    const prepaid = Number(inputOf(m, 'prepaid')), wExt = Number(inputOf(m, 'woojin_ext')), wSelf = Number(inputOf(m, 'woojin_self')), subsidy = Number(inputOf(m, 'subsidy'));
-    if (!k) { await showAlert(`아이 명단과 연결되지 않아 선결제(${prepaid}회)·우진학교외부(${wExt.toLocaleString('ko-KR')}원)·우진학교자율(${wSelf.toLocaleString('ko-KR')}원)·지원금(${subsidy.toLocaleString('ko-KR')}원)은 저장하지 못했어요.\n연결한 뒤 결제내역·기존아이명단 탭에서 맞춰 주세요.`); return; }
+    const wExt = Number(inputOf(m, 'woojin_ext')), wSelf = Number(inputOf(m, 'woojin_self')), subsidy = Number(inputOf(m, 'subsidy'));
+    if (!k) { await showAlert(`아이 명단과 연결되지 않아 선결제(A ${inputOf(m, 'prepaid')}회·B ${inputOf(m, 'prepaid_b')}회·C ${inputOf(m, 'prepaid_c')}회)·우진학교외부(${wExt.toLocaleString('ko-KR')}원)·우진학교자율(${wSelf.toLocaleString('ko-KR')}원)·지원금(${subsidy.toLocaleString('ko-KR')}원)은 저장하지 못했어요.\n연결한 뒤 결제내역·기존아이명단 탭에서 맞춰 주세요.`); return; }
     try {
-      const used = (await getPaymentCounts('2000-01-01', '2999-12-31')).get(k.id)?.prepaid ?? 0;
+      const usedAll = (await getPaymentCounts('2000-01-01', '2999-12-31')).get(k.id);
       const fresh = (await getChildren()).find(x => x.id === k.id) ?? k;
-      const diff = prepaid - ((fresh.prepaidTotal ?? 0) - used);
-      if (diff) {
-        const d = new Date();
-        await addCharge(k.id, `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, diff, '승인할 때 잔여 입력', true);
+      for (const x of PREPAID_KINDS) {
+        const diff = Number(inputOf(m, x.key)) - (prepaidTotalOf(fresh, x.key) - (usedAll?.[x.key] ?? 0));
+        if (diff) {
+          const d = new Date();
+          await addCharge(k.id, `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, diff, '승인할 때 잔여 입력', true, x.key);
+        }
       }
       await setChildBalance(k.id, 'woojin_ext', wExt);
       await setChildBalance(k.id, 'woojin_self', wSelf);
@@ -366,7 +371,10 @@ export default function MembersView({ center }: { center: Center }) {
       if (!k) continue;
       prefillDone.current.add(key);
       const vals: Record<ApproveField, number> = {
-        prepaid: Math.max(0, (k.prepaidTotal ?? 0) - (prepaidUsed.get(k.id) ?? 0)), woojin_ext: k.woojinExtBalance ?? 0, woojin_self: k.woojinSelfBalance ?? 0, subsidy: k.subsidyBalance ?? 0,
+        prepaid: Math.max(0, prepaidTotalOf(k, 'prepaid') - (prepaidUsed.get(k.id)?.prepaid ?? 0)),
+        prepaid_b: Math.max(0, prepaidTotalOf(k, 'prepaid_b') - (prepaidUsed.get(k.id)?.prepaid_b ?? 0)),
+        prepaid_c: Math.max(0, prepaidTotalOf(k, 'prepaid_c') - (prepaidUsed.get(k.id)?.prepaid_c ?? 0)),
+        woojin_ext: k.woojinExtBalance ?? 0, woojin_self: k.woojinSelfBalance ?? 0, subsidy: k.subsidyBalance ?? 0,
       };
       for (const f of APPROVE_FIELDS) if (!inputOf(m, f.key)) fill.set(`${m.userId}|${f.key}`, String(vals[f.key]));
     }
@@ -418,7 +426,8 @@ export default function MembersView({ center }: { center: Center }) {
       names.some(n => n === k.name || n === `${k.name}${k.number ?? ''}` || n === `${k.number ?? ''}${k.name}`)
     ));
   };
-  const list = filter === 'waiting' ? waiting : approved;
+  // 승인된 명단은 이름순, 미승인은 신청 순서 그대로
+  const list = filter === 'waiting' ? waiting : [...approved].sort((a, b) => (a.nickname ?? '').localeCompare(b.nickname ?? '', 'ko'));
   // 승인·미승인 목록은 접기 없이 늘 펼친다(카카오계정번호·회원 코드·가입일자·마지막 로그인)
   const datesOn = filter === 'waiting' || filter === 'approved';
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
@@ -473,10 +482,10 @@ export default function MembersView({ center }: { center: Center }) {
               <th className={th}>{filter === 'waiting' ? '전화번호' : '뒷번호'}</th>
               {filter !== 'waiting' && <th className={th}>전화번호</th>}
               {filter === 'waiting' && <th className={th}>아이 명단</th>}
-              {filter === 'waiting' && [...SUPPORTS.map(x => x.label), '선결제'].map(l => <th key={`u-${l}`} className={`${th} text-center`} title="같은 기존 아이의 쓰는 결제 체크 (보기만)">{l}<span className="block text-[10px] text-[#bbb]">체크</span></th>)}
+              {filter === 'waiting' && [...SUPPORTS.map(x => x.label), ...PREPAID_KINDS.map(x => x.label)].map(l => <th key={`u-${l}`} className={`${th} text-center`} title="같은 기존 아이의 쓰는 결제 체크 (보기만)">{l}<span className="block text-[10px] text-[#bbb]">체크</span></th>)}
               {filter === 'waiting' && APPROVE_FIELDS.map(f => <th key={f.key} className={`${th} text-center`} title={`승인하려면 꼭 적어야 해요 — 없으면 0`}>{f.label}<span className="block text-[10px] text-[#bbb]">{f.unit === '회' ? '남은 횟수' : '남은 금액(원)'}</span></th>)}
               {filter === 'methods' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
-              {filter === 'methods' && <th className={`${th} text-center`}>선결제</th>}
+              {filter === 'methods' && PREPAID_KINDS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
               <th className={th}>설명</th>
               {filter !== 'methods' && <th className={th}><span className="sr-only">관리</span></th>}
@@ -546,7 +555,7 @@ export default function MembersView({ center }: { center: Center }) {
                     </td>
                   )}
                   {/* 미승인 — 쓰는 결제 체크(바우처…선결제)는 같은 기존 아이의 체크를 보여 준다(승인하면 그 아이와 이어져 그대로 쓰인다) */}
-                  {filter === 'waiting' && [...SUPPORTS.map(x => x.key), 'prepaid' as const].map(key => {
+                  {filter === 'waiting' && [...SUPPORTS.map(x => x.key), ...PREPAID_KINDS.map(x => x.key)].map(key => {
                     const k = matchOf(m);
                     return (
                       <td key={key} className={`${td} text-center`}>
@@ -573,23 +582,23 @@ export default function MembersView({ center }: { center: Center }) {
                         onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />
                     </td>
                   ))}
-                  {filter === 'methods' && (
-                    <td className={`${td} text-center`}>
+                  {filter === 'methods' && PREPAID_KINDS.map(p => (
+                    <td key={p.key} className={`${td} text-center`}>
                       {/* 선결제 — 아이 명단의 체크와 같은 칸(연결된 아이가 있어야 체크할 수 있다) */}
-                      <input type="checkbox" checked={!!kidOf(m.userId)?.uses?.prepaid} disabled={!kidOf(m.userId)}
-                        title={kidOf(m.userId) ? '선결제를 쓰는 아이' : '아이 명단과 연결된 뒤에 체크할 수 있어요'}
+                      <input type="checkbox" checked={!!kidOf(m.userId)?.uses?.[p.key]} disabled={!kidOf(m.userId)}
+                        title={kidOf(m.userId) ? `${p.label}를 쓰는 아이` : '아이 명단과 연결된 뒤에 체크할 수 있어요'}
                         onChange={async e => {
                           const k = kidOf(m.userId);
                           if (!k) return;
                           const on = e.target.checked;
                           try {
-                            await setChildUses(k.id, 'prepaid', on);
-                            setKids(list => list.map(x => (x.id === k.id && x.uses ? { ...x, uses: { ...x.uses, prepaid: on } } : x)));
+                            await setChildUses(k.id, p.key, on);
+                            setKids(list => list.map(x => (x.id === k.id && x.uses ? { ...x, uses: { ...x.uses, [p.key]: on } } : x)));
                           } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
                         }}
                         className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
                     </td>
-                  )}
+                  ))}
                   {SHOW_PREPAID && (
                   <td className={`${td} whitespace-nowrap`}>
                     {on ? (

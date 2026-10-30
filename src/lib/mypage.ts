@@ -10,7 +10,7 @@ export interface MyChild {
   oral: boolean;
   supports: { voucher: boolean; gusen: boolean; kkumideun: boolean; woojin: boolean; subsidy: boolean };
   /** 아이 명단에서 체크한 쓰는 결제 */
-  uses: { voucher: boolean; gusen: boolean; jangmatchum: boolean; kkumideun: boolean; woojin: boolean; woojin_ext: boolean; woojin_self: boolean; subsidy: boolean; prepaid: boolean };
+  uses: { voucher: boolean; gusen: boolean; jangmatchum: boolean; kkumideun: boolean; woojin: boolean; woojin_ext: boolean; woojin_self: boolean; subsidy: boolean; prepaid: boolean; prepaid_b: boolean; prepaid_c: boolean };
 }
 
 export interface MyLesson {
@@ -43,7 +43,7 @@ export async function getMyChild(center?: BranchKey): Promise<MyChild | null> {
     payment: r.payment ?? '',
     oral: !!r.oral,
     supports: { voucher: !!r.voucher, gusen: !!r.gusen, kkumideun: !!r.kkumideun, woojin: !!r.woojin, subsidy: !!r.subsidy },
-    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, jangmatchum: !!r.uses_jangmatchum, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, woojin_ext: !!r.uses_woojin_ext, woojin_self: !!r.uses_woojin_self, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
+    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, jangmatchum: !!r.uses_jangmatchum, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, woojin_ext: !!r.uses_woojin_ext, woojin_self: !!r.uses_woojin_self, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid, prepaid_b: !!r.uses_prepaid_b, prepaid_c: !!r.uses_prepaid_c },
   };
 }
 
@@ -72,7 +72,7 @@ export async function getMyLessons(from: string, to: string): Promise<MyLesson[]
 export const isRealLesson = (l: MyLesson) => (l.status === 'child' || l.status === 'cancel_requested') && !l.moved;
 
 /** 결제 현황 — 바우처·굳센·장맞춤·꿈이든은 이번 달 사용/제공(매월 1일 새로), 선결제는 지금까지 사용/충전(남은 = 충전 − 사용). 확정된 결제만 */
-export interface MyPayment { method: 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid'; used: number; total: number }
+export interface MyPayment { method: 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'prepaid_b' | 'prepaid_c'; used: number; total: number }
 
 export async function getMyPayments(center?: BranchKey): Promise<MyPayment[]> {
   const { data, error } = await supabase.rpc('my_payments', center ? { p_center: center } : {});

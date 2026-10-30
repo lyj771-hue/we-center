@@ -8,7 +8,7 @@ import { askChoice, askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import { addAdminLog } from '@/lib/adminLog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, addTeacherWorkDay, getKoreanHolidays, getPostedOpenSlots, getTeachers, HIDDEN_TEACHERS, parseYmd, removeTeacherWorkDay, toYmd } from '@/lib/schedule';
-import type { BalanceKey, CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
+import type { BalanceKey, CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod, PrepaidKey } from '@/lib/timetable';
 import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
 import { addAndSendOutbox, getDayLeaves, type TeacherLeave } from '@/lib/leave';
 import { getMembers } from '@/lib/store';
@@ -18,6 +18,7 @@ import {
   balanceOf, isWoojin, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
   getLaterPayments, isLaterPay, roundMethod, RETRO_BASE,
+  isPrepaid, prepaidTotalOf,
 } from '@/lib/timetable';
 
 // 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임 | 결제방식] 세 칸.
@@ -715,18 +716,18 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
     setSavingPay(true);
     const failedKeys: string[] = [];
-    const prepaidUses = new Map<string, number>();   // 이번에 선결제로 확정한 아이 → 횟수 (알림톡)
+    const prepaidUses = new Map<string, { childId: string; method: PrepaidKey; count: number }>();   // 이번에 선결제로 확정한 아이·종류 → 횟수 (알림톡)
     for (const x of toConfirm) {
       const k = keyOf(x.childId, x.time);
       const e = paidOf(x.childId, x.time) ?? (x.base ? { method: x.base } : undefined);
       if (!e) continue;
       // 이미 선결제로 확정(알림톡도 보냄)된 수업은 다시 알리지 않는다 — 새로 선결제가 된 수업만
       const before = payments.get(k);
-      const wasPrepaid = !!before?.confirmed && before.method === 'prepaid' && !before.note;
+      const wasPrepaid = !!before?.confirmed && before.method === e.method && !before.note;
       try {
         // 소급·미결은 고른 것만 저장하고 확정하지 않는다
         await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { ...e, confirmed: !isLaterPay(e.method) });
-        if (e.method === 'prepaid' && !e.note && !wasPrepaid) prepaidUses.set(x.childId, (prepaidUses.get(x.childId) ?? 0) + 1);
+        if (isPrepaid(e.method) && !e.note && !wasPrepaid) { const pk = `${x.childId}|${e.method}`; prepaidUses.set(pk, { childId: x.childId, method: e.method, count: (prepaidUses.get(pk)?.count ?? 0) + 1 }); }
       }
       catch { failedKeys.push(k); }
     }
@@ -737,7 +738,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     // 선결제 사용 — 아이마다 그날 한 번 '선결제 사용' 알림톡
     if (prepaidUses.size) {
       try {
-        const r = await notifyPrepaidUses(day, [...prepaidUses].map(([childId, count]) => ({ childId, count })));
+        const r = await notifyPrepaidUses(day, [...prepaidUses.values()]);
         if (r.sent + r.failed + r.skipped + r.waiting) await showAlert(`선결제 사용 알림톡 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
       } catch (e) { await showAlert(`결제는 확정했지만 선결제 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
     }
@@ -756,11 +757,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     // 우진학교외부·자율은 남은 금액(만원)
     if (c && isWoojin(method)) return `${Math.floor(balanceOf(c, method as BalanceKey) / 10000)}만`;
     // 횟수가 있는 결제만 (신용카드·현금·직접 작성은 횟수 없음)
-    if (!c || (method !== 'voucher' && method !== 'gusen' && method !== 'kkumideun' && method !== 'prepaid')) return undefined;
-    const limit = { voucher: c.voucherLimit, gusen: c.gusenLimit, kkumideun: c.kkumideunLimit, prepaid: c.prepaidTotal }[method] ?? 0;
+    if (!c || (method !== 'voucher' && method !== 'gusen' && method !== 'kkumideun' && !isPrepaid(method))) return undefined;
+    const limit = isPrepaid(method) ? prepaidTotalOf(c, method) : { voucher: c.voucherLimit, gusen: c.gusenLimit, kkumideun: c.kkumideunLimit }[method] ?? 0;
     if (!limit) return undefined;
     const used = counts.get(childId)?.[method] ?? 0;   // 확정된 결제만 센다
-    return method === 'prepaid' ? `${limit - used}` : `${limit - used}/${limit}`;
+    return isPrepaid(method) ? `${limit - used}` : `${limit - used}/${limit}`;
   };
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
