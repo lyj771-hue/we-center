@@ -93,6 +93,12 @@ export default function MembersView({ center }: { center: Center }) {
   const autoTried = useRef(new Set<string>());
   const autoLink = useRef<() => void>(() => {});
   useEffect(() => { autoLink.current(); }, [kids, members, extraCenters, center]);
+  // 미승인 — 이름·뒷번호가 같은 기존 아이가 있으면 선결제·우진학교·지원금 칸을 그 아이 값으로 미리 채운다(아래 prefill.current)
+  const [prepaidUsed, setPrepaidUsed] = useState<Map<string, number> | null>(null);
+  useEffect(() => { if (isAdmin) getPaymentCounts('2000-01-01', '2999-12-31').then(m => setPrepaidUsed(new Map([...m].map(([k, v]) => [k, v.prepaid])))).catch(() => setPrepaidUsed(new Map())); }, [isAdmin, kids]);
+  const prefillDone = useRef(new Set<string>());
+  const prefill = useRef<() => void>(() => {});
+  useEffect(() => { prefill.current(); }, [kids, members, extraCenters, center, prepaidUsed]);
 
   if (!isAdmin) {
     return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
@@ -331,6 +337,29 @@ export default function MembersView({ center }: { center: Center }) {
   };
   // 이미 승인된 회원인데 이 지점 아이와 아직 안 이어졌으면 — 이름·뒷번호가 같은 아이가 딱 하나일 때 저절로 잇는다
   // (수색에 먼저 등록되고 나중에 의정부를 신청한 아이 등). 한 번 시도한 회원은 다시 하지 않는다
+  // 미승인 회원과 같은 기존 아이 — 이미 이어진 아이, 아니면 이름·뒷번호가 같은 아이가 딱 하나
+  const matchOf = (m: Member): Child | undefined => {
+    const linked = kidOf(m.userId);
+    if (linked) return linked;
+    const hits = sameKidsHere(m, kids);
+    return hits.length === 1 ? hits[0] : undefined;
+  };
+  prefill.current = () => {
+    if (!kids.length || !members.length || !prepaidUsed) return;
+    const fill = new Map<string, string>();
+    for (const m of waiting) {
+      const key = `${m.userId}|${center}`;
+      if (prefillDone.current.has(key)) continue;
+      const k = matchOf(m);
+      if (!k) continue;
+      prefillDone.current.add(key);
+      const vals: Record<ApproveField, number> = {
+        prepaid: Math.max(0, (k.prepaidTotal ?? 0) - (prepaidUsed.get(k.id) ?? 0)), woojin: k.woojinBalance ?? 0, subsidy: k.subsidyBalance ?? 0,
+      };
+      for (const f of APPROVE_FIELDS) if (!inputOf(m, f.key)) fill.set(`${m.userId}|${f.key}`, String(vals[f.key]));
+    }
+    if (fill.size) setApproveInput(mp => new Map([...mp, ...fill]));
+  };
   autoLink.current = () => {
     if (!kids.length || !members.length) return;
     const todo = approved.filter(m => !kidOf(m.userId) && !autoTried.current.has(`${m.userId}|${center}`));
@@ -432,6 +461,7 @@ export default function MembersView({ center }: { center: Center }) {
               <th className={th}>뒷번호</th>
               {filter !== 'waiting' && <th className={th}>전화번호</th>}
               {filter === 'waiting' && <th className={th}>아이 명단</th>}
+              {filter === 'waiting' && [...SUPPORTS.map(x => x.label), '선결제'].map(l => <th key={`u-${l}`} className={`${th} text-center`} title="같은 기존 아이의 쓰는 결제 체크 (보기만)">{l}<span className="block text-[10px] text-[#bbb]">체크</span></th>)}
               {filter === 'waiting' && APPROVE_FIELDS.map(f => <th key={f.key} className={`${th} text-center`} title={`승인하려면 꼭 적어야 해요 — 없으면 0`}>{f.label}<span className="block text-[10px] text-[#bbb]">{f.unit === '회' ? '남은 횟수' : '남은 금액(원)'}</span></th>)}
               {filter === 'methods' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {filter === 'methods' && <th className={`${th} text-center`}>선결제</th>}
@@ -503,6 +533,17 @@ export default function MembersView({ center }: { center: Center }) {
                       })()}
                     </td>
                   )}
+                  {/* 미승인 — 쓰는 결제 체크(바우처…선결제)는 같은 기존 아이의 체크를 보여 준다(승인하면 그 아이와 이어져 그대로 쓰인다) */}
+                  {filter === 'waiting' && [...SUPPORTS.map(x => x.key), 'prepaid' as const].map(key => {
+                    const k = matchOf(m);
+                    return (
+                      <td key={key} className={`${td} text-center`}>
+                        <input type="checkbox" checked={!!k?.uses?.[key]} disabled readOnly aria-label={`${m.nickname} ${key}`}
+                          title={k ? `기존 아이 명단(${k.memberCode ?? ''} ${k.name})의 체크` : '같은 기존 아이가 없어요'}
+                          className="w-4 h-4 accent-[var(--brand)] disabled:opacity-70" />
+                      </td>
+                    );
+                  })}
                   {filter === 'waiting' && APPROVE_FIELDS.map(f => {
                     const v = inputOf(m, f.key);
                     return (
