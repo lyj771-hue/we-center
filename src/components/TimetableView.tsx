@@ -1154,7 +1154,8 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, a
   const options = paid && !paid.note && !methods.some(m => m.key === paid.method) ? [...methods, ...PAY_METHODS.filter(m => m.key === paid.method)] : methods;
   // 회차를 붙이는 결제는 남은 횟수 대신 회차만 (고르는 목록은 그대로)
   const rest = paid?.confirmed && !pending && !round ? left?.(paid.method) : undefined;
-  const rn = round ? <>{round.n}{round.over && <span className="ml-0.5">!</span>}</> : null;
+  // 회차는 결제방식이 있는 칸에만 — 같은 아이가 같은 시간 다른 선생님 칸에도 있으면 결제방식 없는 칸에 숫자만 뜨던 것 막기
+  const rn = round && (paid || base) ? <>{round.n}{round.over && <span className="ml-0.5">!</span>}</> : null;
   // 단계 — 기본(그대로) / 파랑: 직접 고름(저장 전) / 빨강: 결제 완료로 확정
   // 파랑 = 고름(저장 전·선택 저장됨) / 빨강 = 결제 완료로 확정
   const confirmed = !pending && !!paid?.confirmed;
