@@ -17,7 +17,7 @@ import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
   CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
-  getLaterPayments, isLaterPay, roundMethod,
+  getLaterPayments, isLaterPay, roundMethod, RETRO_BASE,
 } from '@/lib/timetable';
 
 // 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임 | 결제방식] 세 칸.
@@ -788,20 +788,21 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         {/* 아직 결제 안 한 소급·미결 — 날짜마다 몇 건인지. 누르면 그날로 */}
         {!isTest && laterPays.length > 0 && (
           <div className="mb-4 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-[13px] text-[#991b1b]">
-            <p className="font-semibold mb-1.5">결제 안 된 소급·미결이 {laterPays.length}건 있어요. 결제한 뒤 그날 결제방식을 바꾸고 [결제 완료]를 눌러 주세요.</p>
-            <div className="flex flex-wrap gap-1.5">
-              {[...laterPays.reduce((m, r) => m.set(r.day, [...(m.get(r.day) ?? []), r.method]), new Map<string, PayMethod[]>())].map(([d, ms]) => {
-                const dd = parseYmd(d);
-                const byMethod = [...ms.reduce((m, k) => m.set(k, (m.get(k) ?? 0) + 1), new Map<PayMethod, number>())]
-                  .map(([k, n]) => `${PAY_METHODS.find(x => x.key === k)?.label ?? k} ${n}건`).join(' · ');
-                return (
-                  <button key={d} onClick={() => guard(() => { setMode('day'); setDay(d); })}
-                    className={`text-[12px] border border-[#fca5a5] rounded-full px-2.5 py-0.5 hover:bg-white ${d === day && mode === 'day' ? 'bg-white font-semibold' : 'bg-[#fff7f7]'}`}>
-                    {d.slice(0, 4)}/{d.slice(5, 7)}/{d.slice(8)}({DOW[dd.getDay()]}) {byMethod}
-                  </button>
-                );
-              })}
-            </div>
+            {(() => {
+              // 날짜마다 몇 건인지만 (어떤 소급인지는 그날 칸에서)
+              const byDay = [...laterPays.reduce((m, r) => m.set(r.day, (m.get(r.day) ?? 0) + 1), new Map<string, number>())];
+              return <>
+                <p className="font-semibold mb-1.5">소급할 결제가 {byDay.length}일 · {laterPays.length}건 있어요. 결제한 뒤 그날 결제방식을 바꾸고 [결제 완료]를 눌러 주세요.</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {byDay.map(([d, n]) => (
+                    <button key={d} onClick={() => guard(() => { setMode('day'); setDay(d); })}
+                      className={`text-[12px] border border-[#fca5a5] rounded-full px-2.5 py-0.5 hover:bg-white tabular-nums ${d === day && mode === 'day' ? 'bg-white font-semibold' : 'bg-[#fff7f7]'}`}>
+                      {d.slice(0, 4)}/{d.slice(5, 7)}/{d.slice(8)}({DOW[parseYmd(d).getDay()]}) {n}건
+                    </button>
+                  ))}
+                </div>
+              </>;
+            })()}
           </div>
         )}
 
@@ -1162,9 +1163,11 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, a
   // 회차 넘침은 확정(빨강 바탕)과 헷갈리지 않게 — 흰 바탕 + 빨간 테두리 + ! 
   // 소급·미결 = 빨간 글씨(나중에 결제)
   const later = isLaterPay(paid?.method);
+  // 소급은 회차를 가운데에 — "바우처3소급"
+  const retroBase = paid ? RETRO_BASE[paid.method] : undefined;
   const tone = round?.over ? 'bg-white text-[#dc2626] font-bold ring-2 ring-[#dc2626]' : later ? 'bg-white text-[#dc2626] font-semibold' : confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
   const text = paid
-    ? <span>{confirmed ? '✓' : ''}{paid.note || cellLabel(paid.method)}{rn}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
+    ? <span>{confirmed ? '✓' : ''}{paid.note || (retroBase ? cellLabel(retroBase) : cellLabel(paid.method))}{rn}{retroBase && !paid.note && '소급'}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
     : <span>{pending ? '체크 풀기' : (cellLabel(base) ?? '')}{!pending && rn}</span>;
   if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{cellLabel(base) ?? ''}</span>;
   return (
