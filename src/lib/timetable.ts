@@ -445,8 +445,8 @@ async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ dat
   }
 }
 
-/** 횟수에서 빼는 선생님 수업 — 이원재 선생님(병가)은 2026년 10월 수업을 세지 않는다 */
-const COUNT_EXCLUDE = [{ name: '이원재', from: '2026-10-01', to: '2026-10-31' }];
+/** 횟수에서 빼는 선생님 수업 — 이원재 선생님은 휴직 중이라 2026년 9월부터 수업을 세지 않는다(시간표에는 그대로 보임). 복직하면 to 를 그 전날로 */
+const COUNT_EXCLUDE = [{ name: '이원재', from: '2026-09-01', to: '9999-12-31' }];
 let excludeIds: Promise<Map<string, { from: string; to: string }[]>> | null = null;
 async function countExcluder(): Promise<(teacherId: string | null | undefined, day: string) => boolean> {
   excludeIds ??= (async () => {
@@ -496,7 +496,7 @@ export function defaultPayMethod(payment: string | undefined): PayMethod | undef
 
 /** 이번 달 1일 ~ upTo 날까지 두 센터 시간표의 바우처·굳센·꿈이든 수업 — 시간표의 월 회차용.
  *  결제를 아직 안 했어도 센다: 결제 기록이 있으면 그 결제, 없으면 칸의 기본 결제(빈타임 아이는 기본 결제가 없어 기록이 있을 때만).
- *  결석·옮긴 수업, 공휴일의 고정 수업, 그날 뺀 선생님 수업, COUNT_EXCLUDE(이원재 10월)는 세지 않는다 */
+ *  결석·옮긴 수업, 공휴일의 고정 수업, 그날 뺀 선생님 수업, COUNT_EXCLUDE(휴직 중인 이원재)는 세지 않는다 */
 export async function getMonthRoundLessons(upTo: string, children: Child[]): Promise<{ childId: string; day: string; time: string; method: PayMethod }[]> {
   const from = `${upTo.slice(0, 7)}-01`;
   const byId = new Map(children.map(c => [c.id, c]));
