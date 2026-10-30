@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday, toYmd, tomorrowsMonday, mondayOf } from '@/lib/schedule';
 import type { PrepaidKey } from '@/lib/timetable';
-import { isPrepaid, methodInCenter, PREPAID_KINDS, worksAt } from '@/lib/timetable';
+import { isPrepaid, isSepUijeongbuExcluded, methodInCenter, PREPAID_KINDS, worksAt } from '@/lib/timetable';
 
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
 
@@ -76,7 +76,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   const thisMonth = today.slice(0, 7);
   const [payMonth, setPayMonth] = useState(thisMonth);
   const shiftMonth = (ym: string, n: number) => { const d = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
-  const usedIn = (p: MyPayment) => payMonth === thisMonth ? p.used : history.filter(h => h.method === p.method && h.day.startsWith(payMonth)).length;
+  const usedIn = (p: MyPayment) => payMonth === thisMonth ? p.used : history.filter(h => h.method === p.method && h.day.startsWith(payMonth) && !isSepUijeongbuExcluded(h.teacher, h.center, h.day)).length;
   const payMonthLabel = `${payMonth.slice(0, 4)}년 ${Number(payMonth.slice(5, 7))}월`;
 
   // 사설 — 그 달(오늘까지) 실제로 한 수업 중 바우처·굳센·장맞춤·꿈이든·우진학교·지원금으로 하지 않은 수업 수 (선결제·카드·현금·결제 글자 없음 포함).
@@ -98,7 +98,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   // 지원 결제로 한 수업인지 — [결제 완료] 기록이 있으면 그것, 없으면 칸의 결제 글자(b·e·c·우·외·자·지)
   const bySupport = (l: MyLesson) => history.some(h => h.day === l.day && h.time === l.time && SUPPORT.includes(h.method))
     || /[bec우외자지장]/.test(l.payment.toLowerCase().replace(/x/g, ''));
-  const privateCount = monthLessons?.filter(l => (!center || l.center === center) && isRealLesson(l) && !l.absent
+  const privateCount = monthLessons?.filter(l => (!center || l.center === center) && isRealLesson(l) && !l.absent && !isSepUijeongbuExcluded(l.teacher, l.center, l.day)
     && !(monthHols[l.day] && l.source === 'fixed') && !bySupport(l)).length;
   // 공휴일 — 그 주에 걸친 해(연말·연초는 두 해)의 공휴일 이름
   const [holidays, setHolidays] = useState<Record<string, string>>({});
