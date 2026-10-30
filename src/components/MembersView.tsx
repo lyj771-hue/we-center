@@ -61,13 +61,15 @@ export default function MembersView({ center }: { center: Center }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ nickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '', phone: '', prepaidLeft: '' });
+  const [form, setForm] = useState({ nickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '', phone: '' });
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   const [kids, setKids] = useState<Child[]>([]);
   // 선결제 쓴 횟수(확정된 것, 처음부터) — 아이 id → 횟수. 남은 횟수 = 충전 합 − 쓴 횟수
   const [prepaidUsed, setPrepaidUsed] = useState<Map<string, number>>(new Map());
+  // 목록에서 적는 중인 남은 횟수 — 아이 id → 글
+  const [leftDraft, setLeftDraft] = useState<Map<string, string>>(new Map());
   const loadKids = useCallback(() => {
     getChildren().then(setKids).catch(() => {});
     getPaymentCounts('2000-01-01', '2999-12-31').then(c => setPrepaidUsed(new Map([...c].map(([id, v]) => [id, v.prepaid ?? 0])))).catch(() => {});
@@ -141,11 +143,24 @@ export default function MembersView({ center }: { center: Center }) {
       prepaidEunpyeong: String(m.prepaidEunpyeong), prepaidUijeongbu: String(m.prepaidUijeongbu),
       code: kidOf(m.userId)?.memberCode ?? '',
       phone: m.phoneLast4 ?? '',
-      prepaidLeft: (() => { const k = kidOf(m.userId); return k ? String(prepaidLeftOf(k)) : ''; })(),
     });
   };
   /** 선결제 남은 횟수 (이 지점 아이) */
   const prepaidLeftOf = (k: Child) => (k.prepaidTotal ?? 0) - (prepaidUsed.get(k.id) ?? 0);
+  // 목록에서 바로 고치기 — 칸을 나가거나 Enter 하면 저장. 지금 잔여와의 차이를 선결제 카드에 [수정] 기록으로
+  const savePrepaidLeft = async (k: Child, raw: string) => {
+    setLeftDraft(mp => { const n = new Map(mp); n.delete(k.id); return n; });
+    if (raw.trim() === '' || !/^-?\d+$/.test(raw.trim())) return;
+    try {
+      const used = (await getPaymentCounts('2000-01-01', '2999-12-31')).get(k.id)?.prepaid ?? 0;
+      const fresh = (await getChildren()).find(x => x.id === k.id) ?? k;
+      const diff = Number(raw) - ((fresh.prepaidTotal ?? 0) - used);
+      if (!diff) return;
+      const d = new Date();
+      await addCharge(k.id, `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, diff, '회원목록에서 남은 횟수 수정', true);
+      loadKids();
+    } catch (e) { showAlert(`선결제 남은 횟수를 저장하지 못했어요.\n${(e as Error).message}`); }
+  };
 
   const save = async (m: Member) => {
     if (!form.nickname.trim()) { alert('이름을 입력해 주세요.'); return; }
@@ -166,18 +181,6 @@ export default function MembersView({ center }: { center: Center }) {
           if (!kid) { await showAlert(`회원 코드 ${code}인 아이가 명단에 없어요.`); return; }
           if (kid.guardianUserId && kid.guardianUserId !== m.userId && !(await askConfirm(`${code} ${kid.name}은(는) 다른 계정에 이어져 있어요.\n이 계정으로 옮길까요?`))) return;
           await linkChild(kid.id, m.userId);
-        }
-        loadKids();
-      }
-      // 선결제 남은 횟수 — 고쳤으면 지금 잔여와의 차이를 선결제 카드에 [수정] 기록으로
-      const k = kidOf(m.userId);
-      if (k && form.prepaidLeft.trim() !== '' && code === (current?.memberCode ?? '')) {
-        const used = (await getPaymentCounts('2000-01-01', '2999-12-31')).get(k.id)?.prepaid ?? 0;
-        const fresh = (await getChildren()).find(x => x.id === k.id) ?? k;
-        const diff = (Number(form.prepaidLeft) || 0) - ((fresh.prepaidTotal ?? 0) - used);
-        if (diff) {
-          const d = new Date();
-          await addCharge(k.id, `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, diff, '회원목록에서 남은 횟수 수정', true);
         }
         loadKids();
       }
@@ -558,18 +561,25 @@ export default function MembersView({ center }: { center: Center }) {
                         className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
                     </td>
                   )}
-                  {/* 선결제 남은 횟수 — 이 지점 아이와 이어져 있어야. [수정]에서 고치면 선결제 카드에 [수정] 기록 */}
+                  {/* 선결제 남은 횟수 — 목록에서 바로 고친다(칸을 나가거나 Enter). 이 지점 아이와 이어져 있어야 */}
                   {filter === 'approved' && (
                     <td className={`${td} text-center tabular-nums whitespace-nowrap`}>
-                      {!kidOf(m.userId) ? <span className="text-[#ddd]" title="아이 명단과 연결된 뒤에 적을 수 있어요">-</span>
-                        : on ? (
-                          <input value={form.prepaidLeft} inputMode="numeric" aria-label={`${m.nickname} 선결제 남은 횟수`}
-                            onChange={e => setForm(f => ({ ...f, prepaidLeft: e.target.value.replace(/[^\d-]/g, '').slice(0, 5) }))}
-                            className="w-14 border-b border-[var(--brand)] py-1 text-center outline-none" />
-                        ) : (() => {
-                          const left = prepaidLeftOf(kidOf(m.userId)!);
-                          return <span className={left < 0 ? 'text-[#e11d48]' : left === 0 ? 'text-[#ccc]' : 'text-[#27272a]'}>{left}회</span>;
-                        })()}
+                      {(() => {
+                        const k = kidOf(m.userId);
+                        if (!k) return <span className="text-[#ddd]" title="아이 명단과 연결된 뒤에 적을 수 있어요">-</span>;
+                        const left = prepaidLeftOf(k);
+                        const v = leftDraft.get(k.id) ?? String(left);
+                        return (
+                          <span className="inline-flex items-center gap-0.5">
+                            <input value={v} inputMode="numeric" aria-label={`${m.nickname} 선결제 남은 횟수`} title="고치고 Enter — 선결제 카드에 [수정] 기록"
+                              onChange={e => { const t = e.target.value.replace(/[^\d-]/g, '').slice(0, 5); setLeftDraft(mp => new Map(mp).set(k.id, t)); }}
+                              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setLeftDraft(mp => { const n = new Map(mp); n.delete(k.id); return n; }); } }}
+                              onBlur={e => { if (leftDraft.has(k.id)) savePrepaidLeft(k, e.target.value); }}
+                              className={`w-12 text-center bg-transparent border-b outline-none focus:border-[var(--brand)] ${leftDraft.has(k.id) ? 'border-[#f59e0b]' : 'border-transparent hover:border-[#e5e5e5]'} ${left < 0 ? 'text-[#e11d48]' : left === 0 ? 'text-[#bbb]' : 'text-[#27272a]'}`} />
+                            <span className="text-[12px] text-[#999]">회</span>
+                          </span>
+                        );
+                      })()}
                     </td>
                   )}
                   {SHOW_PREPAID && (
