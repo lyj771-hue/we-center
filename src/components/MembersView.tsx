@@ -44,6 +44,9 @@ const APPROVE_FIELDS = [
 type ApproveField = (typeof APPROVE_FIELDS)[number]['key'];
 
 const pad = (n: number) => String(n).padStart(2, '0');
+/** 숫자만 (+82 10… → 010…) */
+const digitsOf = (p?: string) => { const d = (p ?? '').replace(/\D/g, ''); return d.startsWith('82') ? `0${d.slice(2)}` : d; };
+const fmtPhone = (p: string) => { const d = digitsOf(p); return d.length === 11 ? `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}` : d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}` : p; };
 const fmtDate = (iso: string) => {
   const d = new Date(iso);
   return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())}`;
@@ -129,9 +132,14 @@ export default function MembersView({ center }: { center: Center }) {
   const sameKidsHere = (m: Member, list: Child[]) => {
     const others = list.filter(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') !== center);
     const names = [m.nickname, ...others.flatMap(k => [k.name, `${k.name}${k.number ?? ''}`])].map(x => x.trim()).filter(Boolean);
-    const phones = [m.phoneLast4, ...others.map(k => k.phoneLast4)].filter((x): x is string => !!x);
+    // 번호 — 전체 번호(카카오 번호 ↔ 아이 명단 보호자 번호들)가 같거나, 아이 명단에 전체 번호가 없으면 뒷 4자리로
+    const full = [digitsOf(m.phone), ...others.flatMap(k => k.phones ?? [])].filter(Boolean);
+    const phones = [m.phoneLast4, digitsOf(m.phone).slice(-4), ...others.map(k => k.phoneLast4)].filter((x): x is string => !!x);
+    const phoneOk = (k: Child) => k.phones?.length
+      ? k.phones.some(p => full.includes(p))
+      : !!k.phoneLast4 && phones.includes(k.phoneLast4);
     return list.filter(k => (k.center ?? 'eunpyeong') === center && (!k.guardianUserId || k.guardianUserId === m.userId)
-      && !!k.phoneLast4 && phones.includes(k.phoneLast4)
+      && phoneOk(k)
       && names.some(n => n === k.name || n === `${k.name}${k.number ?? ''}` || n === `${k.number ?? ''}${k.name}`));
   };
 
@@ -200,7 +208,7 @@ export default function MembersView({ center }: { center: Center }) {
     const fresh = await getChildren().catch(() => kids);
     const already = fresh.find(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') === center);
     if (already) { setKids(fresh); return already; }
-    if (!m.phoneLast4 && !fresh.some(k => k.guardianUserId === m.userId && k.phoneLast4)) { await showAlert('승인했어요.\n뒷번호가 없어서 아이 명단과는 연결하지 않았어요.'); return; }
+    if (!m.phoneLast4 && !m.phone && !fresh.some(k => k.guardianUserId === m.userId && (k.phoneLast4 || k.phones?.length))) { await showAlert('승인했어요.\n전화번호가 없어서 아이 명단과는 연결하지 않았어요.'); return; }
     const hits = sameKidsHere(m, fresh);
     if (hits.length !== 1) {
       await showAlert(hits.length
@@ -383,7 +391,7 @@ export default function MembersView({ center }: { center: Center }) {
     const why: string[] = [];
     if (!canLink(m)) {
       const n = sameKidsHere(m, kids).length;
-      why.push(!m.phoneLast4 ? '뒷번호가 없어요' : n ? `이름·뒷번호가 같은 아이가 ${n}명이에요 (한 명이어야 해요)` : '이름·뒷번호가 같은 아이가 명단에 없어요');
+      why.push(!m.phoneLast4 && !m.phone ? '전화번호가 없어요(카카오 번호를 못 받음)' : n ? `이름·전화번호가 같은 아이가 ${n}명이에요 (한 명이어야 해요)` : '이름·전화번호가 같은 아이가 명단에 없어요');
     }
     const empty = APPROVE_FIELDS.filter(f => inputOf(m, f.key) === '').map(f => f.label);
     if (empty.length) why.push(`${empty.join('·')}을(를) 안 적었어요 (없으면 0)`);
@@ -458,7 +466,7 @@ export default function MembersView({ center }: { center: Center }) {
               <th className={th}>이름</th>
               <th className={`${th} text-center`}>수색점</th>
               <th className={`${th} text-center`}>의정부점</th>
-              <th className={th}>뒷번호</th>
+              <th className={th}>{filter === 'waiting' ? '전화번호' : '뒷번호'}</th>
               {filter !== 'waiting' && <th className={th}>전화번호</th>}
               {filter === 'waiting' && <th className={th}>아이 명단</th>}
               {filter === 'waiting' && [...SUPPORTS.map(x => x.label), '선결제'].map(l => <th key={`u-${l}`} className={`${th} text-center`} title="같은 기존 아이의 쓰는 결제 체크 (보기만)">{l}<span className="block text-[10px] text-[#bbb]">체크</span></th>)}
@@ -509,7 +517,7 @@ export default function MembersView({ center }: { center: Center }) {
                   <td className={`${td} whitespace-nowrap tabular-nums`}>
                     {on ? <input className={`${input} w-14 text-center`} value={form.phone} inputMode="numeric" maxLength={4} placeholder="1234"
                       onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 4) }))} />
-                      : m.phoneLast4 ?? <span className="text-[#ccc]">-</span>}
+                      : filter === 'waiting' && m.phone ? fmtPhone(m.phone) : m.phoneLast4 ?? <span className="text-[#ccc]">-</span>}
                   </td>
                   {/* 카카오계정 전화번호 — 다음 로그인 때 채워진다 */}
                   {filter !== 'waiting' && (

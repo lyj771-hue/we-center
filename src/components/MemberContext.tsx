@@ -143,7 +143,7 @@ function NicknameSetup({ userId, kakaoPhone, onDone, onTeacher, onCancel }: { us
   const last4 = (kakaoPhone ?? '').replace(/\D/g, '').slice(-4);
   const [tPhone, setTPhone] = useState(last4);
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState(last4);
+  const [phone, setPhone] = useState(last4);   // 보호자 — 칸은 없고 카카오 번호 뒷 4자리
   // 카카오 번호가 늦게 오면 — 아직 비어 있는 칸만 채운다
   useEffect(() => {
     if (!last4) return;
@@ -156,7 +156,7 @@ function NicknameSetup({ userId, kakaoPhone, onDone, onTeacher, onCancel }: { us
   const [saving, setSaving] = useState(false);
   const ready = role === 'teacher'
     ? !!name.trim() && /^\d{4}$/.test(tPhone)
-    : !!name.trim() && /^\d{4}$/.test(phone) && !!center;
+    : !!name.trim() && !!center;
 
   // 선생님 인증
   const submitTeacher = async () => {
@@ -184,11 +184,11 @@ function NicknameSetup({ userId, kakaoPhone, onDone, onTeacher, onCancel }: { us
     if (role === 'teacher') { await submitTeacher(); return; }
     const child = name.trim();
     if (!child) { setError('아이 이름을 적어 주세요.'); return; }
-    if (!/^\d{4}$/.test(phone)) { setError('대표 보호자 전화번호 뒷 4자리를 숫자로 적어 주세요.'); return; }
     if (!center) { setError('다니는 센터를 골라 주세요.'); return; }
-    if (!(await askConfirm(`센터: ${center === 'uijeongbu' ? '의정부' : '수색'}\n아이 이름: ${child}\n전화번호 뒷자리: ${phone}\n\n이대로 가입할까요?\n(아이 이름은 나중에 센터에서만 바꿀 수 있어요)`))) return;
+    if (!(await askConfirm(`센터: ${center === 'uijeongbu' ? '의정부' : '수색'}\n아이 이름: ${child}\n\n이대로 가입할까요?\n(아이 이름은 나중에 센터에서만 바꿀 수 있어요)`))) return;
     setSaving(true);
     try {
+      // 보호자 전화번호는 묻지 않고 카카오계정 번호로 (뒷 4자리 + 전체 번호) — 센터가 아이 명단 번호와 비교한다
       await createMyProfile(userId, child, phone, center);
       if (kakaoPhone) await saveMyPhone(kakaoPhone).catch(() => {});
       const p = await getMyProfile(userId);
@@ -211,7 +211,7 @@ function NicknameSetup({ userId, kakaoPhone, onDone, onTeacher, onCancel }: { us
           className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center text-[18px] text-[#999] hover:text-[#333]">✕</button>
         <p className="text-[var(--brand)] text-[22px] mb-2">처음 오셨네요</p>
         <p className="text-[13px] leading-[2] text-[#666] mb-6">
-          {role === 'teacher' ? '센터에 등록된 이름과 휴대전화 뒷번호 4자리를 적어 주세요.' : '아이 이름과 대표 보호자 전화번호 뒷자리를 적어 주세요.'}
+          {role === 'teacher' ? '센터에 등록된 이름과 휴대전화 뒷번호 4자리를 적어 주세요.' : '다니는 센터를 고르고 아이 이름을 적어 주세요.'}
         </p>
         <form onSubmit={submit} className="space-y-4">
           {/* 구분 */}
@@ -246,11 +246,6 @@ function NicknameSetup({ userId, kakaoPhone, onDone, onTeacher, onCancel }: { us
             <span className={label}>아이 이름 <span className="text-[#e11d48]">*</span></span>
             <input type="text" value={name} maxLength={20} autoFocus placeholder="예: 김민준"
               onChange={e => { setName(e.target.value); setError(''); }} className={field} />
-          </label>
-          <label className="block">
-            <span className={label}>대표 보호자 전화번호 뒷 4자리 <span className="text-[#e11d48]">*</span></span>
-            <input type="text" inputMode="numeric" value={phone} maxLength={4} placeholder="예: 1234"
-              onChange={e => { setPhone(e.target.value.replace(/\D/g, '').slice(0, 4)); setError(''); }} className={`${field} tracking-[0.3em]`} />
           </label>
           </>)}
           {error && <p className="text-[12px] text-red-400">{error}</p>}
