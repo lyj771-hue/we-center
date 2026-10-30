@@ -17,6 +17,7 @@ import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
   CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
+  getLaterPayments, isLaterPay, roundMethod,
 } from '@/lib/timetable';
 
 // 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임 | 결제방식] 세 칸.
@@ -77,6 +78,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   // 이번 달 1일~그날 두 센터의 바우처·굳센·꿈이든 수업(결제 전이면 기본 결제로) — 결제방식 칸에 "바우처3"처럼 월 회차를 붙인다
   const [roundPays, setRoundPays] = useState<{ childId: string; day: string; time: string; method: PayMethod }[]>([]);
   const [savingPay, setSavingPay] = useState(false);
+  // 아직 결제 안 한 소급·미결(이 센터 전부) — 시간표 관리 위 안내
+  const [laterPays, setLaterPays] = useState<{ day: string; method: PayMethod }[]>([]);
   // 그날만 이 센터에 더한 선생님(공휴일 등)·뺀 선생님
   const [assigns, setAssigns] = useState<{ added: string[]; removed: string[] }>({ added: [], removed: [] });
   const [board, setBoard] = useState<{ fixed: Map<string, CellView>; open: Map<string, CellView> }>({ fixed: new Map(), open: new Map() });
@@ -118,6 +121,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         setPostedOpen(await getPostedOpenSlots(day, center).catch(() => new Map<string, string>()));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
+      setLaterPays(await getLaterPayments(center).catch(() => []));
       setFailed('');
     } catch (e) {
       setFailed((e as Error).message);
@@ -668,6 +672,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const missingPay = new Set(lessons.filter(x => !paidOf(x.childId, x.time) && !x.base).map(x => keyOf(x.childId, x.time)));
   // 월 회차 — 아이마다 이번 달 바우처·굳센·꿈이든 몇 번째 수업인지 (결제 전 수업도 센다. 오늘 이 표는 고르는 중인 결제까지 반영해 시간 순)
   const effMethod = (x: { childId: string; time: string; base?: PayMethod }) => paidOf(x.childId, x.time)?.method ?? x.base;
+  // 월 회차는 소급도 원래 결제(바우처소급 → 바우처)로 센다
   const rounds = (() => {
     const onBoard = new Set(lessons.map(x => keyOf(x.childId, x.time)));
     const before = new Map<string, number>();
@@ -676,7 +681,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       if (r.day < day) before.set(`${r.childId}|${r.method}`, (before.get(`${r.childId}|${r.method}`) ?? 0) + 1);
       else if (r.day === day && !onBoard.has(keyOf(r.childId, r.time))) today.push({ ...r, mine: false });   // 같은 날 다른 센터 수업
     }
-    for (const x of lessons) { const m = effMethod(x); if (m && m in ROUND_LIMIT) today.push({ childId: x.childId, time: x.time, method: m, mine: true }); }
+    for (const x of lessons) { const m0 = effMethod(x), m = m0 && roundMethod(m0); if (m && m in ROUND_LIMIT) today.push({ childId: x.childId, time: x.time, method: m, mine: true }); }
     today.sort((a, b) => a.time.localeCompare(b.time));
     const out = new Map<string, { n: number; over: boolean }>();
     for (const r of today) {
@@ -690,16 +695,24 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   // 회차가 넘친 수업(빨간 글씨) — 하나라도 있으면 [결제 완료]를 누를 수 없다
   const overRound = [...rounds.values()].filter(r => r.over).length;
   // 아직 확정 안 된 수업 — [결제 완료]에서 고른 결제(없으면 기본 결제)로 확정한다
+  // 소급·미결로 저장해 둔 수업은 [결제 완료]에 확정되지 않는다(실제 결제한 뒤 결제방식을 바꾸면 그때 확정)
   const toConfirm = lessons.filter(x => {
     const k = keyOf(x.childId, x.time);
+    if (!draft.has(k) && isLaterPay(payments.get(k)?.method)) return false;
     return draft.has(k) || !payments.get(k)?.confirmed;
   });
+  // 그날 아직 결제 안 한 소급·미결 — 다 바꿀 때까지 [결제 완료]를 계속 누를 수 있다
+  const laterToday = lessons.filter(x => isLaterPay(effMethod(x))).length;
   const schedPending = ops.size + assignDraft.size;
-  const canPay = !missingPay.size && !overRound && !schedPending && toConfirm.length > 0;
+  const canPay = !missingPay.size && !overRound && !schedPending && (toConfirm.length > 0 || laterToday > 0);
 
   // [결제 완료] — 그날 진행된 수업을 모두 확정 (스케줄 변경을 먼저 저장해야 누를 수 있다)
   const savePayments = async () => {
     if (!canPay) return;
+    if (!toConfirm.length) {
+      await showAlert(`소급·미결 ${laterToday}건이 남아 있어요.\n실제로 결제한 뒤 결제방식을 바우처·굳센 등으로 바꾸고 [결제 완료]를 눌러 주세요.`);
+      return;
+    }
     setSavingPay(true);
     const failedKeys: string[] = [];
     const prepaidUses = new Map<string, number>();   // 이번에 선결제로 확정한 아이 → 횟수 (알림톡)
@@ -707,9 +720,13 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       const k = keyOf(x.childId, x.time);
       const e = paidOf(x.childId, x.time) ?? (x.base ? { method: x.base } : undefined);
       if (!e) continue;
+      // 이미 선결제로 확정(알림톡도 보냄)된 수업은 다시 알리지 않는다 — 새로 선결제가 된 수업만
+      const before = payments.get(k);
+      const wasPrepaid = !!before?.confirmed && before.method === 'prepaid' && !before.note;
       try {
-        await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { ...e, confirmed: true });
-        if (e.method === 'prepaid' && !e.note) prepaidUses.set(x.childId, (prepaidUses.get(x.childId) ?? 0) + 1);
+        // 소급·미결은 고른 것만 저장하고 확정하지 않는다
+        await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { ...e, confirmed: !isLaterPay(e.method) });
+        if (e.method === 'prepaid' && !e.note && !wasPrepaid) prepaidUses.set(x.childId, (prepaidUses.get(x.childId) ?? 0) + 1);
       }
       catch { failedKeys.push(k); }
     }
@@ -766,6 +783,26 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           </div>
         ) : (
           <a href={center === 'uijeongbu' ? '/admin/timetable-test/uijeongbu' : '/admin/timetable-test'} className="inline-block mb-3 text-[12px] text-[#888] underline underline-offset-2">시간표(테스트) — 김유담으로 연습하기 →</a>
+        )}
+
+        {/* 아직 결제 안 한 소급·미결 — 날짜마다 몇 건인지. 누르면 그날로 */}
+        {!isTest && laterPays.length > 0 && (
+          <div className="mb-4 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-[13px] text-[#991b1b]">
+            <p className="font-semibold mb-1.5">결제 안 된 소급·미결이 {laterPays.length}건 있어요. 결제한 뒤 그날 결제방식을 바꾸고 [결제 완료]를 눌러 주세요.</p>
+            <div className="flex flex-wrap gap-1.5">
+              {[...laterPays.reduce((m, r) => m.set(r.day, [...(m.get(r.day) ?? []), r.method]), new Map<string, PayMethod[]>())].map(([d, ms]) => {
+                const dd = parseYmd(d);
+                const byMethod = [...ms.reduce((m, k) => m.set(k, (m.get(k) ?? 0) + 1), new Map<PayMethod, number>())]
+                  .map(([k, n]) => `${PAY_METHODS.find(x => x.key === k)?.label ?? k} ${n}건`).join(' · ');
+                return (
+                  <button key={d} onClick={() => guard(() => { setMode('day'); setDay(d); })}
+                    className={`text-[12px] border border-[#fca5a5] rounded-full px-2.5 py-0.5 hover:bg-white ${d === day && mode === 'day' ? 'bg-white font-semibold' : 'bg-[#fff7f7]'}`}>
+                    {d.slice(0, 4)}/{d.slice(5, 7)}/{d.slice(8)}({DOW[dd.getDay()]}) {byMethod}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {/* 보기 고르기 */}
@@ -965,7 +1002,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                                 round={c.childId ? rounds.get(keyOf(c.childId, time)) : undefined}
                                 left={c.childId ? (m => remaining(c.childId!, m)) : undefined}
                                 askAlways={c !== right && !!c.childId && c.childId === cellOf(board.fixed, t.id, time).childId}
-                                onPay={c.childId ? (e, always) => { pay(c.childId!, t.id, time, e); if (always && e) setFixedPayment(t, time, e.method); } : undefined} />
+                                onPay={c.childId ? (e, always) => { pay(c.childId!, t.id, time, e); if (always && e && !isLaterPay(e.method)) setFixedPayment(t, time, e.method); } : undefined} />
                             ))}
                           </td>
                           {memoTd}
@@ -1008,7 +1045,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                 {missingPay.size ? `결제방식이 빈 수업 ${missingPay.size}개 — 빨간 테두리 칸을 채워 주세요`
                   : overRound ? `월 횟수를 넘은 수업 ${overRound}개 — 빨간 글씨 칸의 결제방식을 바꿔 주세요`
                   : schedPending ? '시간표 변경을 먼저 저장해 주세요'
-                  : toConfirm.length ? `확정할 결제 ${toConfirm.length}건`
+                  : toConfirm.length ? `확정할 결제 ${toConfirm.length}건${laterToday ? ` · 소급·미결 ${laterToday}건 남음` : ''}`
+                  : laterToday ? `소급·미결 ${laterToday}건 남음 — 결제한 뒤 결제방식을 바꿔 [결제 완료]`
                   : lessons.length ? '결제가 모두 확정됐어요' : ''}
               </span>
               <button onClick={savePayments} disabled={!canPay || savingPay}
@@ -1021,7 +1059,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
         <p className="text-[11px] text-[#999] mt-3 leading-[2]">
           칸을 누르면 고칠 수 있어요. 앞 숫자 = 같은 이름 구분 · 줄 = 다른 선생님에게 옮김 · ? = 미정
-          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span> · <span className="text-[#0d9488]">청록 이름</span> = 빈타임에 직접 작성(회원 아님) · <span className="text-[#dc2626] font-bold ring-2 ring-[#dc2626] px-1 rounded">바우처6!</span> = 월 횟수 넘침(바우처 6회째·굳센 4회째·장맞춤 9회째부터)</>}
+          {mode === 'day' && <> · 빈타임의 &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제방식: 기본 결제 → <span className="bg-[#e3edfc] text-[#1d4ed8] px-1 rounded">파랑 = 직접 고름</span> → [결제 완료] → <span className="bg-[#fde2e2] text-[#b91c1c] px-1 rounded">✓ 빨강 = 확정</span> · <span className="text-[#dc2626] font-semibold">빨간 글씨 = 소급·미결</span>(나중에 결제 — [결제 완료]에 확정 안 됨) · <span className="text-[#0d9488]">청록 이름</span> = 빈타임에 직접 작성(회원 아님) · <span className="text-[#dc2626] font-bold ring-2 ring-[#dc2626] px-1 rounded">바우처6!</span> = 월 횟수 넘침(바우처 6회째·굳센 4회째·장맞춤 9회째부터)</>}
         </p>
       </div>
 
@@ -1121,14 +1159,16 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, a
   // 파랑 = 고름(저장 전·선택 저장됨) / 빨강 = 결제 완료로 확정
   const confirmed = !pending && !!paid?.confirmed;
   // 회차 넘침은 확정(빨강 바탕)과 헷갈리지 않게 — 흰 바탕 + 빨간 테두리 + ! 
-  const tone = round?.over ? 'bg-white text-[#dc2626] font-bold ring-2 ring-[#dc2626]' : confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
+  // 소급·미결 = 빨간 글씨(나중에 결제)
+  const later = isLaterPay(paid?.method);
+  const tone = round?.over ? 'bg-white text-[#dc2626] font-bold ring-2 ring-[#dc2626]' : later ? 'bg-white text-[#dc2626] font-semibold' : confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
   const text = paid
     ? <span>{confirmed ? '✓' : ''}{paid.note || cellLabel(paid.method)}{rn}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
     : <span>{pending ? '체크 풀기' : (cellLabel(base) ?? '')}{!pending && rn}</span>;
   if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{cellLabel(base) ?? ''}</span>;
   return (
     <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone} ${missing && !round?.over ? 'ring-1 ring-red-300' : ''}`}
-      title={round?.over ? `이번 달 ${round.n}회째 — 월 횟수를 넘었어요. 결제방식을 바꿔야 [결제 완료]를 누를 수 있어요` : pending ? '저장 전 — [스케줄 변경 완료]로 저장, [결제 완료]로 확정' : paid?.confirmed ? '결제 완료로 확정됨' : paid ? '고른 결제 — [결제 완료]를 눌러야 확정돼요' : '기본 결제 — 눌러서 고르기'}>
+      title={round?.over ? `이번 달 ${round.n}회째 — 월 횟수를 넘었어요. 결제방식을 바꿔야 [결제 완료]를 누를 수 있어요` : later ? '나중에 결제(소급·미결) — 결제한 뒤 결제방식을 바꾸고 [결제 완료]를 눌러 주세요' : pending ? '저장 전 — [스케줄 변경 완료]로 저장, [결제 완료]로 확정' : paid?.confirmed ? '결제 완료로 확정됨' : paid ? '고른 결제 — [결제 완료]를 눌러야 확정돼요' : '기본 결제 — 눌러서 고르기'}>
       {text}
       <select value={paid ? (paid.note ? 'custom' : paid.method) : ''}
         onChange={async e => {
@@ -1137,7 +1177,7 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, a
           else if (v === 'custom') {
             const t = await askPrompt('결제 방식을 적어 주세요', paid?.note ?? '');
             if (t?.trim()) onPay({ method: 'other', note: t.trim() });
-          } else if (askAlways && v !== base) {
+          } else if (askAlways && v !== base && !isLaterPay(v as PayMethod)) {
             const r = await askChoice(`${cell.name} — ${label(v as PayMethod)}\n이번 수업만 바꿀까요,\n앞으로 계속 ${label(v as PayMethod)}(으)로 할까요?`, '이번만', '앞으로 계속');
             if (r) onPay({ method: v as PayMethod }, r === 'b');
           } else onPay({ method: v as PayMethod });

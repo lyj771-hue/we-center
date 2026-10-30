@@ -363,7 +363,8 @@ export async function saveFixedFrom(body: FixedFromBody): Promise<void> {
 
 // ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
 
-export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid' | 'card' | 'cash' | 'other';
+export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid' | 'card' | 'cash' | 'other'
+  | 'voucher_retro' | 'gusen_retro' | 'jangmatchum_retro' | 'kkumideun_retro' | 'unpaid';
 /** cell = 시간표 결제 칸에 보이는 짧은 이름 (없으면 label) */
 export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?: string }[] = [
   { key: 'voucher', label: '바우처', short: 'b' },
@@ -375,7 +376,30 @@ export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?:
   { key: 'prepaid', label: '선결제', short: '선' },
   { key: 'card', label: '신용카드', short: '카' },
   { key: 'cash', label: '현금', short: '현' },
+  // 나중에 결제(소급·미결) — 빨간 글씨. [결제 완료]로 확정되지 않고, 실제 결제한 뒤 결제방식을 바꿔 확정한다. 기본 결제 글자로는 안 쓴다(short 두 글자)
+  { key: 'voucher_retro', label: '바우처소급', short: '바소' },
+  { key: 'gusen_retro', label: '굳센소급', short: '굳소' },
+  { key: 'jangmatchum_retro', label: '장맞춤소급', short: '장소' },
+  { key: 'kkumideun_retro', label: '꿈이든소급', short: '꿈소' },
+  { key: 'unpaid', label: '미결', short: '미결' },
 ];
+
+/** 소급 → 나중에 할 결제. 월 회차는 이 결제로 센다(결제를 미뤘을 뿐 그 달 수업이라서) */
+export const RETRO_BASE: Partial<Record<PayMethod, PayMethod>> = {
+  voucher_retro: 'voucher', gusen_retro: 'gusen', jangmatchum_retro: 'jangmatchum', kkumideun_retro: 'kkumideun',
+};
+/** 나중에 결제(소급·미결) — [결제 완료]에 확정되지 않고 시간표 관리 위 안내에 남는다 */
+export const isLaterPay = (m?: PayMethod) => !!m && (m === 'unpaid' || m in RETRO_BASE);
+/** 월 회차를 셀 결제 — 소급은 원래 결제로 */
+export const roundMethod = (m: PayMethod): PayMethod => RETRO_BASE[m] ?? m;
+
+/** 아직 결제 안 한 소급·미결 — 이 센터 전부 */
+export async function getLaterPayments(center: Center): Promise<{ day: string; method: PayMethod }[]> {
+  const { data, error } = await supabase.from('lesson_payments').select('day, method')
+    .eq('center', center).in('method', ['voucher_retro', 'gusen_retro', 'jangmatchum_retro', 'kkumideun_retro', 'unpaid']).order('day');
+  if (error) throw error;
+  return (data ?? []).map(r => ({ day: r.day as string, method: r.method as PayMethod }));
+}
 
 /** 결제 체크 하나 — 직접 적은 결제는 method = 'other' + note */
 export interface PayEntry {
@@ -455,7 +479,7 @@ export const JANGMATCHUM_MAX = 8;
 
 /** 지점마다 쓰는 결제 — 수색은 굳센, 의정부는 굳센 대신 장맞춤 */
 export const methodInCenter = (key: string, center: Center) =>
-  !(key === 'gusen' && center === 'uijeongbu') && !(key === 'jangmatchum' && center !== 'uijeongbu');
+  !(key.startsWith('gusen') && center === 'uijeongbu') && !(key.startsWith('jangmatchum') && center !== 'uijeongbu');
 export const payMethodsFor = (center: Center) => PAY_METHODS.filter(m => methodInCenter(m.key, center));
 
 /** 결제 글자(b·e·c …) → 기본 결제. 모르는 글자면 없음 */
@@ -524,7 +548,8 @@ export async function getMonthRoundLessons(upTo: string, children: Child[]): Pro
         const c = oc ?? (o?.childId ? undefined : fixed.get(k));
         const childId = oc?.childId ?? o?.childId ?? c?.childId;
         if (!childId || (c && (c.status !== 'child' || c.moved || c.absent))) continue;
-        const method = paid.get(`${childId}|${day}|${time}`) ?? (isOpen ? undefined : defaultPayMethod(c?.payment));
+        const pm = paid.get(`${childId}|${day}|${time}`) ?? (isOpen ? undefined : defaultPayMethod(c?.payment));
+        const method = pm && roundMethod(pm);
         if (method && method in ROUND_LIMIT) out.push({ childId, day, time, method });
       }
     }

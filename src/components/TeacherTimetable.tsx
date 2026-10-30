@@ -6,7 +6,7 @@ import { useMember } from '@/components/MemberContext';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getHolidayNames, getPostedOpenSlots, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
 import type { Center, PayMethod } from '@/lib/timetable';
-import { PAY_METHODS, ROUND_LIMIT, ROW_LABEL, SUNDAY_TEACHERS, defaultPayMethod, rowsForDay, worksAt } from '@/lib/timetable';
+import { PAY_METHODS, ROUND_LIMIT, ROW_LABEL, SUNDAY_TEACHERS, defaultPayMethod, isLaterPay, rowsForDay, worksAt } from '@/lib/timetable';
 import type { TeacherLesson } from '@/lib/teacher';
 import { getTeacherLessons, getTeacherRounds } from '@/lib/teacher';
 import { onScheduleChanged } from '@/lib/sync';
@@ -123,6 +123,8 @@ export default function TeacherTimetable({ center }: { center: Center }) {
     if (l.payNote || l.payMethod) {
       const t = l.payNote || name(l.payMethod) || '';
       if (over) return <span className="font-bold text-[#dc2626]">{l.payConfirmed ? '✓' : ''}{t}{rn}</span>;
+      // 소급·미결(나중에 결제) — 빨간 글씨
+      if (isLaterPay(l.payMethod as PayMethod)) return <span className="font-semibold text-[#dc2626]">{t}{rn}</span>;
       return l.payConfirmed ? <span className="text-[#b91c1c]">✓{t}{rn}</span> : <span className="text-[#1d4ed8]">{t}{rn}</span>;
     }
     const base = l.side === 'fixed' ? name(defaultPayMethod(l.payment)) : undefined;
