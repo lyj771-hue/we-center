@@ -6,7 +6,7 @@
 --    메모로 남기는 것: 이름 앞뒤 시간(실제 시작 시간, 예 "4시"·"2:20"), 앞 날짜(예 "17일"), F = 40분 수업, (장 · (방, 이름 뒤 ? (예정)
 --    9/24(추석)는 이름 앞에 적힌 공휴일 시간(12:40·13:30·14:20·15:10·16:00·16:50·17:40)으로 — 그날만 그 줄이 생긴다
 --    8/31·10월 칸, 9/25·9/26(지난 주 표를 복사해 둔 것), 엑셀의 오른쪽 메모 열은 넣지 않는다
--- 2) 결석이 아닌 수업 중 결제 글자가 바우처(b)·굳센(e)·꿈이든(c)인 수업을 [결제 완료]로 확정한다 (이미 있으면 덮어쓴다)
+-- 2) 결석이 아닌 수업 중 결제 글자가 바우처(b)·꿈이든(e·c, 의정부는 굳센을 쓰지 않는다)인 수업을 [결제 완료]로 확정한다 (이미 있으면 덮어쓴다)
 -- 엑셀 칸 582개 (아이 수업 561 · 그중 결석 65 · 수업 안 함 21 · 미정 0)
 -- 넣지 않은 칸: 2026-09-28 16:50 김영훈 밴드올리기 (그 밖에 "토요일 스케줄"·"19일 오전만"·"22일 주차 등록"·"24일"·"??" 같은 메모)
 -- 문장 하나로 한꺼번에 — 중간에 실패하면 아무것도 바뀌지 않는다
@@ -616,7 +616,7 @@ del as (
 ),
 cells as (
   insert into board_cells (center, day, teacher_id, time, side, status, child_id, name, payment, oral, absent, moved, note, updated_at)
-  select 'uijeongbu', d, teacher_id, time, side, status, child_id, name, payment, false, absent, false, note, now()
+  select 'uijeongbu', d, teacher_id, time, side, status, child_id, name, replace(payment, 'e', 'c'), false, absent, false, note, now()
   from imp2 where teacher_id is not null
   on conflict (center, day, teacher_id, time, side) do update
     set status = excluded.status, child_id = excluded.child_id, name = excluded.name, payment = excluded.payment, oral = false,
@@ -626,7 +626,7 @@ cells as (
 pays as (
   insert into lesson_payments (child_id, day, time, teacher_id, center, method, note, confirmed)
   select distinct on (child_id, d, time) child_id, d, time, teacher_id, 'uijeongbu',
-         case when payment like '%b%' then 'voucher' when payment like '%e%' then 'gusen' else 'kkumideun' end, null, true
+         case when payment like '%b%' then 'voucher' else 'kkumideun' end, null, true
   from imp2
   where status = 'child' and not absent and child_id is not null and teacher_id is not null and payment ~ '[bec]'
   order by child_id, d, time, side
