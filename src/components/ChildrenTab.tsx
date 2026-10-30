@@ -181,7 +181,8 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
   };
 
   const input = 'border-b border-[var(--brand)] py-1 text-[14px] outline-none bg-transparent';
-  const th = 'text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
+  // 머리글 행은 표 칸 안에서 위에 고정 — 표가 자기 칸에서 위아래로도 스크롤된다
+  const th = 'sticky top-0 z-10 bg-white shadow-[inset_0_-1px_0_#e5e5e5] text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
   const td = 'px-3 py-2.5 align-middle';
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
   const approved = members.filter(m => m.nickname);
@@ -200,7 +201,7 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
       </div>
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — 회원 코드 SQL(supabase/children-code.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
 
-      <div className="overflow-x-auto border-t border-[#e5e5e5]">
+      <div className="max-h-[calc(100dvh-140px)] overflow-auto border-t border-[#e5e5e5]">
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
             <tr className="border-b border-[#e5e5e5]">
@@ -216,7 +217,7 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
               <th className={th}>고정 수업</th>
               <th className={th}>승인 여부</th>
               <th className={th}>메모</th>
-              <th className={`${th} sticky right-0 bg-white`}><span className="sr-only">관리</span></th>
+              <th className={`${th} right-0 z-20`}><span className="sr-only">관리</span></th>
             </tr>
           </thead>
           <tbody>

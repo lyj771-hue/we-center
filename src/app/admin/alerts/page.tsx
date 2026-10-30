@@ -191,11 +191,11 @@ function SentLog() {
       {failed && <p className="text-[13px] text-[#b45309] mb-3">불러오지 못했어요 — SQL(supabase/teacher-leave.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
       {list && shown.length === 0 && <p className="text-[13px] text-[#bbb] py-10 text-center">내역이 없어요.</p>}
       {shown.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-[#e5e5e5] bg-white">
+        <div className="max-h-[calc(100dvh-140px)] overflow-auto rounded-xl border border-[#e5e5e5] bg-white">
           <table className="w-full text-[12px] text-[#333] border-collapse">
             <thead>
               <tr className="border-b border-[#e5e5e5] text-[#999] text-left">
-                {['만든 시각', '아이', '받는 번호', '알림', '내용', '상태', '보낸 시각 / 사유', '받는 사람', ''].map((h, i) => <th key={i} className="font-normal px-3 py-2.5 whitespace-nowrap">{h}</th>)}
+                {['만든 시각', '아이', '받는 번호', '알림', '내용', '상태', '보낸 시각 / 사유', '받는 사람', ''].map((h, i) => <th key={i} className="sticky top-0 z-10 bg-white shadow-[inset_0_-1px_0_#e5e5e5] font-normal px-3 py-2.5 whitespace-nowrap">{h}</th>)}
               </tr>
             </thead>
             <tbody>

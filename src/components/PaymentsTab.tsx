@@ -80,7 +80,8 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
     cols: [10, 5, 7, ...USE_COLS.map(() => 8), ...PREPAID_KINDS.map(() => 9), 14, 14, 12, 30, 11],
   });
 
-  const th = 'text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
+  // 머리글 행은 표 칸 안에서 위에 고정 — 표가 자기 칸에서 위아래로도 스크롤된다
+  const th = 'sticky top-0 z-10 bg-white shadow-[inset_0_-1px_0_#e5e5e5] text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
   const td = 'px-3 py-2.5 align-middle';
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
 
@@ -102,7 +103,7 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
       <p className="text-[11px] text-[#aaa] mb-3">사용 횟수는 {m}월에 시간표 [결제 완료]로 확정된 수업이에요(선결제는 선결제 카드의 직접 차감 포함). 선결제 잔여·남은 금액은 지금 기준이에요. 메모는 달마다 따로 저장돼요.</p>
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요. ({failed})</p>}
 
-      <div className="overflow-x-auto border-t border-[#e5e5e5]">
+      <div className="max-h-[calc(100dvh-140px)] overflow-auto border-t border-[#e5e5e5]">
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
             <tr className="border-b border-[#e5e5e5]">

@@ -112,7 +112,7 @@ export default function DashboardPage() {
 
   // 칸 색 — 한 가지 색(브랜드 파랑)을 횟수만큼 진하게 (0은 칠하지 않는다)
   const shade = (n: number) => (n ? `rgba(8, 123, 234, ${0.08 + 0.42 * (n / cellMax)})` : 'transparent');
-  const th = 'px-3 py-2.5 font-normal text-[12px] text-[#888] whitespace-nowrap';
+  const th = 'sticky top-0 z-10 shadow-[inset_0_-1px_0_#e5e5e5] px-3 py-2.5 font-normal text-[12px] text-[#888] whitespace-nowrap';
 
   return (
     <div className="px-3 md:px-6 pt-6 pb-14 fade-up">
@@ -158,15 +158,15 @@ export default function DashboardPage() {
 
         {/* 선생님별 × 결제방식별 진행 횟수 — 칸이 진할수록 많이 */}
         <h2 className="text-[16px] text-[#27272a] mb-3">선생님별 진행 횟수 <span className="text-[12px] text-[#999]">{y}년 {m}월 · {center === 'all' ? '은평점 · 의정부점' : `${CENTERS.find(c => c.key === center)?.label}점`}</span></h2>
-        <div className="overflow-x-auto rounded-xl border border-[#e5e5e5] bg-white">
+        <div className="max-h-[calc(100dvh-140px)] overflow-auto rounded-xl border border-[#e5e5e5] bg-white">
           <table className="w-full text-[14px] border-collapse">
             <thead>
               <tr className="border-b border-[#eee] bg-[#fafafa]">
-                <th className={`${th} text-left sticky left-0 bg-[#fafafa]`}>선생님</th>
-                {SUPPORT.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
+                <th className={`${th} text-left left-0 z-20 bg-[#fafafa]`}>선생님</th>
+                {SUPPORT.map(x => <th key={x.key} className={`${th} text-center bg-[#fafafa]`}>{x.label}</th>)}
                 <th className={`${th} text-center bg-[#f1f5fb] text-[#555]`}>지원 합계</th>
                 <th className={`${th} text-center bg-[#f7f7f7] text-[#555]`} title="선결제A·B·C·신용카드·현금·직접 작성">사설</th>
-                <th className={`${th} text-center text-[#27272a]`}>전체 합계</th>
+                <th className={`${th} text-center bg-[#fafafa] text-[#27272a]`}>전체 합계</th>
               </tr>
             </thead>
             <tbody>

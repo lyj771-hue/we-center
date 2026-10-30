@@ -432,7 +432,8 @@ export default function MembersView({ center }: { center: Center }) {
   const datesOn = filter === 'waiting' || filter === 'approved';
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
   const input = `w-full min-w-[90px] border-b border-[var(--brand)] py-1 ${filter === 'waiting' ? 'text-[12px]' : 'text-[14px]'} outline-none bg-transparent`;
-  const th = 'text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
+  // 머리글 행은 표 칸 안에서 위에 고정 — 표가 자기 칸에서 위아래로도 스크롤된다
+  const th = 'sticky top-0 z-10 bg-white shadow-[inset_0_-1px_0_#e5e5e5] text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
   const td = 'px-3 py-3 align-middle';
 
   return (
@@ -468,7 +469,7 @@ export default function MembersView({ center }: { center: Center }) {
       {filter === 'waiting' && (
         <p className="mb-2 text-[12px] text-[#888]">아이 명단에 <b className="font-normal text-[#555]">아이 이름 · 휴대전화 뒷번호</b>가 같은 아이가 딱 한 명 등록돼 있고, <b className="font-normal text-[#555]">선결제(남은 횟수) · 우진학교 · 지원금(남은 금액)</b>을 모두 적으면(없으면 0) <span className="text-[#16a34a]">승인 가능</span>이에요. 승인하면 그 아이와 자동으로 이어져요.</p>
       )}
-      <div className="overflow-x-auto border-t border-[#e5e5e5]">
+      <div className="max-h-[calc(100dvh-140px)] overflow-auto border-t border-[#e5e5e5]">
         <table className={`w-full ${filter === 'waiting' ? 'text-[12px]' : 'text-[14px]'} text-[#333] border-collapse`}>
           <thead>
             <tr className="border-b border-[#e5e5e5]">

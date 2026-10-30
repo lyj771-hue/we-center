@@ -33,14 +33,15 @@ export default function TeachersTab() {
     catch (e) { showAlert(`끊지 못했어요.\n${(e as Error).message}`); }
   };
 
-  const th = 'text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
+  // 머리글 행은 표 칸 안에서 위에 고정 — 표가 자기 칸에서 위아래로도 스크롤된다
+  const th = 'sticky top-0 z-10 bg-white shadow-[inset_0_-1px_0_#e5e5e5] text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
   const td = 'px-3 py-2.5 align-middle';
 
   return (
     <div>
       <p className="mb-2 text-[12px] text-[#888]">선생님이 카카오로 로그인해서 <b className="font-normal text-[#555]">[선생님] · 이름 · 휴대전화 뒷번호 4자리</b>를 여기 적힌 것과 똑같이 적으면 인증돼요. 인증된 선생님은 위 메뉴의 시간표(수색·의정부)를 볼 수 있어요(고치기는 못 해요).</p>
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요 — SQL(supabase/teacher-login.sql)을 실행했는지 확인해 주세요. ({failed})</p>}
-      <div className="overflow-x-auto border-t border-[#e5e5e5]">
+      <div className="max-h-[calc(100dvh-140px)] overflow-auto border-t border-[#e5e5e5]">
         <table className="w-full text-[14px] text-[#333] border-collapse">
           <thead>
             <tr className="border-b border-[#e5e5e5]">
