@@ -37,8 +37,8 @@ const PROFILE_KEYS: ProfileKey[] = ['voucher', 'gusen', 'kkumideun', 'subsidy'];
 
 /** 전화번호 숫자 → 010-1234-5678 */
 const fmtPhone = (p: string) => (p.length === 11 ? `${p.slice(0, 3)}-${p.slice(3, 7)}-${p.slice(7)}` : p.length === 10 ? `${p.slice(0, 3)}-${p.slice(3, 6)}-${p.slice(6)}` : p);
-/** 수정 칸 글 — 한 줄에 "010-1234-5678 맘" (전체 번호가 없으면 예전 뒷번호) */
-const phonesText = (k: Child) => (k.phones?.length ? k.phones.map((p, i) => `${fmtPhone(p)} ${k.phoneRelations?.[i] ?? ''}`.trim()).join('\n') : k.phoneLast4 ?? '');
+/** 수정 칸 글 — 한 줄에 "010-1234-5678 맘" (전체 번호가 없으면 빈칸) */
+const phonesText = (k: Child) => (k.phones?.length ? k.phones.map((p, i) => `${fmtPhone(p)} ${k.phoneRelations?.[i] ?? ''}`.trim()).join('\n') : '');
 /** 수정 칸 글 → 번호들·관계들. 4자리만 적으면 예전처럼 뒷번호 */
 const parsePhones = (text: string): { phones?: string[]; phoneRelations?: string[]; phoneLast4?: string } => {
   const lines = text.split(/[\n,]/).map(l => l.trim()).filter(Boolean);
@@ -231,12 +231,12 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
                 <td className={`${td} whitespace-nowrap`}>{k.name}</td>
                 {/* 같은 이름 구분 번호 — 비어 있으면 1 (시간표에는 번호가 있는 아이만 이름 앞에 붙는다) */}
                 <td className={`${td} text-center text-[13px] tabular-nums ${k.number ? '' : 'text-[#aaa]'}`}>{k.number ?? 1}</td>
-                {/* 보호자 전화번호들 · 같은 순서의 관계 (전체 번호가 없으면 예전 뒷번호) */}
+                {/* 보호자 전화번호들 · 같은 순서의 관계 (번호가 없으면 빈칸) */}
                 <td className={`${td} text-[12px] whitespace-nowrap tabular-nums`}>
-                  {k.phones?.length ? k.phones.map((p, i) => <div key={i}>{fmtPhone(p)}</div>) : k.phoneLast4 ? <span className="text-[#999]">뒷번호 {k.phoneLast4}</span> : <span className="text-[#ccc]">-</span>}
+                  {k.phones?.length ? k.phones.map((p, i) => <div key={i}>{fmtPhone(p)}</div>) : null}
                 </td>
                 <td className={`${td} text-[12px] whitespace-nowrap text-[#666]`}>
-                  {k.phones?.length ? k.phones.map((_, i) => <div key={i}>{k.phoneRelations?.[i] || <span className="text-[#ccc]">-</span>}</div>) : <span className="text-[#ccc]">-</span>}
+                  {k.phones?.length ? k.phones.map((_, i) => <div key={i}>{k.phoneRelations?.[i] || <span className="text-[#ccc]">-</span>}</div>) : null}
                 </td>
                 {USES.map(c => (
                   <td key={c.key} className={`${td} text-center`}>
