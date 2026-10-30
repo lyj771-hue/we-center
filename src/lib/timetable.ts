@@ -18,6 +18,8 @@ export interface Child {
   phoneLast4?: string;
   /** 보호자 휴대전화 전체 번호들(숫자만) — 회원 가입 때 카카오 번호와 비교 (supabase/child-phones 로 넣는다) */
   phones?: string[];
+  /** phones 와 같은 순서의 관계(맘·아버님·할머님 … 이름만 저장된 번호는 빈칸) */
+  phoneRelations?: string[];
   /** 한 달 제공 횟수(0 = 안 씀) — 바우처·굳센·꿈이든. 선결제는 지금까지 충전한 횟수 */
   voucherLimit?: number;
   gusenLimit?: number;
@@ -135,7 +137,7 @@ export async function getChildren(): Promise<Child[]> {
   const { data, error } = await supabase.from('children').select('*').order('name');
   if (error) throw error;
   return (data ?? []).map(r => ({
-    id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral, lessonKind: r.lesson_kind === 'exercise' || r.lesson_kind === 'oral' ? r.lesson_kind : r.oral ? 'oral' : null, phoneLast4: r.phone_last4 ?? undefined, phones: (r.phones as string[] | null) ?? undefined,
+    id: r.id, memberCode: r.member_code ?? undefined, name: r.name, oral: !!r.oral, lessonKind: r.lesson_kind === 'exercise' || r.lesson_kind === 'oral' ? r.lesson_kind : r.oral ? 'oral' : null, phoneLast4: r.phone_last4 ?? undefined, phones: (r.phones as string[] | null) ?? undefined, phoneRelations: (r.phone_relations as string[] | null) ?? undefined,
     voucherLimit: r.voucher_limit ?? 0, gusenLimit: r.gusen_limit ?? 0, kkumideunLimit: r.kkumideun_limit ?? 0, prepaidTotal: r.prepaid_total ?? 0,
     number: r.number ?? undefined, memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
@@ -181,7 +183,9 @@ export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise
     name: c.name.trim(), number: c.number ?? null, memo: c.memo?.trim() || null, oral: !!c.oral,
     ...(c.lessonKind !== undefined ? { lesson_kind: c.lessonKind, oral: c.lessonKind === 'oral' } : {}),
     ...(c.center ? { center: c.center } : {}),
-    phone_last4: c.phoneLast4 && /^\d{4}$/.test(c.phoneLast4) ? c.phoneLast4 : null,
+    phone_last4: c.phones?.length ? c.phones[0].slice(-4) : c.phoneLast4 && /^\d{4}$/.test(c.phoneLast4) ? c.phoneLast4 : null,
+    // 전화번호(여러 개)·관계 — 고칠 때만 (supabase/child-phones.sql)
+    ...(c.phones !== undefined ? { phones: c.phones.length ? c.phones : null, phone_relations: c.phones.length ? (c.phoneRelations ?? []) : null } : {}),
     ...(c.voucherLimit !== undefined ? { voucher_limit: Math.max(0, Math.floor(c.voucherLimit) || 0) } : {}),
     ...(c.gusenLimit !== undefined ? { gusen_limit: Math.max(0, Math.floor(c.gusenLimit) || 0) } : {}),
     ...(c.kkumideunLimit !== undefined ? { kkumideun_limit: Math.max(0, Math.floor(c.kkumideunLimit) || 0) } : {}),

@@ -17,7 +17,8 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', 장: '장맞춤', c: '꿈이든', 외: '우진학교외부', 자: '우진학교자율', 선: '선결제', 카: '신용카드', 현: '현금' };
 
 type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean; kind: LessonKind };
-const emptyForm = { center: 'eunpyeong' as Center, name: '', number: '', memo: '', guardian: '', phone: '', vl: '0', gl: '0', kl: '0', pt: '0' };
+const emptyForm = { center: 'eunpyeong' as Center, name: '', number: '', memo: '', guardian: '', phone: '',   // phone = 한 줄에 "번호 관계"
+  vl: '0', gl: '0', kl: '0', pt: '0' };
 
 // 결제 칸 — 쓰는 결제 체크(바우처·굳센/장맞춤·꿈이든·우진학교외부·우진학교자율·지원금·선결제), 선결제 남은 횟수, 우진학교외부·자율·지원금 남은 금액.
 // 우진학교외부·자율 남은 금액은 [결제 완료]로 확정될 때마다 6만원씩 저절로 빠진다(supabase/woojin-split.sql).
@@ -33,6 +34,18 @@ const BALANCES: { key: BalanceKey; label: string }[] = [{ key: 'woojin_ext', lab
 // 회원 관리(승인 탭)의 지원 항목과 같은 것 — 둘 중 어디서 체크해도 양쪽이 같이 바뀐다
 // 장맞춤·우진학교외부·자율은 보호자 계정 칸이 없어 아이 명단에만 둔다
 const PROFILE_KEYS: ProfileKey[] = ['voucher', 'gusen', 'kkumideun', 'subsidy'];
+
+/** 전화번호 숫자 → 010-1234-5678 */
+const fmtPhone = (p: string) => (p.length === 11 ? `${p.slice(0, 3)}-${p.slice(3, 7)}-${p.slice(7)}` : p.length === 10 ? `${p.slice(0, 3)}-${p.slice(3, 6)}-${p.slice(6)}` : p);
+/** 수정 칸 글 — 한 줄에 "010-1234-5678 맘" (전체 번호가 없으면 예전 뒷번호) */
+const phonesText = (k: Child) => (k.phones?.length ? k.phones.map((p, i) => `${fmtPhone(p)} ${k.phoneRelations?.[i] ?? ''}`.trim()).join('\n') : k.phoneLast4 ?? '');
+/** 수정 칸 글 → 번호들·관계들. 4자리만 적으면 예전처럼 뒷번호 */
+const parsePhones = (text: string): { phones?: string[]; phoneRelations?: string[]; phoneLast4?: string } => {
+  const lines = text.split(/[\n,]/).map(l => l.trim()).filter(Boolean);
+  if (lines.length === 1 && /^\d{4}$/.test(lines[0])) return { phones: [], phoneLast4: lines[0] };
+  const items = lines.map(l => { const m = l.match(/^([\d\s-]+)(.*)$/); const d = (m?.[1] ?? '').replace(/\D/g, ''); return { d, rel: (m?.[2] ?? '').trim() }; }).filter(x => x.d.length >= 10);
+  return { phones: items.map(x => x.d), phoneRelations: items.map(x => x.rel) };
+};
 
 export default function ChildrenTab({ members, center, onLinked, onMembersChanged }: { members: Member[]; center: Center; onLinked: () => void; onMembersChanged: () => void }) {
   const [kids, setKids] = useState<Child[]>([]);
@@ -103,11 +116,11 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
 
   // 내려받기 — 지금 화면의 명단(찾기 적용) 그대로
   const exportSheet = (): Sheet => {
-    const head = ['회원 코드', '이름', '번호', '뒷번호', '승인 여부', ...USES.map(u => u.label), '선결제 남은 횟수', '우진학교외부 남은 금액', '우진학교자율 남은 금액', '지원금 남은 금액', '고정 수업', '메모'];
+    const head = ['회원 코드', '이름', '번호', '전화번호(관계)', '승인 여부', ...USES.map(u => u.label), '선결제 남은 횟수', '우진학교외부 남은 금액', '우진학교자율 남은 금액', '지원금 남은 금액', '고정 수업', '메모'];
     const rows = list.map(k => {
       const ck = (key: UsesKey) => (k.uses?.[key] ? 'O' : '');
       return [
-        k.memberCode ?? '', k.name, k.number ?? 1, k.phoneLast4 ?? '', approvalOf(k),
+        k.memberCode ?? '', k.name, k.number ?? 1, phonesText(k).replace(/\n/g, ', '), approvalOf(k),
         ...USES.map(u => ck(u.key)),
         prepaidLeftOf(k), balOf(k, 'woojin_ext'), balOf(k, 'woojin_self'), balOf(k, 'subsidy'),
         (fixed.get(k.id) ?? []).map(f => `${DOW[f.weekday]} ${f.time} ${f.teacher}${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)] ? ` ${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)]}` : ''}`).join(', '),
@@ -138,7 +151,7 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
 
   const start = (k?: Child) => {
     setEditing(k ? k.id : 'new');
-    setForm(k ? { center: k.center ?? 'eunpyeong', name: k.name, number: k.number?.toString() ?? '', memo: k.memo ?? '', guardian: k.guardianUserId ?? '', phone: k.phoneLast4 ?? '',
+    setForm(k ? { center: k.center ?? 'eunpyeong', name: k.name, number: k.number?.toString() ?? '', memo: k.memo ?? '', guardian: k.guardianUserId ?? '', phone: phonesText(k),
       vl: String(k.voucherLimit ?? 0), gl: String(k.gusenLimit ?? 0), kl: String(k.kkumideunLimit ?? 0), pt: String(k.prepaidTotal ?? 0) } : { ...emptyForm, center });   // 새 아이는 이 센터로
   };
 
@@ -146,7 +159,7 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
     if (!form.name.trim()) { showAlert('이름을 적어 주세요.'); return; }
     try {
       // 번호 빈칸 = 번호 없음(1로 보임, 시간표엔 숫자가 안 붙는다)
-      await saveChild({ id: k?.id, center: form.center, name: form.name, number: form.number ? Number(form.number) : undefined, oral: k?.oral, memo: form.memo, phoneLast4: form.phone,
+      await saveChild({ id: k?.id, center: form.center, name: form.name, number: form.number ? Number(form.number) : undefined, oral: k?.oral, memo: form.memo, ...parsePhones(form.phone),
         voucherLimit: Number(form.vl) || 0, gusenLimit: Number(form.gl) || 0, kkumideunLimit: Number(form.kl) || 0 });   // 선결제는 [충전] 기록으로만
       if (k && form.guardian !== (k.guardianUserId ?? '')) {
         await linkChild(k.id, form.guardian || null);
@@ -192,7 +205,8 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
               <th className={th}>회원 코드</th>
               <th className={`${th} ${sortTh}`} onClick={() => sortBy('name')} title="이름순 정렬">이름{arrow('name')}</th>
               <th className={`${th} text-center`} title="같은 이름 구분 번호 — 없으면 1">번호</th>
-              <th className={th}>뒷번호</th>
+              <th className={th}>전화번호</th>
+              <th className={th}>관계</th>
               {USES.map(c => <th key={c.key} className={`${th} text-center ${sortTh}`} onClick={() => sortBy(`uses:${c.key}`)} title={`${c.label}를 쓰는 아이면 체크 · 눌러서 정렬`}>{c.label}{arrow(`uses:${c.key}`)}</th>)}
               <th className={`${th} text-center ${sortTh}`} onClick={() => sortBy('prepaidLeft')} title="선결제 남은 횟수 — 고치면 선결제 카드에 [수정] 기록 · 눌러서 정렬">선결제{arrow('prepaidLeft')}<span className="block text-[10px] text-[#bbb]">남은 횟수</span></th>
               {BALANCES.map(b => <th key={b.key} className={`${th} text-center ${sortTh}`} onClick={() => sortBy(`bal:${b.key}`)} title={`${b.label} 남은 금액 — 직접 적어요(원)`}>{b.label}{arrow(`bal:${b.key}`)}<span className="block text-[10px] text-[#bbb]">남은 금액(원)</span></th>)}
@@ -217,7 +231,13 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
                 <td className={`${td} whitespace-nowrap`}>{k.name}</td>
                 {/* 같은 이름 구분 번호 — 비어 있으면 1 (시간표에는 번호가 있는 아이만 이름 앞에 붙는다) */}
                 <td className={`${td} text-center text-[13px] tabular-nums ${k.number ? '' : 'text-[#aaa]'}`}>{k.number ?? 1}</td>
-                <td className={`${td} text-[12px] whitespace-nowrap tabular-nums`}>{k.phoneLast4 ?? <span className="text-[#ccc]">-</span>}</td>
+                {/* 보호자 전화번호들 · 같은 순서의 관계 (전체 번호가 없으면 예전 뒷번호) */}
+                <td className={`${td} text-[12px] whitespace-nowrap tabular-nums`}>
+                  {k.phones?.length ? k.phones.map((p, i) => <div key={i}>{fmtPhone(p)}</div>) : k.phoneLast4 ? <span className="text-[#999]">뒷번호 {k.phoneLast4}</span> : <span className="text-[#ccc]">-</span>}
+                </td>
+                <td className={`${td} text-[12px] whitespace-nowrap text-[#666]`}>
+                  {k.phones?.length ? k.phones.map((_, i) => <div key={i}>{k.phoneRelations?.[i] || <span className="text-[#ccc]">-</span>}</div>) : <span className="text-[#ccc]">-</span>}
+                </td>
                 {USES.map(c => (
                   <td key={c.key} className={`${td} text-center`}>
                     <input type="checkbox" checked={!!k.uses?.[c.key]} onChange={e => toggleUses(k, c.key, e.target.checked)} aria-label={`${k.name} ${c.label} 사용`} />
@@ -293,9 +313,11 @@ function EditRow({ form, setForm, input, td, btn, approved, usesCount, code, fix
         <input value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value.replace(/\D/g, '') }))} placeholder="1" className={`${input} w-10 text-center`} />
       </td>
       <td className={td}>
-        <input value={form.phone} inputMode="numeric" maxLength={4} placeholder="1234"
-          onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/\D/g, '').slice(0, 4) }))} className={`${input} w-14 text-center`} />
+        {/* 한 줄에 하나 — "010-1234-5678 맘" */}
+        <textarea value={form.phone} rows={Math.max(2, form.phone.split('\n').length)} placeholder={'010-1234-5678 맘\n010-2345-6789 아버님'}
+          onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} className={`${input} w-44 text-[12px] leading-[1.6] resize-y`} />
       </td>
+      <td className={`${td} text-[10px] text-[#aaa]`}>번호 뒤에<br />관계</td>
       {/* 쓰는 결제·이번 달 사용·선결제는 표에서 바로 고친다 */}
       {Array.from({ length: usesCount + 1 + BALANCES.length }, (_, i) => <td key={i} className={`${td} text-center text-[11px] text-[#ccc]`}>-</td>)}
       <td className={`${td} text-[12px]`}><FixedList items={fixed} /><p className="text-[10px] text-[#aaa] mt-1">고정 수업은 시간표 관리에서 고쳐요</p></td>
