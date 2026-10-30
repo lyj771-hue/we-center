@@ -54,7 +54,8 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
   const [editing, setEditing] = useState<string | null>(null);   // 아이 id, 'new' = 새 아이
   const [form, setForm] = useState(emptyForm);
   const [failed, setFailed] = useState('');
-  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
+  // 처음엔 이름순 (머리글을 누르면 그 칸으로)
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>({ key: 'name', dir: 'asc' });
   // 선결제 쓴 횟수(확정된 것, 처음부터) — 아이 id → 횟수
   const [prepaidUsed, setPrepaidUsed] = useState<Map<string, number>>(new Map());
   const USES = ALL_USES.filter(u => methodInCenter(u.key, center));
