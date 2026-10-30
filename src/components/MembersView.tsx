@@ -66,14 +66,7 @@ export default function MembersView({ center }: { center: Center }) {
   const [failed, setFailed] = useState(false);
 
   const [kids, setKids] = useState<Child[]>([]);
-  // 선결제 쓴 횟수(확정된 것, 처음부터) — 아이 id → 횟수. 남은 횟수 = 충전 합 − 쓴 횟수
-  const [prepaidUsed, setPrepaidUsed] = useState<Map<string, number>>(new Map());
-  // 목록에서 적는 중인 남은 횟수 — 아이 id → 글
-  const [leftDraft, setLeftDraft] = useState<Map<string, string>>(new Map());
-  const loadKids = useCallback(() => {
-    getChildren().then(setKids).catch(() => {});
-    getPaymentCounts('2000-01-01', '2999-12-31').then(c => setPrepaidUsed(new Map([...c].map(([id, v]) => [id, v.prepaid ?? 0])))).catch(() => {});
-  }, []);
+  const loadKids = useCallback(() => { getChildren().then(setKids).catch(() => {}); }, []);
   useEffect(() => { if (isAdmin) loadKids(); }, [isAdmin, loadKids]);
 
   // 미승인 탭 — 승인할 때 적는 선결제·우진학교·지원금("회원|칸" → 적은 숫자). 하나라도 비어 있으면 승인할 수 없다
@@ -144,22 +137,6 @@ export default function MembersView({ center }: { center: Center }) {
       code: kidOf(m.userId)?.memberCode ?? '',
       phone: m.phoneLast4 ?? '',
     });
-  };
-  /** 선결제 남은 횟수 (이 지점 아이) */
-  const prepaidLeftOf = (k: Child) => (k.prepaidTotal ?? 0) - (prepaidUsed.get(k.id) ?? 0);
-  // 목록에서 바로 고치기 — 칸을 나가거나 Enter 하면 저장. 지금 잔여와의 차이를 선결제 카드에 [수정] 기록으로
-  const savePrepaidLeft = async (k: Child, raw: string) => {
-    setLeftDraft(mp => { const n = new Map(mp); n.delete(k.id); return n; });
-    if (raw.trim() === '' || !/^-?\d+$/.test(raw.trim())) return;
-    try {
-      const used = (await getPaymentCounts('2000-01-01', '2999-12-31')).get(k.id)?.prepaid ?? 0;
-      const fresh = (await getChildren()).find(x => x.id === k.id) ?? k;
-      const diff = Number(raw) - ((fresh.prepaidTotal ?? 0) - used);
-      if (!diff) return;
-      const d = new Date();
-      await addCharge(k.id, `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, diff, '회원목록에서 남은 횟수 수정', true);
-      loadKids();
-    } catch (e) { showAlert(`선결제 남은 횟수를 저장하지 못했어요.\n${(e as Error).message}`); }
   };
 
   const save = async (m: Member) => {
@@ -459,7 +436,6 @@ export default function MembersView({ center }: { center: Center }) {
               {filter === 'methods' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {filter === 'methods' && <th className={`${th} text-center`}>선결제</th>}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
-              {filter === 'approved' && <th className={`${th} text-center whitespace-nowrap`}>선결제<span className="block text-[10px] text-[#bbb]">남은 횟수</span></th>}
               <th className={th}>설명</th>
               {filter !== 'methods' && <th className={th}><span className="sr-only">관리</span></th>}
             </tr>
@@ -559,27 +535,6 @@ export default function MembersView({ center }: { center: Center }) {
                           } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
                         }}
                         className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
-                    </td>
-                  )}
-                  {/* 선결제 남은 횟수 — 목록에서 바로 고친다(칸을 나가거나 Enter). 이 지점 아이와 이어져 있어야 */}
-                  {filter === 'approved' && (
-                    <td className={`${td} text-center tabular-nums whitespace-nowrap`}>
-                      {(() => {
-                        const k = kidOf(m.userId);
-                        if (!k) return <span className="text-[#ddd]" title="아이 명단과 연결된 뒤에 적을 수 있어요">-</span>;
-                        const left = prepaidLeftOf(k);
-                        const v = leftDraft.get(k.id) ?? String(left);
-                        return (
-                          <span className="inline-flex items-center gap-0.5">
-                            <input value={v} inputMode="numeric" aria-label={`${m.nickname} 선결제 남은 횟수`} title="고치고 Enter — 선결제 카드에 [수정] 기록"
-                              onChange={e => { const t = e.target.value.replace(/[^\d-]/g, '').slice(0, 5); setLeftDraft(mp => new Map(mp).set(k.id, t)); }}
-                              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setLeftDraft(mp => { const n = new Map(mp); n.delete(k.id); return n; }); } }}
-                              onBlur={e => { if (leftDraft.has(k.id)) savePrepaidLeft(k, e.target.value); }}
-                              className={`w-12 text-center bg-transparent border-b outline-none focus:border-[var(--brand)] ${leftDraft.has(k.id) ? 'border-[#f59e0b]' : 'border-transparent hover:border-[#e5e5e5]'} ${left < 0 ? 'text-[#e11d48]' : left === 0 ? 'text-[#bbb]' : 'text-[#27272a]'}`} />
-                            <span className="text-[12px] text-[#999]">회</span>
-                          </span>
-                        );
-                      })()}
                     </td>
                   )}
                   {SHOW_PREPAID && (
