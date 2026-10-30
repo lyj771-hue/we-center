@@ -5,6 +5,7 @@
 --   x = 그 시간 수업 안 함, 이름 뒤 x = 결석, 이름 앞 S = 구강, 이름 앞 숫자 = 같은 이름 구분 번호, 이름 뒤 b·e·c = 결제 글자
 --   엑셀에서 비어 있는 고정 칸은 그날 비움(none) — 요일 고정 수업이 대신 보이지 않게
 --   공휴일(10/3·5·9)·일요일도 엑셀 그대로. 이원재 선생님은 10월 수업 없음(병가) — 넣지 않고 있던 칸은 지운다
+--   은평 소속이 아닌 선생님(10/3 김영훈)은 그날만 은평 시간표에 추가
 --   (보호자가 수업스케쥴에서 신청한 칸은 그대로 — 신청은 다른 표)
 -- 결제 기록(lesson_payments)은 만들지도 지우지도 않는다 — 차감 없음
 -- 날짜 2026-10-01 ~ 2026-10-31 (31일) · 엑셀 칸 2144개 (아이 수업 1354 · 그중 결석 304 · 수업 안 함 564 · 빈 고정 칸 231)
@@ -2185,8 +2186,18 @@ cells as (
     set status = excluded.status, child_id = excluded.child_id, name = excluded.name, payment = excluded.payment, oral = excluded.oral,
         kind = excluded.kind, absent = excluded.absent, moved = false, note = null, updated_at = now()
   returning 1
+),
+-- 은평 소속이 아닌 선생님(예: 10/3 김영훈)은 그날만 은평에 추가 — 그래야 은평 시간표에 줄이 보인다
+assign as (
+  insert into teacher_day_assign (day, teacher_id, center, off)
+  select distinct i.d, i.teacher_id, 'eunpyeong', false
+  from imp2 i join teachers t on t.id = i.teacher_id
+  where not ('eunpyeong' = any(coalesce(t.centers, array['eunpyeong'])))
+  on conflict (day, teacher_id, center) do update set off = false
+  returning teacher_id, day
 )
 select '지운 칸(엑셀에 없는 칸)' as 항목, count(*)::text as 값 from del
 union all select '넣은 칸', count(*)::text from cells
+union all select '그날만 은평에 추가한 선생님', coalesce((select string_agg(distinct t.name || ' ' || to_char(a.day, 'MM/DD'), ', ') from assign a join teachers t on t.id = a.teacher_id), '없음')
 union all select '명단에 없는 이름', coalesce(string_agg(distinct coalesce(num::text, '') || name, ', '), '없음') from imp2 where status = 'child' and child_id is null
 union all select '선생님 명단에 없는 이름', coalesce(string_agg(distinct teacher, ', '), '없음') from imp2 where teacher_id is null;
