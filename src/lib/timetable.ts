@@ -445,8 +445,8 @@ async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ dat
   }
 }
 
-/** 횟수에서 빼는 선생님 수업 — 이원재 선생님은 휴직 중이라 2026년 9월부터 수업을 세지 않는다(시간표에는 그대로 보임). 복직하면 to 를 그 전날로 */
-const COUNT_EXCLUDE = [{ name: '이원재', from: '2026-09-01', to: '9999-12-31' }];
+/** 횟수에서 빼는 선생님 수업 — 이원재 선생님은 휴직 중이라 날짜 상관없이 수업을 하나도 세지 않는다(시간표에는 그대로 보임). 복직하면 to 를 복직 전날로 */
+const COUNT_EXCLUDE = [{ name: '이원재', from: '0000-01-01', to: '9999-12-31' }];
 let excludeIds: Promise<Map<string, { from: string; to: string }[]>> | null = null;
 async function countExcluder(): Promise<(teacherId: string | null | undefined, day: string) => boolean> {
   excludeIds ??= (async () => {
