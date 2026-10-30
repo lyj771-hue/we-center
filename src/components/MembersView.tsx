@@ -61,12 +61,17 @@ export default function MembersView({ center }: { center: Center }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [filter, setFilter] = useState<Filter>('approved');
   const [editing, setEditing] = useState<string | null>(null);
-  const [form, setForm] = useState({ nickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '', phone: '' });
+  const [form, setForm] = useState({ nickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '', phone: '', prepaidLeft: '' });
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
   const [kids, setKids] = useState<Child[]>([]);
-  const loadKids = useCallback(() => { getChildren().then(setKids).catch(() => {}); }, []);
+  // 선결제 쓴 횟수(확정된 것, 처음부터) — 아이 id → 횟수. 남은 횟수 = 충전 합 − 쓴 횟수
+  const [prepaidUsed, setPrepaidUsed] = useState<Map<string, number>>(new Map());
+  const loadKids = useCallback(() => {
+    getChildren().then(setKids).catch(() => {});
+    getPaymentCounts('2000-01-01', '2999-12-31').then(c => setPrepaidUsed(new Map([...c].map(([id, v]) => [id, v.prepaid ?? 0])))).catch(() => {});
+  }, []);
   useEffect(() => { if (isAdmin) loadKids(); }, [isAdmin, loadKids]);
 
   // 미승인 탭 — 승인할 때 적는 선결제·우진학교·지원금("회원|칸" → 적은 숫자). 하나라도 비어 있으면 승인할 수 없다
@@ -136,8 +141,11 @@ export default function MembersView({ center }: { center: Center }) {
       prepaidEunpyeong: String(m.prepaidEunpyeong), prepaidUijeongbu: String(m.prepaidUijeongbu),
       code: kidOf(m.userId)?.memberCode ?? '',
       phone: m.phoneLast4 ?? '',
+      prepaidLeft: (() => { const k = kidOf(m.userId); return k ? String(prepaidLeftOf(k)) : ''; })(),
     });
   };
+  /** 선결제 남은 횟수 (이 지점 아이) */
+  const prepaidLeftOf = (k: Child) => (k.prepaidTotal ?? 0) - (prepaidUsed.get(k.id) ?? 0);
 
   const save = async (m: Member) => {
     if (!form.nickname.trim()) { alert('이름을 입력해 주세요.'); return; }
@@ -158,6 +166,18 @@ export default function MembersView({ center }: { center: Center }) {
           if (!kid) { await showAlert(`회원 코드 ${code}인 아이가 명단에 없어요.`); return; }
           if (kid.guardianUserId && kid.guardianUserId !== m.userId && !(await askConfirm(`${code} ${kid.name}은(는) 다른 계정에 이어져 있어요.\n이 계정으로 옮길까요?`))) return;
           await linkChild(kid.id, m.userId);
+        }
+        loadKids();
+      }
+      // 선결제 남은 횟수 — 고쳤으면 지금 잔여와의 차이를 선결제 카드에 [수정] 기록으로
+      const k = kidOf(m.userId);
+      if (k && form.prepaidLeft.trim() !== '' && code === (current?.memberCode ?? '')) {
+        const used = (await getPaymentCounts('2000-01-01', '2999-12-31')).get(k.id)?.prepaid ?? 0;
+        const fresh = (await getChildren()).find(x => x.id === k.id) ?? k;
+        const diff = (Number(form.prepaidLeft) || 0) - ((fresh.prepaidTotal ?? 0) - used);
+        if (diff) {
+          const d = new Date();
+          await addCharge(k.id, `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, diff, '회원목록에서 남은 횟수 수정', true);
         }
         loadKids();
       }
@@ -436,6 +456,7 @@ export default function MembersView({ center }: { center: Center }) {
               {filter === 'methods' && SUPPORTS.map(x => <th key={x.key} className={`${th} text-center`}>{x.label}</th>)}
               {filter === 'methods' && <th className={`${th} text-center`}>선결제</th>}
               {SHOW_PREPAID && <th className={th}>선결제 <span className="text-[11px] text-[#bbb]">은평 | 의정부</span></th>}
+              {filter === 'approved' && <th className={`${th} text-center whitespace-nowrap`}>선결제<span className="block text-[10px] text-[#bbb]">남은 횟수</span></th>}
               <th className={th}>설명</th>
               {filter !== 'methods' && <th className={th}><span className="sr-only">관리</span></th>}
             </tr>
@@ -535,6 +556,20 @@ export default function MembersView({ center }: { center: Center }) {
                           } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
                         }}
                         className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
+                    </td>
+                  )}
+                  {/* 선결제 남은 횟수 — 이 지점 아이와 이어져 있어야. [수정]에서 고치면 선결제 카드에 [수정] 기록 */}
+                  {filter === 'approved' && (
+                    <td className={`${td} text-center tabular-nums whitespace-nowrap`}>
+                      {!kidOf(m.userId) ? <span className="text-[#ddd]" title="아이 명단과 연결된 뒤에 적을 수 있어요">-</span>
+                        : on ? (
+                          <input value={form.prepaidLeft} inputMode="numeric" aria-label={`${m.nickname} 선결제 남은 횟수`}
+                            onChange={e => setForm(f => ({ ...f, prepaidLeft: e.target.value.replace(/[^\d-]/g, '').slice(0, 5) }))}
+                            className="w-14 border-b border-[var(--brand)] py-1 text-center outline-none" />
+                        ) : (() => {
+                          const left = prepaidLeftOf(kidOf(m.userId)!);
+                          return <span className={left < 0 ? 'text-[#e11d48]' : left === 0 ? 'text-[#ccc]' : 'text-[#27272a]'}>{left}회</span>;
+                        })()}
                     </td>
                   )}
                   {SHOW_PREPAID && (
