@@ -16,7 +16,7 @@ import { showAlert } from '@/lib/dialog';
 // 굳센은 수색, 장맞춤은 의정부 — 한 센터만 볼 땐 그 센터 것만, 전체는 둘 다
 const ALL_SUPPORT: { key: PayMethod; label: string }[] = [
   { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'jangmatchum', label: '장맞춤' }, { key: 'kkumideun', label: '꿈이든' },
-  { key: 'subsidy', label: '지원금' }, { key: 'woojin', label: '학교' },
+  { key: 'subsidy', label: '지원금' }, { key: 'woojin_ext', label: '학교외부' }, { key: 'woojin_self', label: '학교자율' },
 ];
 const PRIVATE: { key: PayMethod; label: string }[] = [
   { key: 'prepaid', label: '선결제' }, { key: 'card', label: '신용카드' }, { key: 'cash', label: '현금' }, { key: 'other', label: '직접 작성' },

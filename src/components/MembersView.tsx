@@ -24,21 +24,24 @@ type Filter = 'waiting' | 'approved' | 'methods' | 'children' | 'payments';
 const SHOW_PREPAID = false;
 
 // 지원 항목 — 받는지 체크(O/X). 누르면 바로 저장된다
-// 굳센은 수색, 장맞춤은 의정부에서만. 장맞춤은 보호자 계정 칸이 없어 연결된 아이의 체크로만 (아이가 있어야 체크할 수 있다)
-type SupportKey = keyof Pick<MemberExtras, 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy'> | 'jangmatchum';
+// 굳센은 수색, 장맞춤은 의정부에서만. 장맞춤·우진학교외부·자율은 보호자 계정 칸이 없어 연결된 아이의 체크로만 (아이가 있어야 체크할 수 있다)
+type SupportKey = keyof Pick<MemberExtras, 'voucher' | 'gusen' | 'kkumideun' | 'subsidy'> | 'jangmatchum' | 'woojin_ext' | 'woojin_self';
+const KID_ONLY: SupportKey[] = ['jangmatchum', 'woojin_ext', 'woojin_self'];
 const ALL_SUPPORTS: { key: SupportKey; label: string }[] = [
   { key: 'voucher', label: '바우처' },
   { key: 'gusen', label: '굳센' },
   { key: 'jangmatchum', label: '장맞춤' },
   { key: 'kkumideun', label: '꿈이든' },
-  { key: 'woojin', label: '우진학교' },
+  { key: 'woojin_ext', label: '우진학교외부' },
+  { key: 'woojin_self', label: '우진학교자율' },
   { key: 'subsidy', label: '지원금' },
 ];
 
-// 미승인 탭 — 승인할 때 꼭 적는 칸(없으면 0). 선결제는 남은 횟수, 우진학교·지원금은 남은 금액(원)
+// 미승인 탭 — 승인할 때 꼭 적는 칸(없으면 0). 선결제는 남은 횟수, 우진학교외부·자율·지원금은 남은 금액(원)
 const APPROVE_FIELDS = [
   { key: 'prepaid', label: '선결제', unit: '회' },
-  { key: 'woojin', label: '우진학교', unit: '원' },
+  { key: 'woojin_ext', label: '우진학교외부', unit: '원' },
+  { key: 'woojin_self', label: '우진학교자율', unit: '원' },
   { key: 'subsidy', label: '지원금', unit: '원' },
 ] as const;
 type ApproveField = (typeof APPROVE_FIELDS)[number]['key'];
@@ -184,12 +187,12 @@ export default function MembersView({ center }: { center: Center }) {
   const SUPPORTS = ALL_SUPPORTS.filter(x => methodInCenter(x.key, center));
   const supportOf = (m: Member, key: SupportKey) => {
     const k = kidOf(m.userId);
-    return k?.uses ? k.uses[key] : key === 'jangmatchum' ? false : m[key];
+    return k?.uses ? k.uses[key] : KID_ONLY.includes(key) ? false : m[key as Exclude<SupportKey, 'jangmatchum' | 'woojin_ext' | 'woojin_self'>];
   };
   const toggleSupport = async (m: Member, key: SupportKey) => {
     const on = !supportOf(m, key);
     try {
-      if (key !== 'jangmatchum') {
+      if (!KID_ONLY.includes(key)) {
         await saveMemberProfile({ userId: m.userId, nickname: m.nickname, memo: m.memo, approvedAt: m.approvedAt, [key]: on });
         setMembers(ms => ms.map(x => (x.userId === m.userId ? { ...x, [key]: on } : x)));
       }
@@ -229,8 +232,8 @@ export default function MembersView({ center }: { center: Center }) {
   // 승인할 때 적은 값을 이어진 아이에게 — 선결제는 지금 잔여(충전 합 − 확정된 사용)와의 차이를 카드의 [수정] 기록으로, 우진학교·지원금은 남은 금액 그대로
   const saveApproveInput = async (m: Member, k?: Child) => {
     if (!filled(m)) return;
-    const prepaid = Number(inputOf(m, 'prepaid')), woojin = Number(inputOf(m, 'woojin')), subsidy = Number(inputOf(m, 'subsidy'));
-    if (!k) { await showAlert(`아이 명단과 연결되지 않아 선결제(${prepaid}회)·우진학교(${woojin.toLocaleString('ko-KR')}원)·지원금(${subsidy.toLocaleString('ko-KR')}원)은 저장하지 못했어요.\n연결한 뒤 결제내역·기존아이명단 탭에서 맞춰 주세요.`); return; }
+    const prepaid = Number(inputOf(m, 'prepaid')), wExt = Number(inputOf(m, 'woojin_ext')), wSelf = Number(inputOf(m, 'woojin_self')), subsidy = Number(inputOf(m, 'subsidy'));
+    if (!k) { await showAlert(`아이 명단과 연결되지 않아 선결제(${prepaid}회)·우진학교외부(${wExt.toLocaleString('ko-KR')}원)·우진학교자율(${wSelf.toLocaleString('ko-KR')}원)·지원금(${subsidy.toLocaleString('ko-KR')}원)은 저장하지 못했어요.\n연결한 뒤 결제내역·기존아이명단 탭에서 맞춰 주세요.`); return; }
     try {
       const used = (await getPaymentCounts('2000-01-01', '2999-12-31')).get(k.id)?.prepaid ?? 0;
       const fresh = (await getChildren()).find(x => x.id === k.id) ?? k;
@@ -239,7 +242,8 @@ export default function MembersView({ center }: { center: Center }) {
         const d = new Date();
         await addCharge(k.id, `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, diff, '승인할 때 잔여 입력', true);
       }
-      await setChildBalance(k.id, 'woojin', woojin);
+      await setChildBalance(k.id, 'woojin_ext', wExt);
+      await setChildBalance(k.id, 'woojin_self', wSelf);
       await setChildBalance(k.id, 'subsidy', subsidy);
       setApproveInput(mp => { const n = new Map(mp); APPROVE_FIELDS.forEach(f => n.delete(`${m.userId}|${f.key}`)); return n; });
       loadKids();
@@ -362,7 +366,7 @@ export default function MembersView({ center }: { center: Center }) {
       if (!k) continue;
       prefillDone.current.add(key);
       const vals: Record<ApproveField, number> = {
-        prepaid: Math.max(0, (k.prepaidTotal ?? 0) - (prepaidUsed.get(k.id) ?? 0)), woojin: k.woojinBalance ?? 0, subsidy: k.subsidyBalance ?? 0,
+        prepaid: Math.max(0, (k.prepaidTotal ?? 0) - (prepaidUsed.get(k.id) ?? 0)), woojin_ext: k.woojinExtBalance ?? 0, woojin_self: k.woojinSelfBalance ?? 0, subsidy: k.subsidyBalance ?? 0,
       };
       for (const f of APPROVE_FIELDS) if (!inputOf(m, f.key)) fill.set(`${m.userId}|${f.key}`, String(vals[f.key]));
     }
@@ -564,8 +568,8 @@ export default function MembersView({ center }: { center: Center }) {
                   })}
                   {filter === 'methods' && SUPPORTS.map(x => (
                     <td key={x.key} className={`${td} text-center`}>
-                      <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname || (x.key === 'jangmatchum' && !kidOf(m.userId))} aria-label={`${m.nickname} ${x.label}`}
-                        title={x.key === 'jangmatchum' && !kidOf(m.userId) ? '아이 명단과 연결된 뒤에 체크할 수 있어요' : undefined}
+                      <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname || (KID_ONLY.includes(x.key) && !kidOf(m.userId))} aria-label={`${m.nickname} ${x.label}`}
+                        title={KID_ONLY.includes(x.key) && !kidOf(m.userId) ? '아이 명단과 연결된 뒤에 체크할 수 있어요' : undefined}
                         onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />
                     </td>
                   ))}

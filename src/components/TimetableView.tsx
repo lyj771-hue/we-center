@@ -8,14 +8,14 @@ import { askChoice, askConfirm, askPrompt, showAlert } from '@/lib/dialog';
 import { addAdminLog } from '@/lib/adminLog';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, addTeacherWorkDay, getKoreanHolidays, getPostedOpenSlots, getTeachers, HIDDEN_TEACHERS, parseYmd, removeTeacherWorkDay, toYmd } from '@/lib/schedule';
-import type { CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
+import type { BalanceKey, CellInput, CellView, Center, Child, LessonKind, PayCount, PayEntry, PayMethod } from '@/lib/timetable';
 import TeacherLeaveDialog, { type LeaveLesson } from '@/components/TeacherLeaveDialog';
 import { addAndSendOutbox, getDayLeaves, type TeacherLeave } from '@/lib/leave';
 import { getMembers } from '@/lib/store';
 import { notifyFixedChanges, notifyLessonDay, notifyPrepaidUses, sendSummary } from '@/lib/alimtalkNotify';
 import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
-  CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
+  balanceOf, isWoojin, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
   getLaterPayments, isLaterPay, roundMethod, RETRO_BASE,
 } from '@/lib/timetable';
@@ -744,8 +744,17 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   };
 
   // 남은 횟수 — 바우처·굳센·꿈이든은 이번 달 제공 횟수에서, 선결제는 지금까지 충전한 횟수에서 확정된 만큼 뺀다
+  // 우진학교외부·자율 — 남은 금액이 6만원(한 번 수업)보다 적으면 고를 수 없다. 확정되면 DB가 6만원씩 뺀다(supabase/woojin-split.sql)
+  const woojinBlocked = (childId: string, method: PayMethod): string | undefined => {
+    if (!isWoojin(method)) return undefined;
+    const c = children.find(x => x.id === childId);
+    const bal = c ? balanceOf(c, method as BalanceKey) : 0;
+    return bal < WOOJIN_FEE ? `잔액 ${bal.toLocaleString('ko-KR')}원` : undefined;
+  };
   const remaining = (childId: string, method: PayMethod): string | undefined => {
     const c = children.find(x => x.id === childId);
+    // 우진학교외부·자율은 남은 금액(만원)
+    if (c && isWoojin(method)) return `${Math.floor(balanceOf(c, method as BalanceKey) / 10000)}만`;
     // 횟수가 있는 결제만 (신용카드·현금·직접 작성은 횟수 없음)
     if (!c || (method !== 'voucher' && method !== 'gusen' && method !== 'kkumideun' && method !== 'prepaid')) return undefined;
     const limit = { voucher: c.voucherLimit, gusen: c.gusenLimit, kkumideun: c.kkumideunLimit, prepaid: c.prepaidTotal }[method] ?? 0;
@@ -1002,6 +1011,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                                 missing={!!c.childId && missingPay.has(keyOf(c.childId, time))}
                                 round={c.childId ? rounds.get(keyOf(c.childId, time)) : undefined}
                                 left={c.childId ? (m => remaining(c.childId!, m)) : undefined}
+                                blocked={c.childId ? (m => woojinBlocked(c.childId!, m)) : undefined}
                                 askAlways={c !== right && !!c.childId && c.childId === cellOf(board.fixed, t.id, time).childId}
                                 onPay={c.childId ? (e, always) => { pay(c.childId!, t.id, time, e); if (always && e && !isLaterPay(e.method)) setFixedPayment(t, time, e.method); } : undefined} />
                             ))}
@@ -1128,7 +1138,7 @@ function CellText({ cell, label, muted, nonMember, posted }: { cell: CellView; l
 }
 
 /** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
-function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, askAlways, onPay }: {
+function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, blocked, askAlways, onPay }: {
   cell: CellView;
   /** 이 센터에서 쓰는 결제 (수색 굳센 / 의정부 장맞춤) */
   methods: typeof PAY_METHODS;
@@ -1142,6 +1152,8 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, a
   /** 바우처·굳센·꿈이든 월 회차 — over = 빨간 글씨([결제 완료] 막힘) */
   round?: { n: number; over: boolean };
   left?: (m: PayMethod) => string | undefined;
+  /** 고를 수 없는 결제 — 까닭(예: 우진학교 남은 금액이 6만원보다 적음). 지금 고른 결제는 막지 않는다 */
+  blocked?: (m: PayMethod) => string | undefined;
   /** 고정 아이 — 기본과 다른 결제를 고르면 이번만인지 앞으로 계속인지 묻는다 */
   askAlways?: boolean;
   onPay?: (e: PayEntry | null, always?: boolean) => void;
@@ -1188,7 +1200,10 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, a
         }}
         className="absolute inset-0 w-full opacity-0 cursor-pointer" aria-label={`${cell.name} 결제 체크`}>
         <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
-        {options.map(m => <option key={m.key} value={m.key}>{m.label}{m.key === base ? ' (기본)' : ''}</option>)}
+        {options.map(m => {
+          const why = paid?.method === m.key ? undefined : blocked?.(m.key);
+          return <option key={m.key} value={m.key} disabled={!!why}>{m.label}{m.key === base ? ' (기본)' : ''}{why ? ` (${why})` : ''}</option>;
+        })}
         <option value="custom">{paid?.note ? `${paid.note} (고치기)` : '직접 작성…'}</option>
       </select>
     </label>

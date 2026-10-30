@@ -31,8 +31,11 @@ export interface Child {
   uses?: UsesFlags;
   /** 다니는 센터 — 수색(은평) / 의정부 */
   center?: Center;
-  /** 우진학교·지원금 남은 금액(원) — 관리자가 적는다 */
+  /** 우진학교·지원금 남은 금액(원) — 관리자가 적는다. woojin 은 나누기 전 예전 값(지금은 외부·자율로 따로) */
   woojinBalance?: number;
+  /** 우진학교외부·우진학교자율 남은 금액(원) — [결제 완료]로 확정되면 한 번에 6만원씩 빠진다(supabase/woojin-split.sql) */
+  woojinExtBalance?: number;
+  woojinSelfBalance?: number;
   subsidyBalance?: number;
 }
 
@@ -43,7 +46,15 @@ export const kindLabel = (k?: LessonKind) => (k === 'exercise' ? '운동' : k ==
 /** 칸·고정 수업 줄 → 수업 종류 (kind 가 없던 예전 줄은 구강 체크로) */
 const kindOf = (r: Record<string, unknown>): LessonKind => (r.kind === 'exercise' || r.kind === 'oral' ? r.kind : r.oral ? 'oral' : null);
 
-export type UsesKey = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid';
+export type UsesKey = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid';
+/** 남은 금액(원)을 적는 결제 */
+export type BalanceKey = 'woojin_ext' | 'woojin_self' | 'subsidy';
+/** 우진학교 한 번 수업 금액 — 남은 금액이 이보다 적으면 고를 수 없다 */
+export const WOOJIN_FEE = 60000;
+export const isWoojin = (m?: string) => m === 'woojin_ext' || m === 'woojin_self';
+/** 아이의 남은 금액 */
+export const balanceOf = (k: Pick<Child, 'woojinExtBalance' | 'woojinSelfBalance' | 'subsidyBalance'>, key: BalanceKey) =>
+  (key === 'woojin_ext' ? k.woojinExtBalance : key === 'woojin_self' ? k.woojinSelfBalance : k.subsidyBalance) ?? 0;
 export type UsesFlags = Record<UsesKey, boolean>;
 
 /** 아이 이름 + 동명이인 숫자 (예: 김채현3) — 시간표·검색에서 이렇게 보인다 */
@@ -129,13 +140,14 @@ export async function getChildren(): Promise<Child[]> {
     number: r.number ?? undefined, memo: r.memo ?? undefined,
     guardianUserId: r.guardian_user_id ?? undefined,
     woojinBalance: r.woojin_balance ?? 0, subsidyBalance: r.subsidy_balance ?? 0,
+    woojinExtBalance: r.woojin_ext_balance ?? 0, woojinSelfBalance: r.woojin_self_balance ?? 0,
     center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
-    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, jangmatchum: !!r.uses_jangmatchum, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
+    uses: { voucher: !!r.uses_voucher, gusen: !!r.uses_gusen, jangmatchum: !!r.uses_jangmatchum, kkumideun: !!r.uses_kkumideun, woojin: !!r.uses_woojin, woojin_ext: !!r.uses_woojin_ext, woojin_self: !!r.uses_woojin_self, subsidy: !!r.uses_subsidy, prepaid: !!r.uses_prepaid },
   }));
 }
 
-/** 우진학교·지원금 남은 금액(원) 적기 */
-export async function setChildBalance(childId: string, key: 'woojin' | 'subsidy', won: number): Promise<void> {
+/** 우진학교외부·우진학교자율·지원금 남은 금액(원) 적기 */
+export async function setChildBalance(childId: string, key: BalanceKey, won: number): Promise<void> {
   const { error } = await supabase.from('children').update({ [`${key}_balance`]: Math.max(0, Math.floor(won) || 0) }).eq('id', childId);
   if (error) throw error;
 }
@@ -365,7 +377,7 @@ export async function saveFixedFrom(body: FixedFromBody): Promise<void> {
 
 // ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
 
-export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'subsidy' | 'prepaid' | 'card' | 'cash' | 'other'
+export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'card' | 'cash' | 'other'
   | 'voucher_retro' | 'gusen_retro' | 'jangmatchum_retro' | 'kkumideun_retro' | 'unpaid';
 /** cell = 시간표 결제 칸에 보이는 짧은 이름 (없으면 label) */
 export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?: string }[] = [
@@ -373,6 +385,9 @@ export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?:
   { key: 'gusen', label: '굳센', short: 'e' },
   { key: 'jangmatchum', label: '장맞춤', short: '장' },
   { key: 'kkumideun', label: '꿈이든', short: 'c' },
+  // 우진학교 — 외부·자율로 나눴다. 예전 '우진학교'(woojin)는 지난 기록에만 보이고 고를 수 없다(payMethodsFor)
+  { key: 'woojin_ext', label: '우진학교외부', short: '외', cell: '우외' },
+  { key: 'woojin_self', label: '우진학교자율', short: '자', cell: '우자' },
   { key: 'woojin', label: '우진학교', short: '우' },
   { key: 'subsidy', label: '지원금', short: '지' },
   { key: 'prepaid', label: '선결제', short: '선' },
@@ -432,7 +447,7 @@ export async function setLessonPayment(childId: string, day: string, time: strin
   if (error) throw error;
 }
 
-export interface PayCount { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; subsidy: number; prepaid: number }
+export interface PayCount { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; woojin_ext: number; woojin_self: number; subsidy: number; prepaid: number }
 
 /** 1000줄 넘게 — 디비가 한 번에 1000줄까지만 주니 나눠서 다 받는다 (range 로 쪼갤 수 있는 select 를 넘긴다) */
 async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
@@ -462,14 +477,14 @@ async function countExcluder(): Promise<(teacherId: string | null | undefined, d
 /** 아이마다 사용 횟수(확정된 결제만) — 바우처·굳센·꿈이든은 이번 달, 선결제는 지금까지 */
 export async function getPaymentCounts(monthStart: string, monthEnd: string): Promise<Map<string, PayCount>> {
   const [monthRows, prepaidRows] = await Promise.all([
-    fetchAll<{ child_id: string; method: string; teacher_id: string | null; day: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method, teacher_id, day').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'subsidy']).order('id').range(a, b)),
+    fetchAll<{ child_id: string; method: string; teacher_id: string | null; day: string }>((a, b) => supabase.from('lesson_payments').select('child_id, method, teacher_id, day').eq('confirmed', true).gte('day', monthStart).lte('day', monthEnd).in('method', ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'woojin_ext', 'woojin_self', 'subsidy']).order('id').range(a, b)),
     fetchAll<{ child_id: string }>((a, b) => supabase.from('lesson_payments').select('child_id').eq('confirmed', true).eq('method', 'prepaid').order('id').range(a, b)),
   ]);
   const skip = await countExcluder();
   const month = { data: monthRows.filter(r => !skip(r.teacher_id, r.day)) }, prepaid = { data: prepaidRows };
   const m = new Map<string, PayCount>();
-  const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; m.set(id, c); return c; };
-  for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'subsidy']++;
+  const get = (id: string) => { const c = m.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, woojin_ext: 0, woojin_self: 0, subsidy: 0, prepaid: 0 }; m.set(id, c); return c; };
+  for (const r of month.data ?? []) get(r.child_id)[r.method as 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy']++;
   for (const r of prepaid.data ?? []) get(r.child_id).prepaid++;
   return m;
 }
@@ -482,7 +497,7 @@ export const JANGMATCHUM_MAX = 8;
 /** 지점마다 쓰는 결제 — 수색은 굳센, 의정부는 굳센 대신 장맞춤 */
 export const methodInCenter = (key: string, center: Center) =>
   !(key.startsWith('gusen') && center === 'uijeongbu') && !(key.startsWith('jangmatchum') && center !== 'uijeongbu');
-export const payMethodsFor = (center: Center) => PAY_METHODS.filter(m => methodInCenter(m.key, center));
+export const payMethodsFor = (center: Center) => PAY_METHODS.filter(m => methodInCenter(m.key, center) && m.key !== 'woojin');
 
 /** 결제 글자(b·e·c …) → 기본 결제. 모르는 글자면 없음 */
 export function defaultPayMethod(payment: string | undefined): PayMethod | undefined {
@@ -618,7 +633,7 @@ export async function clearChildTestData(childId: string): Promise<{ deleted: nu
 
 // ── 결제내역(월별) ──────────────────────────────────────────────────
 
-export interface MonthUse { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; subsidy: number; prepaid: number }
+export interface MonthUse { voucher: number; gusen: number; jangmatchum: number; kkumideun: number; woojin: number; woojin_ext: number; woojin_self: number; subsidy: number; prepaid: number }
 
 /** 그 달 아이마다 결제별 사용 횟수(확정된 것) — 선결제는 결제 완료 + 선결제 카드의 직접 차감 */
 export async function getMonthUses(month: string): Promise<Map<string, MonthUse>> {
@@ -631,7 +646,7 @@ export async function getMonthUses(month: string): Promise<Map<string, MonthUse>
   ]);
   const lp = { data: lpRows };
   const map = new Map<string, MonthUse>();
-  const get = (id: string) => { const c = map.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, subsidy: 0, prepaid: 0 }; map.set(id, c); return c; };
+  const get = (id: string) => { const c = map.get(id) ?? { voucher: 0, gusen: 0, jangmatchum: 0, kkumideun: 0, woojin: 0, woojin_ext: 0, woojin_self: 0, subsidy: 0, prepaid: 0 }; map.set(id, c); return c; };
   for (const r of lp.data ?? []) if (r.method in get(r.child_id)) (get(r.child_id) as unknown as Record<string, number>)[r.method]++;
   for (const r of pc.data ?? []) if (!r.adjust) get(r.child_id as string).prepaid += -(r.count as number);
   return map;

@@ -10,12 +10,12 @@ import Portal from '@/components/Portal';
 import PrepaidModal from '@/components/PrepaidModal';
 
 // 회원 관리 — "결제내역" 탭. 달을 골라 아이마다 그 달 결제별 사용 횟수(시간표 [결제 완료]로 확정된 것),
-// 선결제 잔여/충전([충전·차감·수정] 카드 창), 우진학교·지원금 남은 금액, 그 달 메모, 보호자 승인 날짜를 본다. 선결제는 센터(아이)마다 따로.
+// 선결제 잔여/충전([충전·차감·수정] 카드 창), 우진학교외부·자율·지원금 남은 금액, 그 달 메모, 보호자 승인 날짜를 본다. 선결제는 센터(아이)마다 따로.
 
 // 굳센은 수색, 장맞춤은 의정부에서만
 const ALL_USE_COLS: { key: keyof MonthUse; label: string }[] = [
   { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'jangmatchum', label: '장맞춤' }, { key: 'kkumideun', label: '꿈이든' },
-  { key: 'woojin', label: '우진학교' }, { key: 'subsidy', label: '지원금' }, { key: 'prepaid', label: '선결제' },
+  { key: 'woojin_ext', label: '우진학교외부' }, { key: 'woojin_self', label: '우진학교자율' }, { key: 'subsidy', label: '지원금' }, { key: 'prepaid', label: '선결제' },
 ];
 
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -53,7 +53,7 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
   const prepaidLeft = (k: Child) => (k.prepaidTotal ?? 0) - (allTime.get(k.id)?.prepaid ?? 0);
   // 기본은 결제를 쓰는 아이(체크·사용·잔액·메모가 있는 아이)만, [모두 보기]면 전부
   const active = (k: Child) => Object.values(k.uses ?? {}).some(Boolean) || USE_COLS.some(c => (uses.get(k.id)?.[c.key] ?? 0) > 0)
-    || (k.prepaidTotal ?? 0) > 0 || !!k.woojinBalance || !!k.subsidyBalance || !!notes.get(k.id);
+    || (k.prepaidTotal ?? 0) > 0 || !!k.woojinExtBalance || !!k.woojinSelfBalance || !!k.subsidyBalance || !!notes.get(k.id);
   const list = kids.filter(k => (k.center ?? 'eunpyeong') === center && (showAll || active(k)) && (!q.trim() || `${k.memberCode} ${k.name}${k.number ?? ''}`.includes(q.trim())));
 
   const saveNote = async (k: Child, text: string) => {
@@ -70,14 +70,14 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
   const sheet = (): Sheet => ({
     name: `${y}년 ${m}월 결제내역`,
     rows: [
-      ['이름', '번호', '뒷번호', ...USE_COLS.map(c => `${c.label} 사용`), '선결제 잔여/충전', '우진학교 남은 금액', '지원금 남은 금액', '메모', '승인 날짜'],
+      ['이름', '번호', '뒷번호', ...USE_COLS.map(c => `${c.label} 사용`), '선결제 잔여/충전', '우진학교외부 남은 금액', '우진학교자율 남은 금액', '지원금 남은 금액', '메모', '승인 날짜'],
       ...list.map(k => [
         k.name, k.number ?? 1, k.phoneLast4 ?? '', ...USE_COLS.map(c => uses.get(k.id)?.[c.key] ?? 0),
-        (k.prepaidTotal ?? 0) || (allTime.get(k.id)?.prepaid ?? 0) ? `${prepaidLeft(k)}/${k.prepaidTotal ?? 0}` : '', k.woojinBalance ?? 0, k.subsidyBalance ?? 0, notes.get(k.id) ?? '',
+        (k.prepaidTotal ?? 0) || (allTime.get(k.id)?.prepaid ?? 0) ? `${prepaidLeft(k)}/${k.prepaidTotal ?? 0}` : '', k.woojinExtBalance ?? 0, k.woojinSelfBalance ?? 0, k.subsidyBalance ?? 0, notes.get(k.id) ?? '',
         fmtDate(k.guardianUserId ? memberOf.get(k.guardianUserId)?.approvedAt : undefined),
       ]),
     ],
-    cols: [10, 5, 7, ...USE_COLS.map(() => 8), 9, 12, 12, 30, 11],
+    cols: [10, 5, 7, ...USE_COLS.map(() => 8), 9, 14, 14, 12, 30, 11],
   });
 
   const th = 'text-left font-normal text-[12px] text-[#999] px-3 py-3 whitespace-nowrap';
@@ -111,7 +111,8 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
               <th className={th}>뒷번호</th>
               {USE_COLS.map(c => <th key={c.key} className={`${th} text-center`}>{c.label}<span className="block text-[10px] text-[#bbb]">{m}월 사용</span></th>)}
               <th className={`${th} text-center`}>선결제<span className="block text-[10px] text-[#bbb]">잔여/충전</span></th>
-              <th className={`${th} text-right`}>우진학교<span className="block text-[10px] text-[#bbb]">남은 금액</span></th>
+              <th className={`${th} text-right`}>우진학교외부<span className="block text-[10px] text-[#bbb]">남은 금액</span></th>
+              <th className={`${th} text-right`}>우진학교자율<span className="block text-[10px] text-[#bbb]">남은 금액</span></th>
               <th className={`${th} text-right`}>지원금<span className="block text-[10px] text-[#bbb]">남은 금액</span></th>
               <th className={th}>{m}월 메모</th>
               <th className={th}>승인 날짜</th>
@@ -139,7 +140,8 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
                       <span className="ml-1 text-[10px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">충전·차감·수정</span>
                     </button>
                   </td>
-                  <td className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>{won(k.woojinBalance) || <span className="text-[#ddd]">-</span>}</td>
+                  <td className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>{won(k.woojinExtBalance) || <span className="text-[#ddd]">-</span>}</td>
+                  <td className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>{won(k.woojinSelfBalance) || <span className="text-[#ddd]">-</span>}</td>
                   <td className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>{won(k.subsidyBalance) || <span className="text-[#ddd]">-</span>}</td>
                   <td className={`${td} min-w-[180px]`}>
                     <input key={`${k.id}-${month}-${notes.get(k.id) ?? ''}`} defaultValue={notes.get(k.id) ?? ''} placeholder="메모"
@@ -150,7 +152,7 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
                 </tr>
               );
             })}
-            {!list.length && <tr><td colSpan={14} className="py-10 text-center text-[13px] text-[#bbb]">보여 줄 아이가 없어요. [모두 보기]를 켜 보세요.</td></tr>}
+            {!list.length && <tr><td colSpan={15} className="py-10 text-center text-[13px] text-[#bbb]">보여 줄 아이가 없어요. [모두 보기]를 켜 보세요.</td></tr>}
           </tbody>
         </table>
       </div>

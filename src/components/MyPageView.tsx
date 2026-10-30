@@ -13,7 +13,7 @@ import { methodInCenter, worksAt } from '@/lib/timetable';
 // 마이페이지 화면(보호자) — 데이터는 app/mypage/page.tsx 가 불러와서 넘긴다.
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', jangmatchum: '장맞춤', kkumideun: '꿈이든', woojin: '우진학교', subsidy: '지원금', prepaid: '선결제' };
+const PAY_ROW_LABEL: Record<MyPayment['method'], string> = { voucher: '바우처', gusen: '굳센', jangmatchum: '장맞춤', kkumideun: '꿈이든', woojin: '우진학교', woojin_ext: '우진학교외부', woojin_self: '우진학교자율', subsidy: '지원금', prepaid: '선결제' };
 const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', 장: '장맞춤', c: '꿈이든' };
 const payKind = (p: string) => {
   const code = p.toLowerCase().replace(/[x~]/g, '');
@@ -86,10 +86,10 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       .catch(() => { if (alive) setMonthLessons(null); });
     return () => { alive = false; };
   }, [payMonth, today]);
-  const SUPPORT = ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'subsidy'];
-  // 지원 결제로 한 수업인지 — [결제 완료] 기록이 있으면 그것, 없으면 칸의 결제 글자(b·e·c·우·지)
+  const SUPPORT = ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'woojin_ext', 'woojin_self', 'subsidy'];
+  // 지원 결제로 한 수업인지 — [결제 완료] 기록이 있으면 그것, 없으면 칸의 결제 글자(b·e·c·우·외·자·지)
   const bySupport = (l: MyLesson) => history.some(h => h.day === l.day && h.time === l.time && SUPPORT.includes(h.method))
-    || /[bec우지장]/.test(l.payment.toLowerCase().replace(/x/g, ''));
+    || /[bec우외자지장]/.test(l.payment.toLowerCase().replace(/x/g, ''));
   const privateCount = monthLessons?.filter(l => (!center || l.center === center) && isRealLesson(l) && !l.absent
     && !(monthHols[l.day] && l.source === 'fixed') && !bySupport(l)).length;
   // 공휴일 — 그 주에 걸친 해(연말·연초는 두 해)의 공휴일 이름
@@ -224,9 +224,9 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
               {payRows.map(p => (
                 <tr key={p.method} className="border-t border-[#f0f0f0] first:border-t-0">
                   <td className="py-2.5">{PAY_ROW_LABEL[p.method]}</td>
-                  {p.method === 'woojin' || p.method === 'subsidy' ? (
+                  {p.method === 'woojin' || p.method === 'woojin_ext' || p.method === 'woojin_self' || p.method === 'subsidy' ? (
                     <td className="py-2.5 text-right tabular-nums text-[var(--brand)]">
-                      {/* 우진학교·지원금은 남은 금액 */}
+                      {/* 우진학교외부·자율·지원금은 남은 금액 */}
                       <span className="text-[12px] text-[#999] mr-1">{payMonth === thisMonth ? '' : '지금 '}남은 금액</span>{p.total.toLocaleString('ko-KR')}<span className="text-[12px] text-[#999] ml-0.5">원</span>
                     </td>
                   ) : p.method === 'prepaid' ? (

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import type { Center, Child } from '@/lib/timetable';
-import { deleteChild, getChildren, getFixedByChild, getPaymentCounts, linkChild, methodInCenter, saveChild, setChildUses, setChildBalance, type UsesKey, type LessonKind, kindLabel } from '@/lib/timetable';
+import { balanceOf, type BalanceKey, deleteChild, getChildren, getFixedByChild, getPaymentCounts, linkChild, methodInCenter, saveChild, setChildUses, setChildBalance, type UsesKey, type LessonKind, kindLabel } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 import { saveMemberProfile } from '@/lib/store';
 import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
@@ -14,24 +14,25 @@ import { addCharge } from '@/lib/prepaid';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 // 고정 자리 결제 글자 → 이름 (표에는 영어 글자 대신 이름으로)
-const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', 장: '장맞춤', c: '꿈이든', 선: '선결제', 카: '신용카드', 현: '현금' };
+const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', 장: '장맞춤', c: '꿈이든', 외: '우진학교외부', 자: '우진학교자율', 선: '선결제', 카: '신용카드', 현: '현금' };
 
 type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean; kind: LessonKind };
 const emptyForm = { center: 'eunpyeong' as Center, name: '', number: '', memo: '', guardian: '', phone: '', vl: '0', gl: '0', kl: '0', pt: '0' };
 
-// 결제 칸 — 쓰는 결제 체크(바우처·굳센/장맞춤·꿈이든·선결제), 선결제 남은 횟수, 우진학교·지원금 남은 금액.
+// 결제 칸 — 쓰는 결제 체크(바우처·굳센/장맞춤·꿈이든·우진학교외부·우진학교자율·지원금·선결제), 선결제 남은 횟수, 우진학교외부·자율·지원금 남은 금액.
+// 우진학교외부·자율 남은 금액은 [결제 완료]로 확정될 때마다 6만원씩 저절로 빠진다(supabase/woojin-split.sql).
 // 선결제 남은 횟수를 고치면 지금 잔여와의 차이를 선결제 카드에 [수정] 기록으로 남긴다(충전 내역은 결제내역 탭에서)
 // 굳센은 수색, 장맞춤은 의정부에서만 보인다
 const ALL_USES: { key: UsesKey; label: string }[] = [
   { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'jangmatchum', label: '장맞춤' }, { key: 'kkumideun', label: '꿈이든' },
-  { key: 'woojin', label: '우진학교' }, { key: 'subsidy', label: '지원금' }, { key: 'prepaid', label: '선결제' },
+  { key: 'woojin_ext', label: '우진학교외부' }, { key: 'woojin_self', label: '우진학교자율' }, { key: 'subsidy', label: '지원금' }, { key: 'prepaid', label: '선결제' },
 ];
 type ProfileKey = 'voucher' | 'gusen' | 'kkumideun' | 'woojin' | 'subsidy';
-// 우진학교·지원금 — 횟수가 아니라 남은 금액(원)을 적는다
-const BALANCES: { key: 'woojin' | 'subsidy'; label: string }[] = [{ key: 'woojin', label: '우진학교' }, { key: 'subsidy', label: '지원금' }];
+// 우진학교외부·자율·지원금 — 횟수가 아니라 남은 금액(원)을 적는다
+const BALANCES: { key: BalanceKey; label: string }[] = [{ key: 'woojin_ext', label: '우진학교외부' }, { key: 'woojin_self', label: '우진학교자율' }, { key: 'subsidy', label: '지원금' }];
 // 회원 관리(승인 탭)의 지원 항목과 같은 것 — 둘 중 어디서 체크해도 양쪽이 같이 바뀐다
-// 장맞춤은 보호자 계정 칸이 없어 아이 명단에만 둔다
-const PROFILE_KEYS: ProfileKey[] = ['voucher', 'gusen', 'kkumideun', 'woojin', 'subsidy'];
+// 장맞춤·우진학교외부·자율은 보호자 계정 칸이 없어 아이 명단에만 둔다
+const PROFILE_KEYS: ProfileKey[] = ['voucher', 'gusen', 'kkumideun', 'subsidy'];
 
 export default function ChildrenTab({ members, center, onLinked, onMembersChanged }: { members: Member[]; center: Center; onLinked: () => void; onMembersChanged: () => void }) {
   const [kids, setKids] = useState<Child[]>([]);
@@ -60,11 +61,11 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
   useEffect(() => { load(); }, [load]);
 
   const memberOf = useMemo(() => new Map(members.map(m => [m.userId, m])), [members]);
-  const balOf = (k: Child, key: 'woojin' | 'subsidy') => (key === 'woojin' ? k.woojinBalance : k.subsidyBalance) ?? 0;
-  const saveBalance = async (k: Child, key: 'woojin' | 'subsidy', text: string) => {
+  const balOf = balanceOf;
+  const saveBalance = async (k: Child, key: BalanceKey, text: string) => {
     const won = Number(text.replace(/[^\d]/g, '')) || 0;
     if (won === balOf(k, key)) return;
-    setKids(list => list.map(x => (x.id === k.id ? { ...x, [key === 'woojin' ? 'woojinBalance' : 'subsidyBalance']: won } : x)));
+    setKids(list => list.map(x => (x.id === k.id ? { ...x, [key === 'woojin_ext' ? 'woojinExtBalance' : key === 'woojin_self' ? 'woojinSelfBalance' : 'subsidyBalance']: won } : x)));
     try { await setChildBalance(k.id, key, won); }
     catch (e) { showAlert(`저장하지 못했어요 — SQL(supabase/payment-balance.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); load(); }
   };
@@ -84,7 +85,7 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
     } catch (e) { showAlert(`선결제 남은 횟수를 저장하지 못했어요.\n${(e as Error).message}`); load(); }
   };
   const toggleUses = async (k: Child, key: UsesKey, on: boolean) => {
-    setKids(list => list.map(x => (x.id === k.id ? { ...x, uses: { ...(x.uses ?? { voucher: false, gusen: false, jangmatchum: false, kkumideun: false, woojin: false, subsidy: false, prepaid: false }), [key]: on } } : x)));
+    setKids(list => list.map(x => (x.id === k.id ? { ...x, uses: { ...(x.uses ?? { voucher: false, gusen: false, jangmatchum: false, kkumideun: false, woojin: false, woojin_ext: false, woojin_self: false, subsidy: false, prepaid: false }), [key]: on } } : x)));
     try {
       await setChildUses(k.id, key, on);
       // 연결된 보호자 계정의 지원 항목도 같이
@@ -102,18 +103,18 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
 
   // 내려받기 — 지금 화면의 명단(찾기 적용) 그대로
   const exportSheet = (): Sheet => {
-    const head = ['회원 코드', '이름', '번호', '뒷번호', '승인 여부', ...USES.map(u => u.label), '선결제 남은 횟수', '우진학교 남은 금액', '지원금 남은 금액', '고정 수업', '메모'];
+    const head = ['회원 코드', '이름', '번호', '뒷번호', '승인 여부', ...USES.map(u => u.label), '선결제 남은 횟수', '우진학교외부 남은 금액', '우진학교자율 남은 금액', '지원금 남은 금액', '고정 수업', '메모'];
     const rows = list.map(k => {
       const ck = (key: UsesKey) => (k.uses?.[key] ? 'O' : '');
       return [
         k.memberCode ?? '', k.name, k.number ?? 1, k.phoneLast4 ?? '', approvalOf(k),
         ...USES.map(u => ck(u.key)),
-        prepaidLeftOf(k), balOf(k, 'woojin'), balOf(k, 'subsidy'),
+        prepaidLeftOf(k), balOf(k, 'woojin_ext'), balOf(k, 'woojin_self'), balOf(k, 'subsidy'),
         (fixed.get(k.id) ?? []).map(f => `${DOW[f.weekday]} ${f.time} ${f.teacher}${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)] ? ` ${PAY_LABEL[f.payment.replace(/x/gi, '').charAt(0)]}` : ''}`).join(', '),
         k.memo ?? '',
       ];
     });
-    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 7, 8, ...USES.map(() => 7), 12, 12, 12, 40, 20] };
+    return { name: '아이 명단', rows: [head, ...rows], cols: [9, 10, 5, 7, 8, ...USES.map(() => 7), 12, 14, 14, 12, 40, 20] };
   };
   const stamp = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`; };
   // 정렬 — 머리글을 누르면 오름차순 → 내림차순 → 원래대로(회원 코드 순)
@@ -121,7 +122,7 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
     if (key === 'name') return `${k.name}${String(k.number ?? 1).padStart(3, '0')}`;
     if (key.startsWith('uses:')) return k.uses?.[key.slice(5) as UsesKey] ? 1 : 0;
     if (key === 'prepaidLeft') return prepaidLeftOf(k);
-    if (key.startsWith('bal:')) return balOf(k, key.slice(4) as 'woojin' | 'subsidy');
+    if (key.startsWith('bal:')) return balOf(k, key.slice(4) as BalanceKey);
     return k.memberCode ?? '';
   };
   // 이 센터 아이만
