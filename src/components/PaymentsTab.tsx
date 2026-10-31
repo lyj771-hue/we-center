@@ -23,13 +23,12 @@ const shiftMonth = (ym: string, n: number) => { const [y, m] = ym.split('-').map
 const fmtDate = (iso?: string) => { if (!iso) return ''; const d = new Date(iso); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; };
 const won = (n?: number) => (n ? `${n.toLocaleString('ko-KR')}원` : '');
 
-export default function PaymentsTab({ members, center }: { members: Member[]; center: Center }) {
+export default function PaymentsTab({ members, center, q }: { members: Member[]; center: Center; /** 찾기 — 위 회원 관리 칸 */ q: string }) {
   const [month, setMonth] = useState(thisMonth);
   const [kids, setKids] = useState<Child[]>([]);
   const [uses, setUses] = useState<Map<string, MonthUse>>(new Map());
   const [allTime, setAllTime] = useState<Map<string, PayCount>>(new Map());
   const [notes, setNotes] = useState<Map<string, string>>(new Map());
-  const [q, setQ] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [failed, setFailed] = useState('');
   const [cardFor, setCardFor] = useState<{ child: Child; method: PrepaidKey } | null>(null);    // 선결제 카드 창을 연 아이·종류
@@ -92,8 +91,6 @@ export default function PaymentsTab({ members, center }: { members: Member[]; ce
         <input type="month" value={month} onChange={e => e.target.value && setMonth(e.target.value)} className="text-[13px] border border-[#ddd] px-2 h-8" />
         <button onClick={() => setMonth(x => shiftMonth(x, 1))} className="text-[13px] border border-[#e5e5e5] w-8 h-8 hover:bg-[#f8f8f8]" aria-label="다음달">›</button>
         {month !== thisMonth() && <button onClick={() => setMonth(thisMonth())} className="text-[12px] text-[#888] underline underline-offset-2">이번 달</button>}
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="이름·회원 코드 찾기"
-          className="ml-2 border border-[#e5e5e5] px-3 py-1.5 text-[13px] w-48 outline-none focus:border-[var(--brand)]" />
         <label className="flex items-center gap-1 text-[12px] text-[#888]"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} />모두 보기</label>
         <span className="text-[12px] text-[#aaa]">{list.length}명</span>
         <button onClick={() => downloadXlsx([sheet()], `결제내역_${month.replace('-', '')}`).catch(e => showAlert(`내려받지 못했어요.\n${(e as Error).message}`))}

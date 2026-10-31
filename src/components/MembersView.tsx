@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
 import { clearMemberBranch, deleteMemberCenter, getMemberCenterRequests, getMemberCenters, promoteMemberCenter, getMembers, saveMemberProfile, setMemberCenterApproved } from '@/lib/store';
 import type { Member, MemberExtras } from '@/lib/types';
-import { askConfirm, showAlert } from '@/lib/dialog';
+import { askChoice, askConfirm, showAlert } from '@/lib/dialog';
 import ChildrenTab from '@/components/ChildrenTab';
 import PaymentsTab from '@/components/PaymentsTab';
 import type { Center, Child } from '@/lib/timetable';
@@ -69,6 +69,8 @@ export default function MembersView({ center }: { center: Center }) {
   const { isAdmin } = useAdmin();
   const [members, setMembers] = useState<Member[]>([]);
   const [filter, setFilter] = useState<Filter>('approved');
+  // 이름·회원 코드 찾기 — 탭을 바꿔도 그대로, 모든 탭에 같이 걸린다
+  const [q, setQ] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ nickname: '', memo: '', prepaidEunpyeong: '0', prepaidUijeongbu: '0', code: '', phone: '' });
   const [loaded, setLoaded] = useState(false);
@@ -177,6 +179,12 @@ export default function MembersView({ center }: { center: Center }) {
           const kid = kids.find(k => k.memberCode === code);
           if (!kid) { await showAlert(`회원 코드 ${code}인 아이가 명단에 없어요.`); return; }
           if (kid.guardianUserId && kid.guardianUserId !== m.userId && !(await askConfirm(`${code} ${kid.name}은(는) 다른 계정에 이어져 있어요.\n이 계정으로 옮길까요?`))) return;
+          // 이미 이어진 아이가 있으면 — 형제로 같이 이을지, 잘못 이어서 바꾸는 건지
+          if (current && kid.id !== current.id) {
+            const r = await askChoice(`이 계정에 ${current.memberCode} ${current.name}이(가) 이어져 있어요.\n${code} ${kid.name}을(를) 어떻게 할까요?`, '형제로 같이 잇기', '이 아이로 바꾸기');
+            if (!r) return;
+            if (r === 'b') await linkChild(current.id, null);
+          }
           await linkChild(kid.id, m.userId);
         }
         loadKids();
@@ -427,7 +435,8 @@ export default function MembersView({ center }: { center: Center }) {
     ));
   };
   // 승인된 명단은 이름순, 미승인은 신청 순서 그대로
-  const list = filter === 'waiting' ? waiting : [...approved].sort((a, b) => (a.nickname ?? '').localeCompare(b.nickname ?? '', 'ko'));
+  const found = (m: Member) => { const k = kidOf(m.userId); return !q.trim() || `${m.nickname ?? ''} ${k?.memberCode ?? ''} ${k ? `${k.name}${k.number ?? ''}` : ''}`.includes(q.trim()); };
+  const list = (filter === 'waiting' ? waiting : [...approved].sort((a, b) => (a.nickname ?? '').localeCompare(b.nickname ?? '', 'ko'))).filter(found);
   // 승인·미승인 목록은 접기 없이 늘 펼친다(카카오계정번호·회원 코드·가입일자·마지막 로그인)
   const datesOn = filter === 'waiting' || filter === 'approved';
   const btn = 'text-[12px] border px-2.5 py-1 transition-colors whitespace-nowrap';
@@ -437,11 +446,14 @@ export default function MembersView({ center }: { center: Center }) {
   const td = 'px-3 py-3 align-middle';
 
   return (
-    <div className="px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
+    <div className="px-5 md:px-8 pt-3 pb-14 md:pt-5 fade-up">
       {/* 폭 제한 없음 — PC에서 화면을 축소하면 표도 옆으로 넓어진다 */}
-      <h1 className="display-heading mb-6">회원 관리 <span className="text-[0.7em] text-[#888]">({centerLabel})</span></h1>
+      <h1 className="display-heading mb-3">회원 관리 <span className="text-[0.7em] text-[#888]">({centerLabel})</span></h1>
 
-      <div role="tablist" className="flex gap-1.5 mb-5">
+      <div className="flex flex-wrap items-center gap-1.5 mb-5">
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="이름·회원 코드 찾기" aria-label="이름·회원 코드 찾기"
+          className="mr-1.5 border border-[#e5e5e5] px-3 py-2 text-[13px] w-48 outline-none focus:border-[var(--brand)]" />
+      <div role="tablist" className="flex flex-wrap gap-1.5">
         {([['approved', `승인 ${approved.length}`], ['waiting', `미승인 ${waiting.length}`], ['methods', '결제방식 관리'], ['payments', '결제내역'], ['children', `기존아이명단 ${kids.filter(k => (k.center ?? 'eunpyeong') === center).length}`]] as const).map(([key, label]) => (
           <button key={key} role="tab" aria-selected={filter === key} onClick={() => setFilter(key)}
             className={[
@@ -452,6 +464,7 @@ export default function MembersView({ center }: { center: Center }) {
           </button>
         ))}
       </div>
+      </div>
 
       {failed && <p className="text-[14px] text-red-400 py-6">회원 목록을 불러오지 못했어요. (DB 설정 SQL을 실행했는지 확인해 주세요)</p>}
 
@@ -459,9 +472,9 @@ export default function MembersView({ center }: { center: Center }) {
         {kids.filter(k => (k.center ?? 'eunpyeong') === center).map(k => <option key={k.id} value={k.memberCode}>{`${k.name}${k.number ?? ''}`}</option>)}
       </datalist>
       {filter === 'payments' ? (
-        <PaymentsTab members={members} center={center} />
+        <PaymentsTab members={members} center={center} q={q} />
       ) : filter === 'children' ? (
-        <ChildrenTab members={members} center={center} onLinked={loadKids} onMembersChanged={load} />
+        <ChildrenTab members={members} center={center} q={q} onLinked={loadKids} onMembersChanged={load} />
       ) : (<>
       {filter === 'methods' && (
         <p className="mb-2 text-[12px] text-[#888]">승인된 회원이 쓰는 결제방식이에요. 체크하면 바로 저장되고, 아이 명단의 쓰는 결제와 같은 값이에요.</p>
@@ -503,7 +516,9 @@ export default function MembersView({ center }: { center: Center }) {
                       <input className={`${input} w-20 uppercase`} value={form.code} placeholder="W0001" list="member-codes"
                         onChange={e => setForm(f => ({ ...f, code: e.target.value }))} />
                     ) : kidOf(m.userId) ? (
-                      <span className="text-[12px]"><span className="text-[#888] tabular-nums">{kidOf(m.userId)!.memberCode}</span> {kidOf(m.userId)!.name}{kidOf(m.userId)!.number ?? ''}</span>
+                      <span className="text-[12px]">{kids.filter(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') === center).map(k => (
+                        <span key={k.id} className="block"><span className="text-[#888] tabular-nums">{k.memberCode}</span> {k.name}{k.number ?? ''}</span>
+                      ))}</span>
                     ) : otherKidsOf(m.userId).length ? (
                       <button type="button" onClick={() => linkByName(m)} className="text-[12px] text-[#f59e0b] underline underline-offset-2 hover:text-[#b45309]"
                         title={`${centerLabel} 아이 명단과 아직 안 이어졌어요 — 눌러서 같은 이름 아이와 잇기`}>{centerLabel} 미연결 · 잇기</button>

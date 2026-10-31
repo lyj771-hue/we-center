@@ -49,10 +49,9 @@ const parsePhones = (text: string): { phones?: string[]; phoneRelations?: string
   return { phones: items.map(x => x.d), phoneRelations: items.map(x => x.rel) };
 };
 
-export default function ChildrenTab({ members, center, onLinked, onMembersChanged }: { members: Member[]; center: Center; onLinked: () => void; onMembersChanged: () => void }) {
+export default function ChildrenTab({ members, center, q, onLinked, onMembersChanged }: { members: Member[]; center: Center; /** 찾기 — 위 회원 관리 칸 */ q: string; onLinked: () => void; onMembersChanged: () => void }) {
   const [kids, setKids] = useState<Child[]>([]);
   const [fixed, setFixed] = useState<Map<string, Fixed[]>>(new Map());
-  const [q, setQ] = useState('');
   const [editing, setEditing] = useState<string | null>(null);   // 아이 id, 'new' = 새 아이
   const [form, setForm] = useState(emptyForm);
   const [failed, setFailed] = useState('');
@@ -190,8 +189,6 @@ export default function ChildrenTab({ members, center, onLinked, onMembersChange
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="이름·회원 코드 찾기"
-          className="border border-[#e5e5e5] px-3 py-1.5 text-[13px] w-56 outline-none focus:border-[var(--brand)]" />
         <span className="text-[12px] text-[#aaa]">{list.length}명</span>
         <button onClick={() => downloadXlsx([exportSheet()], `아이명단_${stamp()}`).catch(e => showAlert(`내려받지 못했어요.\n${(e as Error).message}`))}
           className={`${btn} ml-auto border-[#16a34a] text-[#16a34a] hover:bg-[#f0fdf4]`} title="엑셀 파일(.xlsx) — 맥 Numbers 에서도 열려요">엑셀 다운로드</button>
