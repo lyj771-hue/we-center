@@ -99,6 +99,23 @@ export async function getMyChildCenters(): Promise<BranchKey[]> {
   return ((data ?? []) as string[]).map(c => (c === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong'));
 }
 
+/** 계정에 이어진 아이들 (형제) — 이름 순. SQL 전이면 빈 목록 */
+export interface MyKid { id: string; name: string; number?: number; center: BranchKey }
+export async function getMyChildren(): Promise<MyKid[]> {
+  const { data, error } = await supabase.rpc('my_children');
+  if (error) return [];
+  return (data ?? []).map((r: { id: string; name: string; child_number: number | null; center: string }) => ({
+    id: r.id, name: r.name, number: r.child_number ?? undefined, center: r.center === 'uijeongbu' ? 'uijeongbu' as const : 'eunpyeong' as const,
+  }));
+}
+
+/** 마이페이지에서 아이 고르기 — 디비에 남아 다음 로그인에도 그대로 */
+export async function setActiveChild(childId: string): Promise<void> {
+  const { data, error } = await supabase.rpc('set_active_child', { p_child: childId });
+  if (error) throw error;
+  if (data !== 'ok') throw new Error(data as string);
+}
+
 // ── 지점(수색/의정부) 가입 ─────────────────────────────────────────────
 
 export type BranchKey = 'eunpyeong' | 'uijeongbu';

@@ -6,8 +6,8 @@ import { useMember } from '@/components/MemberContext';
 import MyPageView, { MYPAGE_CARD } from '@/components/MyPageView';
 import type { MyLedgers } from '@/lib/prepaid';
 import { getMyLedger, NO_LEDGERS } from '@/lib/prepaid';
-import type { MyChild, MyLesson, MyPayment } from '@/lib/mypage';
-import { getMyChild, getMyChildCenters, getMyLessons, getMyPaymentHistory, getMyPayments } from '@/lib/mypage';
+import type { MyChild, MyKid, MyLesson, MyPayment } from '@/lib/mypage';
+import { getMyChild, getMyChildCenters, getMyChildren, getMyLessons, getMyPaymentHistory, getMyPayments, setActiveChild } from '@/lib/mypage';
 import type { BranchKey, MyPaymentUse } from '@/lib/mypage';
 import { BRANCHES, leaveBranch, requestBranch, withdrawMember } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -32,6 +32,10 @@ export default function MyPage() {
   const branch: BranchKey = sel && viewable(sel) ? sel : primary;
   const usable = branches.filter(b => viewable(b.key));
   const [child, setChild] = useState<MyChild | null>(null);
+  // 형제 — 이 계정에 이어진 아이들. 고른 아이는 디비에 저장돼 다음 로그인에도 그대로
+  const [kids, setKids] = useState<MyKid[]>([]);
+  const [switching, setSwitching] = useState(false);
+  useEffect(() => { if (userId && profile) getMyChildren().then(setKids); }, [userId, profile]);
   const [week, setWeek] = useState(thisMonday());
   const [weekLessons, setWeekLessons] = useState<MyLesson[]>([]);
   const [payments, setPayments] = useState<MyPayment[]>([]);
@@ -95,6 +99,26 @@ export default function MyPage() {
       ))}
     </div>
   );
+  // 아이 고르기 — 이 지점에 아이가 둘 이상일 때만. 고른 아이로 마이페이지·수업 신청이 움직인다
+  const kidsHere = kids.filter(k => k.center === branch);
+  const pickKid = async (k: MyKid) => {
+    if (k.name === child?.childName || switching) return;
+    setSwitching(true);
+    try { await setActiveChild(k.id); await load(); }
+    catch (e) { showAlert(`아이를 바꾸지 못했어요.\n${(e as Error).message}`); }
+    finally { setSwitching(false); }
+  };
+  const kidTabs = kidsHere.length > 1 && (
+    <div role="tablist" aria-label="아이 고르기" className="flex flex-wrap gap-1 border-b border-[#e5e5e5]">
+      {kidsHere.map(k => (
+        <button key={k.id} type="button" role="tab" aria-selected={k.name === child?.childName} onClick={() => pickKid(k)} disabled={switching}
+          className={`-mb-px px-4 py-2 text-[15px] border-b-2 ${k.name === child?.childName ? 'border-[var(--brand)] text-[var(--brand)]' : 'border-transparent text-[#777] hover:text-[#333]'}`}>
+          {k.name}{k.number ?? ''}
+        </button>
+      ))}
+    </div>
+  );
+
   // 가입했거나 신청한 지점을 다시 누르면 — 취소할지 묻고, 그 지점 아이 연결을 끊고 빠진다(마지막 지점이면 계정은 남고 미승인으로)
   const joined = branches.filter(b => b.status !== 'none' || linked.includes(b.key));
   const leave = async (b: { key: BranchKey; label: string; status: string }) => {
@@ -170,6 +194,7 @@ export default function MyPage() {
 
   return wrap(
     <div className="space-y-6">
+      {kidTabs}
       <MyPageView onChanged={load} child={child} nickname={profile?.nickname} approved={viewable(branch)} week={week} setWeek={setWeek}
         weekLessons={lessonsHere} payments={paymentsHere} ledger={ledger} history={historyHere} today={today} center={branch} failed={failed}
         top={top} bottom={bottom} />

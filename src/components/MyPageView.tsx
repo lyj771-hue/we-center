@@ -95,7 +95,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       .then(([ls, h]) => { if (alive) { setMonthLessons(ls); setMonthHols(h); } })
       .catch(() => { if (alive) setMonthLessons(null); });
     return () => { alive = false; };
-  }, [payMonth, today]);
+  }, [payMonth, today, child?.childName]);   // 아이를 바꾸면 다시
   const SUPPORT = ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'woojin_ext', 'woojin_self', 'subsidy'];
   // 지원 결제로 한 수업인지 — [결제 완료] 기록이 있으면 그것, 없으면 칸의 결제 글자(b·e·c·우·외·자·지)
   const bySupport = (l: MyLesson) => history.some(h => h.day === l.day && h.time === l.time && SUPPORT.includes(h.method))

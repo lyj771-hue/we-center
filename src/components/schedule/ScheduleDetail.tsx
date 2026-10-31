@@ -16,7 +16,7 @@ import {
   bookSlot, FREE_CANCEL_MIN, freeCancelSlot, freeCancelUntil, getSchedulePreview, notifyBooked, publishLabel, setScheduleHidden, getSchedule, scheduleDays,
   getScheduleTeachers, shortDay,
 } from '@/lib/schedule';
-import { getMyLessons, isRealLesson } from '@/lib/mypage';
+import { getMyChild, getMyChildren, getMyLessons, isRealLesson } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import { getSlotOwners, getTeacherLessons, teacherAddSlots, teacherRemoveSlots } from '@/lib/teacher';
 import { rowsForDay } from '@/lib/timetable';
@@ -33,6 +33,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const { isAdmin } = useAdmin();
   const { userId, profile, teacher } = useMember();
   // 선생님은 두 지점 모두 보기만 (신청은 보호자만)
+  const [bookingKid, setBookingKid] = useState('');
   const canView = isAdmin || !!teacher || (!!userId && !!profile?.approvedAt);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
@@ -72,6 +73,9 @@ export default function ScheduleDetail({ id }: { id: string }) {
       else setPreview(null);
       // 보호자: 이 스케쥴 기간의 우리 아이 수업 — 겹치는 시간은 미리 "수업 있음"으로
       if (s && !isAdmin && !teacher && userId) {
+        // 형제 — 어느 아이로 신청되는지 보여 준다
+        const here = (await getMyChildren()).filter(k => k.center === s.center);
+        setBookingKid(here.length > 1 ? (await getMyChild(s.center).catch(() => null))?.childName ?? '' : '');
         const days = scheduleDays(s);
         const mine = await getMyLessons(days[0], days[days.length - 1]).catch(() => []);
         const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -247,6 +251,9 @@ export default function ScheduleDetail({ id }: { id: string }) {
       <Link href="/schedule" className="inline-block text-[12px] text-[#999] hover:text-[#333] mb-6">← 수업스케쥴 목록</Link>
 
       <ScheduleGate>
+        {bookingKid && !editing && schedule && (
+          <p className="mb-3 text-[13px] text-[#555]"><b className="text-[var(--brand)]">{bookingKid}</b> 이름으로 신청돼요. 다른 아이로 신청하려면 <Link href="/mypage" className="underline underline-offset-2">마이페이지</Link>에서 아이를 바꿔 주세요.</p>
+        )}
         {editing && schedule ? (
           <ScheduleEditor
             teachers={teachers}

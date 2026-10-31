@@ -289,7 +289,8 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
       .map(s => ({
         id: s.id, teacherId: s.teacher_id, day: s.day, time: s.time,
         bookedBy: s.booked_by ?? undefined,
-        owner: s.booked_by ? (names.get(s.booked_by)?.nickname ?? ownerOf.get(s.id)) : undefined,
+        // 신청한 아이가 있으면 신청 기록의 아이 이름(형제 구분), 없으면 회원 이름
+        owner: s.booked_by ? ((s.booked_child_id && ownerOf.get(s.id)) || (names.get(s.booked_by)?.nickname ?? ownerOf.get(s.id))) : undefined,
         ownerCenter: s.booked_by && names.get(s.booked_by)?.center !== names.get(s.booked_by)?.nickname ? names.get(s.booked_by)?.center : undefined,
         cancelState: s.cancel_state ?? undefined,
       }))

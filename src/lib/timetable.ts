@@ -197,16 +197,8 @@ export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise
   if (error) throw error;
 }
 
-/** 아이를 보호자 계정과 잇는다(계정 하나 = 센터마다 아이 한 명 — 두 센터를 다니면 수색·의정부 명단의 아이를 각각 잇는다). null 이면 연결을 끊는다 */
+/** 아이를 보호자 계정과 잇는다(형제는 계정 하나에 여러 명 — 이미 이어진 다른 아이는 그대로). null 이면 연결을 끊는다 */
 export async function linkChild(childId: string, userId: string | null): Promise<void> {
-  if (userId) {
-    // 이 계정에 이미 이어진 같은 센터의 다른 아이가 있으면 먼저 끊는다
-    const { data: me, error: e0 } = await supabase.from('children').select('center').eq('id', childId).single();
-    if (e0) throw e0;
-    const { error: e1 } = await supabase.from('children').update({ guardian_user_id: null })
-      .eq('guardian_user_id', userId).eq('center', me?.center ?? 'eunpyeong').neq('id', childId);
-    if (e1) throw e1;
-  }
   const { error } = await supabase.from('children').update({ guardian_user_id: userId }).eq('id', childId);
   if (error) throw error;
 }
@@ -302,7 +294,8 @@ export async function getDayBoard(day: string, children: Child[], center: Center
     for (const s of booked) {
       if (s.cancel_state === 'approved') continue;
       const p = prof.get(s.booked_by);
-      const child = children.find(c => c.guardianUserId === s.booked_by && (c.center ?? 'eunpyeong') === center)
+      const child = children.find(c => c.id === s.booked_child_id)   // 신청한 아이
+        ?? children.find(c => c.guardianUserId === s.booked_by && (c.center ?? 'eunpyeong') === center)
         ?? children.find(c => c.guardianUserId === s.booked_by) ?? (p ? byName.get(p.nickname) : undefined);
       open.set(key(s.teacher_id, s.time), {
         ...blank, status: 'child', name: child?.name ?? p?.nickname ?? '신청',
@@ -548,7 +541,7 @@ export async function getMonthRoundLessons(upTo: string, children: Child[]): Pro
   const [fixedRows, cellRows, slotRows, payRows, offRows, hols, skip] = await Promise.all([
     all(() => supabase.from('fixed_lessons').select('*')),
     all(() => supabase.from('board_cells').select('*').gte('day', from).lte('day', upTo)),
-    all(() => supabase.from('slots').select('day, teacher_id, time, booked_by, cancel_state').gte('day', from).lte('day', upTo).not('booked_by', 'is', null)),
+    all(() => supabase.from('slots').select('*').gte('day', from).lte('day', upTo).not('booked_by', 'is', null)),
     all(() => supabase.from('lesson_payments').select('child_id, day, time, method').gte('day', from).lte('day', upTo)),
     all(() => supabase.from('teacher_day_assign').select('day, teacher_id, center').eq('off', true).gte('day', from).lte('day', upTo)),
     getKoreanHolidays(upTo.slice(0, 4)).catch(() => [] as string[]),
@@ -558,7 +551,7 @@ export async function getMonthRoundLessons(upTo: string, children: Child[]): Pro
   const off = new Set(offRows.map(r => `${r.day}|${r.center}|${r.teacher_id}`));
   // 보호자 신청한 빈타임 — 그 시간엔 신청한 아이 수업(고정 아이 대신). 아이는 보호자 계정으로 찾는다
   const booked = new Map(slotRows.filter(s => s.cancel_state !== 'approved')
-    .map(s => [`${s.day}|${s.teacher_id}|${s.time}`, children.find(c => c.guardianUserId === s.booked_by)?.id]));
+    .map(s => [`${s.day}|${s.teacher_id}|${s.time}`, (children.find(c => c.id === s.booked_child_id) ?? children.find(c => c.guardianUserId === s.booked_by))?.id]));
   const out: { childId: string; day: string; time: string; method: PayMethod }[] = [];
   for (let d = parseYmd(from); ; d.setDate(d.getDate() + 1)) {
     const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
