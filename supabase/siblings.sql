@@ -1,4 +1,4 @@
--- WE 소아재활센터 — 형제: 보호자 계정 하나에 같은 지점 아이 여러 명 (2026-10)
+-- WE 소아재활센터 — 가족: 보호자 계정 하나에 같은 지점 아이 여러 명 (2026-10)
 -- 실행 방법: Supabase 대시보드 → SQL Editor → New query → 붙여넣고 Run. 여러 번 실행해도 괜찮다.
 --
 -- 마이페이지에서 고른 아이(profiles.active_child_id)를 기준으로 마이페이지·수업 신청이 움직인다. 고른 적이 없으면 이름 순으로 빠른 아이.
@@ -118,7 +118,7 @@ as $$
   order by lp.day, lp.time;
 $$;
 
--- 8. 수업 신청 — 고른 아이로. 겹침은 그 아이 수업만 본다(형제는 같은 시간에 수업이 있어도 된다)
+-- 8. 수업 신청 — 고른 아이로. 겹침은 그 아이 수업만 본다(가족는 같은 시간에 수업이 있어도 된다)
 create or replace function public.book_slot(p_slot uuid)
 returns text
 language plpgsql
@@ -329,7 +329,7 @@ as $$
   where s.schedule_id = p_schedule and s.booked_by is not null and (public.is_admin() or public.is_teacher());
 $$;
 
--- 10. 보호자가 회원 코드로 이을 때 — 다른 아이 연결은 끊지 않는다(형제)
+-- 10. 보호자가 회원 코드로 이을 때 — 다른 아이 연결은 끊지 않는다(가족)
 create or replace function public.claim_child(p_code text)
 returns text
 language plpgsql

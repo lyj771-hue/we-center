@@ -289,7 +289,7 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
       .map(s => ({
         id: s.id, teacherId: s.teacher_id, day: s.day, time: s.time,
         bookedBy: s.booked_by ?? undefined,
-        // 신청한 아이가 있으면 신청 기록의 아이 이름(형제 구분), 없으면 회원 이름
+        // 신청한 아이가 있으면 신청 기록의 아이 이름(가족 구분), 없으면 회원 이름
         owner: s.booked_by ? ((s.booked_child_id && ownerOf.get(s.id)) || (names.get(s.booked_by)?.nickname ?? ownerOf.get(s.id))) : undefined,
         ownerCenter: s.booked_by && names.get(s.booked_by)?.center !== names.get(s.booked_by)?.nickname ? names.get(s.booked_by)?.center : undefined,
         cancelState: s.cancel_state ?? undefined,
@@ -302,8 +302,9 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
 // ── 신청 · 취소 ──────────────────────────────────────────────────────
 
 /** 신청 — ok / taken(다른 분이 먼저) / not_approved / conflict(같은 시간에 이미 우리 아이 수업) */
-export async function bookSlot(slotId: string): Promise<'ok' | 'taken' | 'not_approved' | 'conflict'> {
-  const { data, error } = await supabase.rpc('book_slot', { p_slot: slotId });
+export async function bookSlot(slotId: string, childId?: string): Promise<'ok' | 'taken' | 'not_approved' | 'conflict'> {
+  // childId — 가족이 있을 때 신청 화면에서 고른 아이
+  const { data, error } = await supabase.rpc('book_slot', childId ? { p_slot: slotId, p_child: childId } : { p_slot: slotId });
   if (error) throw error;
   if (data === 'ok') notifyScheduleChanged();
   // 한발 늦음 — 대시보드(스케줄 잡기)에서 센다 (supabase/booking-misses.sql). 실패해도 그만

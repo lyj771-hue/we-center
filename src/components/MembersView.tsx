@@ -179,9 +179,9 @@ export default function MembersView({ center }: { center: Center }) {
           const kid = kids.find(k => k.memberCode === code);
           if (!kid) { await showAlert(`회원 코드 ${code}인 아이가 명단에 없어요.`); return; }
           if (kid.guardianUserId && kid.guardianUserId !== m.userId && !(await askConfirm(`${code} ${kid.name}은(는) 다른 계정에 이어져 있어요.\n이 계정으로 옮길까요?`))) return;
-          // 이미 이어진 아이가 있으면 — 형제로 같이 이을지, 잘못 이어서 바꾸는 건지
+          // 이미 이어진 아이가 있으면 — 가족으로 같이 이을지, 잘못 이어서 바꾸는 건지
           if (current && kid.id !== current.id) {
-            const r = await askChoice(`이 계정에 ${current.memberCode} ${current.name}이(가) 이어져 있어요.\n${code} ${kid.name}을(를) 어떻게 할까요?`, '형제로 같이 잇기', '이 아이로 바꾸기');
+            const r = await askChoice(`이 계정에 ${current.memberCode} ${current.name}이(가) 이어져 있어요.\n${code} ${kid.name}을(를) 어떻게 할까요?`, '가족으로 같이 잇기', '이 아이로 바꾸기');
             if (!r) return;
             if (r === 'b') await linkChild(current.id, null);
           }
@@ -200,6 +200,21 @@ export default function MembersView({ center }: { center: Center }) {
     const k = kidOf(m.userId);
     return k?.uses ? k.uses[key] : KID_ONLY.includes(key) ? false : m[key as Exclude<SupportKey, 'jangmatchum' | 'woojin_ext' | 'woojin_self'>];
   };
+  // 가족 — 이 계정에 이어진 이 지점 아이들. 결제 체크는 아이 이름마다
+  const familyOf = (userId: string) => kids.filter(k => k.guardianUserId === userId && (k.center ?? 'eunpyeong') === center);
+  const toggleKidUse = async (k: Child, key: Parameters<typeof setChildUses>[1]) => {
+    const on = !k.uses?.[key];
+    try {
+      await setChildUses(k.id, key, on);
+      setKids(list => list.map(x => (x.id === k.id && x.uses ? { ...x, uses: { ...x.uses, [key]: on } } : x)));
+    } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
+  };
+  const kidChecks = (m: Member, key: Parameters<typeof setChildUses>[1], label: string) => familyOf(m.userId).map(k => (
+    <label key={k.id} className="flex items-center justify-center gap-1 whitespace-nowrap py-0.5 text-[10px] text-[#777]">
+      {k.name}{k.number ?? ''}
+      <input type="checkbox" checked={!!k.uses?.[key]} aria-label={`${k.name} ${label}`} onChange={() => toggleKidUse(k, key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer" />
+    </label>
+  ));
   const toggleSupport = async (m: Member, key: SupportKey) => {
     const on = !supportOf(m, key);
     try {
@@ -593,15 +608,15 @@ export default function MembersView({ center }: { center: Center }) {
                   })}
                   {filter === 'methods' && SUPPORTS.map(x => (
                     <td key={x.key} className={`${td} text-center`}>
-                      <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname || (KID_ONLY.includes(x.key) && !kidOf(m.userId))} aria-label={`${m.nickname} ${x.label}`}
+                      {familyOf(m.userId).length > 1 ? kidChecks(m, x.key, x.label) : <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname || (KID_ONLY.includes(x.key) && !kidOf(m.userId))} aria-label={`${m.nickname} ${x.label}`}
                         title={KID_ONLY.includes(x.key) && !kidOf(m.userId) ? '아이 명단과 연결된 뒤에 체크할 수 있어요' : undefined}
-                        onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />
+                        onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />}
                     </td>
                   ))}
                   {filter === 'methods' && PREPAID_KINDS.map(p => (
                     <td key={p.key} className={`${td} text-center`}>
                       {/* 선결제 — 아이 명단의 체크와 같은 칸(연결된 아이가 있어야 체크할 수 있다) */}
-                      <input type="checkbox" checked={!!kidOf(m.userId)?.uses?.[p.key]} disabled={!kidOf(m.userId)}
+                      {familyOf(m.userId).length > 1 ? kidChecks(m, p.key, p.label) : <input type="checkbox" checked={!!kidOf(m.userId)?.uses?.[p.key]} disabled={!kidOf(m.userId)}
                         title={kidOf(m.userId) ? `${p.label}를 쓰는 아이` : '아이 명단과 연결된 뒤에 체크할 수 있어요'}
                         onChange={async e => {
                           const k = kidOf(m.userId);
@@ -612,7 +627,7 @@ export default function MembersView({ center }: { center: Center }) {
                             setKids(list => list.map(x => (x.id === k.id && x.uses ? { ...x, uses: { ...x.uses, [p.key]: on } } : x)));
                           } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
                         }}
-                        className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />
+                        className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />}
                     </td>
                   ))}
                   {SHOW_PREPAID && (

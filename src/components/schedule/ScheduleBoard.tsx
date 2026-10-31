@@ -17,6 +17,8 @@ interface Props {
   isAdmin: boolean;
   myId: string | null;
   nickname?: string;
+  /** 가족 — 내 계정 신청에 어느 아이인지 이름으로 */
+  showOwnerName?: boolean;
   busySlot: string | null;
   /** 보호자: 우리 아이 수업과 시간이 겹쳐 신청할 수 없는 칸 */
   conflicts?: Set<string>;
@@ -52,7 +54,7 @@ const TINTS = ['#e8f1fd', '#fdf1e3', '#e8f5ee', '#f3ecfb', '#fdecef', '#eef3f5']
 const pill = 'inline-flex items-center gap-1.5 text-[11px] md:text-[12px] px-3 min-h-[32px] rounded-full border-[1.5px] transition-colors';
 
 export default function ScheduleBoard({
-  schedule, teachers, isAdmin, myId, nickname, busySlot, conflicts, onPick, freeCancelUntil, onFreeCancel, onEdit, onDelete,
+  schedule, teachers, isAdmin, myId, nickname, showOwnerName, busySlot, conflicts, onPick, freeCancelUntil, onFreeCancel, onEdit, onDelete,
   staffView = isAdmin, teacherTools: tt,
 }: Props) {
   const days = scheduleDays(schedule);
@@ -203,11 +205,11 @@ export default function ScheduleBoard({
                           <button key={s.id} type="button" disabled={busy} onClick={() => onFreeCancel(s, teacher)}
                             title={`${untilText}까지 누르면 바로 취소해요`}
                             className={`${pill} border-[#0a0a0a] bg-[#0a0a0a] text-white hover:opacity-90`}>
-                            ✓ {s.time} 신청완료 <span className="text-[10px] opacity-70">취소</span>
+                            ✓ {s.time} {showOwnerName && s.owner ? s.owner : '신청완료'} <span className="text-[10px] opacity-70">취소</span>
                           </button>
                         ) : (
                           <span key={s.id} title="취소·변경은 센터로 연락해 주세요" className={`${pill} border-[#0a0a0a] bg-[#0a0a0a] text-white`}>
-                            ✓ {s.time} 신청완료
+                            ✓ {s.time} {showOwnerName && s.owner ? s.owner : '신청완료'}
                           </span>
                         );
                       }

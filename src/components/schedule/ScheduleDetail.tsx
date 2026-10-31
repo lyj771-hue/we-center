@@ -16,6 +16,7 @@ import {
   bookSlot, FREE_CANCEL_MIN, freeCancelSlot, freeCancelUntil, getSchedulePreview, notifyBooked, publishLabel, setScheduleHidden, getSchedule, scheduleDays,
   getScheduleTeachers, shortDay,
 } from '@/lib/schedule';
+import type { MyKid } from '@/lib/mypage';
 import { getMyChild, getMyChildren, getMyLessons, isRealLesson } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import { getSlotOwners, getTeacherLessons, teacherAddSlots, teacherRemoveSlots } from '@/lib/teacher';
@@ -33,7 +34,9 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const { isAdmin } = useAdmin();
   const { userId, profile, teacher } = useMember();
   // 선생님은 두 지점 모두 보기만 (신청은 보호자만)
-  const [bookingKid, setBookingKid] = useState('');
+  // 가족 — 이 지점 아이들과 신청할 아이. 처음엔 마이페이지에서 고른 아이, 이 화면에서 바꿀 수 있다
+  const [family, setFamily] = useState<MyKid[]>([]);
+  const [pickKid, setPickKid] = useState('');
   const canView = isAdmin || !!teacher || (!!userId && !!profile?.approvedAt);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [schedule, setSchedule] = useState<Schedule | null>(null);
@@ -73,11 +76,16 @@ export default function ScheduleDetail({ id }: { id: string }) {
       else setPreview(null);
       // 보호자: 이 스케쥴 기간의 우리 아이 수업 — 겹치는 시간은 미리 "수업 있음"으로
       if (s && !isAdmin && !teacher && userId) {
-        // 형제 — 어느 아이로 신청되는지 보여 준다
         const here = (await getMyChildren()).filter(k => k.center === s.center);
-        setBookingKid(here.length > 1 ? (await getMyChild(s.center).catch(() => null))?.childName ?? '' : '');
+        setFamily(here);
+        let kidId = here.some(k => k.id === pickKid) ? pickKid : '';
+        if (!kidId && here.length > 1) {
+          const active = await getMyChild(s.center).catch(() => null);
+          kidId = here.find(k => k.name === active?.childName)?.id ?? here[0].id;
+          setPickKid(kidId);
+        }
         const days = scheduleDays(s);
-        const mine = await getMyLessons(days[0], days[days.length - 1]).catch(() => []);
+        const mine = await getMyLessons(days[0], days[days.length - 1], kidId || undefined).catch(() => []);
         const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
         const busy = mine.filter(l => isRealLesson(l));
         setConflicts(new Set(s.slots.filter(sl => !sl.bookedBy && busy.some(l => l.day === sl.day && Math.abs(toMin(l.time) - toMin(sl.time)) < 50)).map(sl => sl.id)));
@@ -87,7 +95,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
     } finally {
       setLoaded(true);
     }
-  }, [id, isAdmin, teacher, userId]);
+  }, [id, isAdmin, teacher, userId, pickKid]);
 
   useEffect(() => { if (canView) load(); }, [canView, load]);
   // 실시간 보강 — 다른 화면(선생님 시간표·시간표 관리)에서 바뀌면 신호로 바로, 놓친 것은 1분마다·화면으로 돌아올 때 다시 읽는다
@@ -134,7 +142,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
   const handlePick = async (slot: Slot) => {
     setBusySlot(slot.id);
     try {
-      const r = await bookSlot(slot.id);
+      const r = await bookSlot(slot.id, family.length > 1 ? pickKid || undefined : undefined);
       if (r === 'ok') notifyBooked(slot.id);   // '수업 확정' 알림톡
       if (r === 'taken') setPopup('방금 다른 분이 먼저 신청했어요.\n다른 시간을 골라 주세요.');
       if (r === 'not_approved') setPopup('센터 승인 후 신청할 수 있어요.');
@@ -251,8 +259,15 @@ export default function ScheduleDetail({ id }: { id: string }) {
       <Link href="/schedule" className="inline-block text-[12px] text-[#999] hover:text-[#333] mb-6">← 수업스케쥴 목록</Link>
 
       <ScheduleGate>
-        {bookingKid && !editing && schedule && (
-          <p className="mb-3 text-[13px] text-[#555]"><b className="text-[var(--brand)]">{bookingKid}</b> 이름으로 신청돼요. 다른 아이로 신청하려면 <Link href="/mypage" className="underline underline-offset-2">마이페이지</Link>에서 아이를 바꿔 주세요.</p>
+        {/* 가족 — 신청할 아이 고르기 */}
+        {family.length > 1 && !editing && schedule && !isAdmin && !teacher && (
+          <div className="mb-3 flex items-center justify-end gap-2">
+            <label htmlFor="booking-kid" className="text-[13px] text-[#555]">신청할 아이</label>
+            <select id="booking-kid" value={pickKid} onChange={e => setPickKid(e.target.value)}
+              className="text-[14px] text-[var(--brand)] border border-[var(--brand)] rounded-full bg-white px-3 py-1.5">
+              {family.map(k => <option key={k.id} value={k.id}>{k.name}{k.number ?? ''}</option>)}
+            </select>
+          </div>
         )}
         {editing && schedule ? (
           <ScheduleEditor
@@ -276,7 +291,8 @@ export default function ScheduleDetail({ id }: { id: string }) {
             teachers={teachers}
             isAdmin={isAdmin}
             myId={teacher ? null : userId}
-            nickname={myName}
+            nickname={family.length > 1 ? family.find(k => k.id === pickKid)?.name ?? myName : myName}
+            showOwnerName={family.length > 1}
             busySlot={busySlot}
             conflicts={conflicts}
             onPick={handlePick}

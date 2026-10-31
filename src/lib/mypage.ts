@@ -47,8 +47,9 @@ export async function getMyChild(center?: BranchKey): Promise<MyChild | null> {
   };
 }
 
-export async function getMyLessons(from: string, to: string): Promise<MyLesson[]> {
-  const { data, error } = await supabase.rpc('my_lessons', { p_from: from, p_to: to });
+/** childId — 그 아이 수업(수업 신청 화면). 없으면 마이페이지에서 고른 아이 */
+export async function getMyLessons(from: string, to: string, childId?: string): Promise<MyLesson[]> {
+  const { data, error } = await supabase.rpc('my_lessons', childId ? { p_from: from, p_to: to, p_child: childId } : { p_from: from, p_to: to });
   if (error) throw error;
   return (data ?? []).map((r: Record<string, unknown>) => ({
     day: r.day as string,
@@ -99,7 +100,7 @@ export async function getMyChildCenters(): Promise<BranchKey[]> {
   return ((data ?? []) as string[]).map(c => (c === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong'));
 }
 
-/** 계정에 이어진 아이들 (형제) — 이름 순. SQL 전이면 빈 목록 */
+/** 계정에 이어진 아이들 (가족) — 이름 순. SQL 전이면 빈 목록 */
 export interface MyKid { id: string; name: string; number?: number; center: BranchKey }
 export async function getMyChildren(): Promise<MyKid[]> {
   const { data, error } = await supabase.rpc('my_children');

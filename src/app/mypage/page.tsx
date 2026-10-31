@@ -32,7 +32,7 @@ export default function MyPage() {
   const branch: BranchKey = sel && viewable(sel) ? sel : primary;
   const usable = branches.filter(b => viewable(b.key));
   const [child, setChild] = useState<MyChild | null>(null);
-  // 형제 — 이 계정에 이어진 아이들. 고른 아이는 디비에 저장돼 다음 로그인에도 그대로
+  // 가족 — 이 계정에 이어진 아이들. 고른 아이는 디비에 저장돼 다음 로그인에도 그대로
   const [kids, setKids] = useState<MyKid[]>([]);
   const [switching, setSwitching] = useState(false);
   useEffect(() => { if (userId && profile) getMyChildren().then(setKids); }, [userId, profile]);

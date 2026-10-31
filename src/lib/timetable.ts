@@ -197,7 +197,7 @@ export async function saveChild(c: Omit<Child, 'id'> & { id?: string }): Promise
   if (error) throw error;
 }
 
-/** 아이를 보호자 계정과 잇는다(형제는 계정 하나에 여러 명 — 이미 이어진 다른 아이는 그대로). null 이면 연결을 끊는다 */
+/** 아이를 보호자 계정과 잇는다(가족은 계정 하나에 여러 명 — 이미 이어진 다른 아이는 그대로). null 이면 연결을 끊는다 */
 export async function linkChild(childId: string, userId: string | null): Promise<void> {
   const { error } = await supabase.from('children').update({ guardian_user_id: userId }).eq('id', childId);
   if (error) throw error;
