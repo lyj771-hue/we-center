@@ -19,7 +19,7 @@ const ALL_SUPPORT: { key: PayMethod; label: string }[] = [
   { key: 'subsidy', label: '지원금' }, { key: 'woojin_ext', label: '학교외부' }, { key: 'woojin_self', label: '학교자율' },
 ];
 const PRIVATE: { key: PayMethod; label: string }[] = [
-  { key: 'prepaid', label: '선결제A' }, { key: 'prepaid_b', label: '선결제B' }, { key: 'prepaid_c', label: '선결제C' }, { key: 'card', label: '신용카드' }, { key: 'cash', label: '현금' }, { key: 'other', label: '직접 작성' },
+  { key: 'prepaid', label: '선결제A' }, { key: 'prepaid_b', label: '선결제B' }, { key: 'prepaid_c', label: '선결제C' }, { key: 'card', label: '신용카드A' }, { key: 'card_b', label: '신용카드B' }, { key: 'card_c', label: '신용카드C' }, { key: 'cash', label: '현금' }, { key: 'other', label: '직접 작성' },
 ];
 
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };

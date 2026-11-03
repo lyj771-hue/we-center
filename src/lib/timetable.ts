@@ -376,7 +376,7 @@ export async function saveFixedFrom(body: FixedFromBody): Promise<void> {
 
 // ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
 
-export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'prepaid_b' | 'prepaid_c' | 'card' | 'cash' | 'other'
+export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'prepaid_b' | 'prepaid_c' | 'card' | 'card_b' | 'card_c' | 'cash' | 'other'
   | 'voucher_retro' | 'gusen_retro' | 'jangmatchum_retro' | 'kkumideun_retro' | 'unpaid';
 /** cell = 시간표 결제 칸에 보이는 짧은 이름 (없으면 label) */
 export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?: string }[] = [
@@ -393,7 +393,10 @@ export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?:
   { key: 'prepaid', label: '선결제A', short: '선' },
   { key: 'prepaid_b', label: '선결제B', short: '비' },
   { key: 'prepaid_c', label: '선결제C', short: '씨' },
-  { key: 'card', label: '신용카드', short: '카' },
+  // 신용카드 — A·B·C로 나눴다. 예전 신용카드 기록(card, 글자 '카')은 그대로 신용카드A
+  { key: 'card', label: '신용카드A', short: '카' },
+  { key: 'card_b', label: '신용카드B', short: '드' },
+  { key: 'card_c', label: '신용카드C', short: '디' },
   { key: 'cash', label: '현금', short: '현' },
   // 나중에 결제(소급·미결) — 빨간 글씨. [결제 완료]로 확정되지 않고, 실제 결제한 뒤 결제방식을 바꿔 확정한다. 기본 결제 글자로는 안 쓴다(short 두 글자)
   { key: 'voucher_retro', label: '바우처소급', short: '바소' },
