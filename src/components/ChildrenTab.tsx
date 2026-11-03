@@ -14,7 +14,7 @@ import { addCharge } from '@/lib/prepaid';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 // 고정 자리 결제 글자 → 이름 (표에는 영어 글자 대신 이름으로)
-const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', 장: '장맞춤', c: '꿈이든', 외: '우진학교외부', 자: '우진학교자율', 선: '선결제A', 비: '선결제B', 씨: '선결제C', 카: '신용카드', 현: '현금' };
+const PAY_LABEL: Record<string, string> = { b: '바우처', e: '굳센', 장: '장맞춤', c: '꿈이든', 외: '우진학교외부', 자: '우진학교자율', 선: '선결제A', 비: '선결제B', 씨: '선결제C', 카: '신용카드A', 드: '신용카드B', 디: '신용카드C', 현: '현금' };
 
 type Fixed = { weekday: number; time: string; teacher: string; payment: string; oral: boolean; kind: LessonKind };
 const emptyForm = { center: 'eunpyeong' as Center, name: '', number: '', memo: '', guardian: '', phone: '',   // phone = 한 줄에 "번호 관계"
