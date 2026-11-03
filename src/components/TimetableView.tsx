@@ -1139,6 +1139,9 @@ function CellText({ cell, label, muted, nonMember, posted }: { cell: CellView; l
   );
 }
 
+/** 선결제·신용카드 A·B·C 한 번 수업 금액 — 고르는 목록에서 이름 뒤에 붙인다 (선결제A(60000)) */
+const ABC_PRICE: Partial<Record<PayMethod, number>> = { prepaid: 60000, prepaid_b: 55000, prepaid_c: 50000, card: 60000, card_b: 55000, card_c: 50000 };
+
 /** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
 function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, blocked, askAlways, onPay }: {
   cell: CellView;
@@ -1216,7 +1219,7 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
         <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
         {options.map(m => {
           const why = paid?.method === m.key ? undefined : blocked?.(m.key);
-          return <option key={m.key} value={m.key} disabled={!!why}>{m.label}{m.key === base ? ' (기본)' : ''}{why ? ` (${why})` : ''}</option>;
+          return <option key={m.key} value={m.key} disabled={!!why}>{m.label}{ABC_PRICE[m.key] ? `(${ABC_PRICE[m.key]})` : ''}{m.key === base ? ' (기본)' : ''}{why ? ` (${why})` : ''}</option>;
         })}
         {paid?.method === 'visit' && <option value="visit-edit">방문 금액 고치기…</option>}
         <option value="custom">{paid?.note ? `${paid.note} (고치기)` : '직접 작성…'}</option>
