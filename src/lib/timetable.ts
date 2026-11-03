@@ -392,7 +392,7 @@ export async function saveFixedFrom(body: FixedFromBody): Promise<void> {
 
 // ── 결제 체크 (수업이 끝나면 관리자가 어떤 결제로 했는지) ────────────────
 
-export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'prepaid_b' | 'prepaid_c' | 'card' | 'card_b' | 'card_c' | 'cash' | 'other'
+export type PayMethod = 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'prepaid_b' | 'prepaid_c' | 'card' | 'card_b' | 'card_c' | 'cash' | 'visit' | 'other'
   | 'voucher_retro' | 'gusen_retro' | 'jangmatchum_retro' | 'kkumideun_retro' | 'unpaid';
 /** cell = 시간표 결제 칸에 보이는 짧은 이름 (없으면 label) */
 export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?: string }[] = [
@@ -414,6 +414,8 @@ export const PAY_METHODS: { key: PayMethod; label: string; short: string; cell?:
   { key: 'card_b', label: '신용카드B', short: '드' },
   { key: 'card_c', label: '신용카드C', short: '디' },
   { key: 'cash', label: '현금', short: '현' },
+  // 방문 — 고를 때 금액(원)을 바로 적는다(PayEntry.amount, supabase/visit-payment.sql)
+  { key: 'visit', label: '방문', short: '방' },
   // 나중에 결제(소급·미결) — 빨간 글씨. [결제 완료]로 확정되지 않고, 실제 결제한 뒤 결제방식을 바꿔 확정한다. 기본 결제 글자로는 안 쓴다(short 두 글자)
   { key: 'voucher_retro', label: '바우처소급', short: '바소' },
   { key: 'gusen_retro', label: '굳센소급', short: '굳소' },
@@ -452,6 +454,8 @@ export async function getLaterPayments(center: Center): Promise<{ day: string; m
 export interface PayEntry {
   method: PayMethod;
   note?: string;
+  /** 방문 결제 금액(원) */
+  amount?: number;
   /** true = [결제 완료]로 확정, false = 고르기만 함([스케줄 변경 완료]로 저장) */
   confirmed?: boolean;
 }
@@ -460,7 +464,7 @@ export interface PayEntry {
 export async function getDayPayments(day: string): Promise<Map<string, PayEntry>> {
   const { data, error } = await supabase.from('lesson_payments').select('*').eq('day', day);
   if (error) throw error;
-  return new Map((data ?? []).map(r => [`${r.child_id}|${r.time}`, { method: r.method as PayMethod, note: (r.note as string | null) ?? undefined, confirmed: r.confirmed !== false }]));
+  return new Map((data ?? []).map(r => [`${r.child_id}|${r.time}`, { method: r.method as PayMethod, note: (r.note as string | null) ?? undefined, amount: (r.amount as number | null) ?? undefined, confirmed: r.confirmed !== false }]));
 }
 
 /** 결제 체크 저장 / 지우기(entry = null) */
@@ -471,7 +475,8 @@ export async function setLessonPayment(childId: string, day: string, time: strin
     return;
   }
   const { error } = await supabase.from('lesson_payments').upsert(
-    { child_id: childId, day, time, teacher_id: teacherId, center, method: entry.method, note: entry.note ?? null, confirmed: !!entry.confirmed },
+    { child_id: childId, day, time, teacher_id: teacherId, center, method: entry.method, note: entry.note ?? null, confirmed: !!entry.confirmed,
+      ...(entry.method === 'visit' ? { amount: entry.amount ?? null } : {}) },
     { onConflict: 'child_id,day,time' },
   );
   if (error) throw error;

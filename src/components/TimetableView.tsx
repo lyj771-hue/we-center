@@ -634,7 +634,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   // 수업 후 결제 체크 — 먼저 표에만 표시하고, [결제 완료]에서 한꺼번에 저장한다
   const keyOf = (childId: string, time: string) => `${childId}|${time}`;
-  const sameEntry = (a?: PayEntry | null, b?: PayEntry | null) => (a?.method ?? null) === (b?.method ?? null) && (a?.note ?? '') === (b?.note ?? '');
+  const sameEntry = (a?: PayEntry | null, b?: PayEntry | null) => (a?.method ?? null) === (b?.method ?? null) && (a?.note ?? '') === (b?.note ?? '')
+    && (a?.method !== 'visit' || (a?.amount ?? null) === (b?.amount ?? null));
   const paidOf = (childId: string, time: string): PayEntry | undefined => {
     const k = keyOf(childId, time);
     return draft.has(k) ? draft.get(k)!.entry ?? undefined : payments.get(k);
@@ -1166,8 +1167,17 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
   const cellLabel = (k?: PayMethod) => { const m = PAY_METHODS.find(x => x.key === k); return m?.cell ?? m?.label; };
   // 고르는 목록 — 이 센터 결제 + (다른 센터 결제로 이미 골라 둔 것)
   const options = paid && !paid.note && !methods.some(m => m.key === paid.method) ? [...methods, ...PAY_METHODS.filter(m => m.key === paid.method)] : methods;
-  // 회차를 붙이는 결제는 남은 횟수 대신 회차만 (고르는 목록은 그대로)
-  const rest = paid?.confirmed && !pending && !round ? left?.(paid.method) : undefined;
+  // 회차를 붙이는 결제는 남은 횟수 대신 회차만 (고르는 목록은 그대로). 선결제는 확정돼도 남은 횟수를 붙이지 않는다
+  const rest = paid?.confirmed && !pending && !round && !isPrepaid(paid.method) ? left?.(paid.method) : undefined;
+  // 방문은 적은 금액을 붙인다 (5만 · 3.5만 · 8,000)
+  const visitAmount = paid?.method === 'visit' && paid.amount
+    ? (paid.amount >= 10000 ? `${+(paid.amount / 10000).toFixed(1)}만` : paid.amount.toLocaleString('ko-KR')) : '';
+  // 방문 금액 묻기 — 숫자만 남긴다. 취소하거나 비우면 null
+  const askAmount = async () => {
+    const t = await askPrompt(`${cell.name} — 방문 결제 금액(원)을 적어 주세요`, paid?.method === 'visit' && paid.amount ? String(paid.amount) : '');
+    const n = Number((t ?? '').replace(/[^0-9]/g, ''));
+    return n > 0 ? n : null;
+  };
   // 회차는 결제방식이 있는 칸에만 — 같은 아이가 같은 시간 다른 선생님 칸에도 있으면 결제방식 없는 칸에 숫자만 뜨던 것 막기
   const rn = round && (paid || base) ? <>{round.n}{round.over && <span className="ml-0.5">!</span>}</> : null;
   // 단계 — 기본(그대로) / 파랑: 직접 고름(저장 전) / 빨강: 결제 완료로 확정
@@ -1180,7 +1190,7 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
   const retroBase = paid ? RETRO_BASE[paid.method] : undefined;
   const tone = round?.over ? 'bg-white text-[#dc2626] font-bold ring-2 ring-[#dc2626]' : later ? 'bg-white text-[#dc2626] font-semibold' : confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
   const text = paid
-    ? <span>{confirmed ? '✓' : ''}{paid.note || (retroBase ? cellLabel(retroBase) : cellLabel(paid.method))}{rn}{retroBase && !paid.note && '소급'}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
+    ? <span>{confirmed ? '✓' : ''}{paid.note || (retroBase ? cellLabel(retroBase) : cellLabel(paid.method))}{visitAmount && <span className="ml-0.5">{visitAmount}</span>}{rn}{retroBase && !paid.note && '소급'}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
     : <span>{pending ? '체크 풀기' : (cellLabel(base) ?? '')}{!pending && rn}</span>;
   if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{cellLabel(base) ?? ''}</span>;
   return (
@@ -1191,7 +1201,10 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
         onChange={async e => {
           const v = e.target.value;
           if (!v) onPay(null);
-          else if (v === 'custom') {
+          else if (v === 'visit' || v === 'visit-edit') {
+            const n = await askAmount();
+            if (n) onPay({ method: 'visit', amount: n });
+          } else if (v === 'custom') {
             const t = await askPrompt('결제 방식을 적어 주세요', paid?.note ?? '');
             if (t?.trim()) onPay({ method: 'other', note: t.trim() });
           } else if (askAlways && v !== base && !isLaterPay(v as PayMethod)) {
@@ -1205,6 +1218,7 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
           const why = paid?.method === m.key ? undefined : blocked?.(m.key);
           return <option key={m.key} value={m.key} disabled={!!why}>{m.label}{m.key === base ? ' (기본)' : ''}{why ? ` (${why})` : ''}</option>;
         })}
+        {paid?.method === 'visit' && <option value="visit-edit">방문 금액 고치기…</option>}
         <option value="custom">{paid?.note ? `${paid.note} (고치기)` : '직접 작성…'}</option>
       </select>
     </label>
