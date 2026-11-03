@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { showAlert } from '@/lib/dialog';
-import type { Center, Child, MonthUse, PayCount, PrepaidKey } from '@/lib/timetable';
-import { getChildren, getMonthNotes, getMonthUses, getPaymentCounts, methodInCenter, PREPAID_KINDS, prepaidTotalOf, setMonthNote } from '@/lib/timetable';
+import type { BalanceKey, Center, Child, MonthUse, PayCount, PrepaidKey } from '@/lib/timetable';
+import { balanceOf, getChildren, getMonthNotes, getMonthUses, getPaymentCounts, methodInCenter, PREPAID_KINDS, prepaidTotalOf, setMonthNote } from '@/lib/timetable';
 import type { Member } from '@/lib/types';
 import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
 import Portal from '@/components/Portal';
 import PrepaidModal from '@/components/PrepaidModal';
+import BalanceModal from '@/components/BalanceModal';
 
 // 회원 관리 — "결제내역" 탭. 달을 골라 아이마다 그 달 결제별 사용 횟수(시간표 [결제 완료]로 확정된 것),
 // 선결제 잔여/충전([충전·차감·수정] 카드 창), 우진학교외부·자율·지원금 남은 금액, 그 달 메모, 보호자 승인 날짜를 본다. 선결제는 센터(아이)마다 따로.
@@ -17,6 +18,9 @@ const ALL_USE_COLS: { key: keyof MonthUse; label: string }[] = [
   { key: 'voucher', label: '바우처' }, { key: 'gusen', label: '굳센' }, { key: 'jangmatchum', label: '장맞춤' }, { key: 'kkumideun', label: '꿈이든' },
   { key: 'woojin_ext', label: '우진학교외부' }, { key: 'woojin_self', label: '우진학교자율' }, { key: 'subsidy', label: '지원금' }, ...PREPAID_KINDS.map(x => ({ key: x.key, label: x.label })),
 ];
+
+// 남은 금액 칸 — 누르면 상세보기
+const BALANCE_COLS: BalanceKey[] = ['woojin_ext', 'woojin_self', 'subsidy'];
 
 const thisMonth = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
 const shiftMonth = (ym: string, n: number) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
@@ -32,6 +36,7 @@ export default function PaymentsTab({ members, center, q }: { members: Member[];
   const [showAll, setShowAll] = useState(false);
   const [failed, setFailed] = useState('');
   const [cardFor, setCardFor] = useState<{ child: Child; method: PrepaidKey } | null>(null);    // 선결제 카드 창을 연 아이·종류
+  const [balanceFor, setBalanceFor] = useState<{ child: Child; method: BalanceKey } | null>(null);   // 남은 금액 상세를 연 아이·종류
   const USE_COLS = ALL_USE_COLS.filter(c => methodInCenter(c.key, center));
 
   const load = useCallback(async () => {
@@ -140,9 +145,14 @@ export default function PaymentsTab({ members, center, q }: { members: Member[];
                       </button>
                     </td>
                   ))}
-                  <td className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>{won(k.woojinExtBalance) || <span className="text-[#ddd]">-</span>}</td>
-                  <td className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>{won(k.woojinSelfBalance) || <span className="text-[#ddd]">-</span>}</td>
-                  <td className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>{won(k.subsidyBalance) || <span className="text-[#ddd]">-</span>}</td>
+                  {/* 남은 금액을 누르면 상세(날짜·선생님·횟수·차감금액·잔여금액) */}
+                  {BALANCE_COLS.map(key => (
+                    <td key={key} className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>
+                      <button type="button" onClick={() => setBalanceFor({ child: k, method: key })} className="hover:underline" title="상세보기">
+                        {won(balanceOf(k, key)) || <span className="text-[#ddd]">-</span>}
+                      </button>
+                    </td>
+                  ))}
                   <td className={`${td} min-w-[180px]`}>
                     <input key={`${k.id}-${month}-${notes.get(k.id) ?? ''}`} defaultValue={notes.get(k.id) ?? ''} placeholder="메모"
                       onBlur={e => saveNote(k, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -157,6 +167,7 @@ export default function PaymentsTab({ members, center, q }: { members: Member[];
         </table>
       </div>
       {cardFor && <Portal><PrepaidModal child={cardFor.child} method={cardFor.method} onClose={() => { setCardFor(null); load(); }} /></Portal>}
+      {balanceFor && <Portal><BalanceModal child={balanceFor.child} method={balanceFor.method} onClose={() => setBalanceFor(null)} /></Portal>}
     </div>
   );
 }

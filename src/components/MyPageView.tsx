@@ -50,7 +50,12 @@ export interface MyPageViewProps {
 // 결제별 사용 카드 — 선결제 카드 아래에 이 순서로 (쓰는 결제이거나 이번 달 기록이 있는 것만)
 const USAGE_CARDS: { method: MyPayment['method']; label: string }[] = [
   { method: 'voucher', label: '바우처' }, { method: 'gusen', label: '굳센' }, { method: 'jangmatchum', label: '장맞춤' }, { method: 'kkumideun', label: '꿈이든' }, { method: 'subsidy', label: '지원금' },
+  { method: 'woojin_ext', label: '우진학교외부' }, { method: 'woojin_self', label: '우진학교자율' },
 ];
+// 남은 금액으로 보는 카드
+const BALANCE_CARD = (m: MyPayment['method']) => m === 'subsidy' || m === 'woojin_ext' || m === 'woojin_self';
+// 우진학교 카드는 쓰는 아이만 (아이 명단 체크 · 남은 금액 · 사용 기록 중 하나라도 있으면)
+const WOOJIN_CARD = (m: MyPayment['method']) => m === 'woojin_ext' || m === 'woojin_self';
 // 굳센은 수색, 장맞춤은 의정부 지점에서만 보인다
 const inBranch = (method: string, center?: string) => methodInCenter(method, center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong');
 
@@ -68,6 +73,8 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   const shownKind = kinds.find(x => x.key === tab)?.key ?? kinds[0].key;
   const payRows = payments.filter(p => inBranch(p.method, center) && (!isPrepaid(p.method) || kinds.some(x => x.key === p.method)))
     .sort((a, b) => Number(isPrepaid(b.method)) - Number(isPrepaid(a.method)));   // 선결제를 맨 위로
+  const usageCards = USAGE_CARDS.filter(u => inBranch(u.method, center) && (!WOOJIN_CARD(u.method)
+    || child?.uses?.[u.method as 'woojin_ext' | 'woojin_self'] || (payments.find(p => p.method === u.method)?.total ?? 0) > 0 || history.some(h => h.method === u.method)));
 
   const card = MYPAGE_CARD;
 
@@ -135,7 +142,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   if (!approved) return (
     <div className="space-y-6">
       {top}
-      {['주별 시간표', '결제 현황', '선결제 카드', ...USAGE_CARDS.filter(u => inBranch(u.method, center)).map(u => u.label)].map(t => (
+      {['주별 시간표', '결제 현황', '선결제 카드', ...USAGE_CARDS.filter(u => inBranch(u.method, center) && !WOOJIN_CARD(u.method)).map(u => u.label)].map(t => (
         <section key={t} className={card}>
           <h2 className="text-[17px] text-[#27272a] mb-3">{t}</h2>
           <p className="text-[14px] text-[#f59e0b]">승인 대기 중</p>
@@ -273,8 +280,8 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         <PrepaidCard key={shownKind} rows={ledger[shownKind]} name={child?.childName} />
       </section>
 
-      {/* 결제별 사용 카드 — 바우처·굳센·꿈이든·지원금: 일자 · 그 달 회차 · 메모 (지난 달도 쌓인다) */}
-      {USAGE_CARDS.filter(u => inBranch(u.method, center)).map(u => {
+      {/* 결제별 사용 카드 — 바우처·굳센·꿈이든·지원금·우진학교: 일자 · 그 달 회차 · 메모 (지난 달도 쌓인다) */}
+      {usageCards.map(u => {
         const p = payments.find(x => x.method === u.method);
         // 회차는 달마다 1회부터 (11월 첫 사용 = 1회)
         const perMonth = new Map<string, number>();
@@ -287,7 +294,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
           <section key={u.method} className={card}>
             <h2 className="text-[17px] text-[#27272a] mb-4">{u.label}</h2>
             <UsageCard label={u.label} rows={rows} name={child?.childName} used={p?.used ?? rows.length}
-              {...(u.method === 'subsidy' ? { balance: p?.total ?? 0 } : { limit: p?.total })} />
+              {...(BALANCE_CARD(u.method) ? { balance: p?.total ?? 0 } : { limit: p?.total })} />
           </section>
         );
       })}

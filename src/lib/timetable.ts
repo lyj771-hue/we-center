@@ -56,6 +56,8 @@ export type BalanceKey = 'woojin_ext' | 'woojin_self' | 'subsidy';
 /** 우진학교 한 번 수업 금액 — 남은 금액이 이보다 적으면 고를 수 없다 */
 export const WOOJIN_FEE = 60000;
 export const isWoojin = (m?: string) => m === 'woojin_ext' || m === 'woojin_self';
+/** 남은 금액에서 6만원씩 빠지는 결제 — 우진학교외부·자율·지원금 (supabase/balance-detail.sql) */
+export const isBalancePay = (m?: string): m is BalanceKey => isWoojin(m) || m === 'subsidy';
 /** 아이의 남은 금액 */
 export const balanceOf = (k: Pick<Child, 'woojinExtBalance' | 'woojinSelfBalance' | 'subsidyBalance'>, key: BalanceKey) =>
   (key === 'woojin_ext' ? k.woojinExtBalance : key === 'woojin_self' ? k.woojinSelfBalance : k.subsidyBalance) ?? 0;
@@ -154,6 +156,20 @@ export async function getChildren(): Promise<Child[]> {
 export async function setChildBalance(childId: string, key: BalanceKey, won: number): Promise<void> {
   const { error } = await supabase.from('children').update({ [`${key}_balance`]: Math.max(0, Math.floor(won) || 0) }).eq('id', childId);
   if (error) throw error;
+}
+
+/** 남은 금액 상세 한 줄 — 확정된 수업 하나. deducted = 그 수업으로 6만원을 뺐는지(supabase/balance-detail.sql 전 지원금은 false) */
+export interface BalanceUse { day: string; time: string; teacherId: string | null; center: Center; deducted: boolean }
+
+/** 우진학교외부·자율·지원금 — 그 아이의 확정된 수업 전부(오래된 순) */
+export async function getBalanceUses(childId: string, key: BalanceKey): Promise<BalanceUse[]> {
+  const { data, error } = await supabase.from('lesson_payments').select('day, time, teacher_id, center, balance_deducted')
+    .eq('child_id', childId).eq('method', key).eq('confirmed', true).order('day').order('time');
+  if (error) throw error;
+  return (data ?? []).map(r => ({
+    day: r.day, time: r.time, teacherId: r.teacher_id ?? null,
+    center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong', deducted: !!r.balance_deducted,
+  }));
 }
 
 /** 쓰는 결제 체크 켜기·끄기 */

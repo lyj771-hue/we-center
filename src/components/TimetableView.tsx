@@ -15,7 +15,7 @@ import { getMembers } from '@/lib/store';
 import { notifyFixedChanges, notifyLessonDay, notifyPrepaidUses, sendSummary } from '@/lib/alimtalkNotify';
 import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
-  balanceOf, isWoojin, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
+  balanceOf, isWoojin, isBalancePay, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
   getLaterPayments, isLaterPay, roundMethod, RETRO_BASE,
   isPrepaid, prepaidTotalOf,
@@ -745,17 +745,17 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   };
 
   // 남은 횟수 — 바우처·굳센·꿈이든은 이번 달 제공 횟수에서, 선결제는 지금까지 충전한 횟수에서 확정된 만큼 뺀다
-  // 우진학교외부·자율 — 남은 금액이 6만원(한 번 수업)보다 적으면 고를 수 없다. 확정되면 DB가 6만원씩 뺀다(supabase/woojin-split.sql)
+  // 우진학교외부·자율·지원금 — 남은 금액이 6만원(한 번 수업)보다 적으면 고를 수 없다. 확정되면 DB가 6만원씩 뺀다(supabase/balance-detail.sql)
   const woojinBlocked = (childId: string, method: PayMethod): string | undefined => {
-    if (!isWoojin(method)) return undefined;
+    if (!isBalancePay(method)) return undefined;
     const c = children.find(x => x.id === childId);
     const bal = c ? balanceOf(c, method as BalanceKey) : 0;
     return bal < WOOJIN_FEE ? `잔액 ${bal.toLocaleString('ko-KR')}원` : undefined;
   };
   const remaining = (childId: string, method: PayMethod): string | undefined => {
     const c = children.find(x => x.id === childId);
-    // 우진학교외부·자율은 남은 금액(만원)
-    if (c && isWoojin(method)) return `${Math.floor(balanceOf(c, method as BalanceKey) / 10000)}만`;
+    // 우진학교외부·자율·지원금은 남은 금액(만원)
+    if (c && isBalancePay(method)) return `${Math.floor(balanceOf(c, method as BalanceKey) / 10000)}만`;
     // 횟수가 있는 결제만 (신용카드·현금·직접 작성은 횟수 없음)
     if (!c || (method !== 'voucher' && method !== 'gusen' && method !== 'kkumideun' && !isPrepaid(method))) return undefined;
     const limit = isPrepaid(method) ? prepaidTotalOf(c, method) : { voucher: c.voucherLimit, gusen: c.gusenLimit, kkumideun: c.kkumideunLimit }[method] ?? 0;
