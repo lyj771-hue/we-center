@@ -27,7 +27,7 @@ create policy "admin all balance_charges" on balance_charges for all to authenti
 drop trigger if exists balance_charges_apply on balance_charges;
 insert into balance_charges (child_id, method, day, amount, memo, seed)
 select c.id, k.method,
-       coalesce((select min(lp.day) from lesson_payments lp where lp.child_id = c.id and lp.method = k.method and lp.balance_deducted), current_date),
+       coalesce((select min(lp.day) from lesson_payments lp where lp.child_id = c.id and lp.method = k.method and lp.balance_deducted), date '2026-11-01'),
        k.balance + 60000 * (select count(*) from lesson_payments lp where lp.child_id = c.id and lp.method = k.method and lp.balance_deducted)::int,
        '이전 잔액', true
 from children c

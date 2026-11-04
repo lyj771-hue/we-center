@@ -1,18 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { showAlert } from '@/lib/dialog';
 import type { BalanceCharge, BalanceKey, BalanceUse, Child } from '@/lib/timetable';
-import { addBalanceCharge, getBalanceCharges, getBalanceUses, WOOJIN_FEE } from '@/lib/timetable';
+import { getBalanceCharges, getBalanceUses, WOOJIN_FEE } from '@/lib/timetable';
 import { getTeachers } from '@/lib/schedule';
 
-// 회원 관리 "결제내역" 탭에서 우진학교외부·자율·지원금 남은 금액을 누르면 여는 상세보기 + [충전].
+// 회원 관리 "결제내역" 탭에서 우진학교외부·자율·지원금 남은 금액을 누르면 여는 상세보기(보기만 — 충전 입력은 없다).
 // 충전·수정 기록(balance_charges)과 확정된 수업(차감 6만원)을 날짜 순으로 늘어놓고, 줄마다 그 뒤 잔여금액을 붙인다.
 
 const LABEL: Record<BalanceKey, string> = { woojin_ext: '우진학교외부', woojin_self: '우진학교자율', subsidy: '지원금' };
 const ymd = (d: string) => d.replace(/-/g, '/');
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
-const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 type Row =
   | { kind: 'charge'; day: string; c: BalanceCharge }
@@ -24,10 +22,6 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
   const [noTable, setNoTable] = useState(false);
   const [teachers, setTeachers] = useState<Map<string, string>>(new Map());
   const [failed, setFailed] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [day, setDay] = useState(today);
-  const [amount, setAmount] = useState('');
-  const [memo, setMemo] = useState('');
 
   const load = useCallback(() => {
     Promise.all([
@@ -52,19 +46,8 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
   let bal = now - end;
   const rows = list.map(r => { bal += delta(r); return { r, left: bal }; });
 
-  const charge = async () => {
-    const n = Number(amount.replace(/\D/g, ''));
-    if (!n) { showAlert('충전 금액을 적어 주세요.'); return; }
-    setBusy(true);
-    try { await addBalanceCharge(child.id, method, day, n, memo); setAmount(''); setMemo(''); load(); }
-    catch (e) { showAlert(`충전하지 못했어요 — SQL(supabase/balance-charges.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); }
-    finally { setBusy(false); }
-  };
-
   const th = 'py-2 px-2 font-normal text-[11px] text-[#999] whitespace-nowrap';
   const td = 'py-2 px-2 tabular-nums whitespace-nowrap';
-  const input = 'border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]';
-  const label = 'text-[11px] text-[#999]';
 
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
@@ -109,15 +92,6 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
         )}
         <p className="text-right text-[13px] text-[#27272a]">지금 남은 금액 <span className="text-[16px] tabular-nums text-[var(--brand)]">{won(now)}</span></p>
 
-        {/* 충전 */}
-        <div className="bg-white rounded-xl p-4 flex flex-wrap items-end gap-3">
-          <p className="w-full text-[11px] text-[#777]">충전</p>
-          <label className={label}>날짜<input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} className={`${input} block`} /></label>
-          <label className={label}>금액(원)<input value={amount ? Number(amount).toLocaleString('ko-KR') : ''} inputMode="numeric" placeholder="600,000"
-            onChange={e => setAmount(e.target.value.replace(/\D/g, '').slice(0, 9))} className={`${input} block w-24 text-right`} /></label>
-          <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={memo} onChange={e => setMemo(e.target.value)} placeholder="예: 11월 지원금" className={`${input} block w-full`} /></label>
-          <button onClick={charge} disabled={busy || noTable} className="text-[12px] border border-[var(--brand)] bg-[var(--brand)] text-white px-3.5 py-1.5 rounded-full disabled:opacity-50">충전</button>
-        </div>
         <p className="text-[11px] text-[#aaa] leading-[1.7]">시간표 [결제 완료]로 확정한 수업이 한 번에 {won(WOOJIN_FEE)}씩 빠져요. 아이 명단에서 남은 금액을 직접 고치면 그 차이가 [수정]으로 남아요.</p>
       </div>
     </div>
