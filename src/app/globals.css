@@ -11,12 +11,13 @@
   size-adjust: 200%;
 }
 
-/* ── 나눔손글씨 암스테르담 — 사이트 기본 폰트: 조각 파일로 잘라 둔 것(app/amsterdam-font.css, layout 에서 불러온다) ── */
+/* ── 나눔손글씨 배은혜체 — 사이트 기본 폰트: 조각 파일로 잘라 둔 것(app/baeeunhye-font.css, layout 에서 불러온다).
+   예전 암스테르담체(app/amsterdam-font.css · public/fonts/amsterdam)는 되돌릴 때를 위해 남겨 둔다 ── */
 
 /* ── Font theme — runtime CSS vars from next/font ── */
 @theme inline {
-  --font-sans:  "NanumAmSeuTeReuDam", var(--font-noto-sans),  "Noto Sans KR",  -apple-system, sans-serif;
-  --font-serif: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia,       serif;
+  --font-sans:  "NanumBaeEunHyeCe", var(--font-noto-sans),  "Noto Sans KR",  -apple-system, sans-serif;
+  --font-serif: "NanumBaeEunHyeCe Heading", var(--font-noto-serif), "Noto Serif KR", Georgia,       serif;
 }
 
 /* ── Design tokens ────────────────────────────────── */
@@ -165,7 +166,7 @@ body {
 
 /* Serif display heading — used on every page */
 .display-heading {
-  font-family: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
+  font-family: "NanumBaeEunHyeCe Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
   font-weight: 700;
   font-size: clamp(22px, 3.2vw, 32px);
   line-height: 1.2;
