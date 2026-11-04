@@ -1,5 +1,5 @@
 import { getMembers } from './store';
-import { getChildren, getPaymentCounts, childLabel, PREPAID_KINDS, prepaidTotalOf, type Center, type Child, type PrepaidKey } from './timetable';
+import { getChildren, getPaymentCounts, childLabel, prepaidTotalOf, type Center, type Child, type PrepaidKey } from './timetable';
 import { addAndSendOutbox, newBatchId } from './leave';
 import type { Member } from './types';
 
@@ -42,9 +42,7 @@ export async function notifyMemberApproved(m: Member, center: Center, requestedA
 }
 
 // ── 선결제 ─────────────────────────────────────────────────────
-
-/** #{구분} 앞에 붙는 종류 글자 — "선결제 A 사용" */
-const letterOf = (method: PrepaidKey) => PREPAID_KINDS.find(x => x.key === method)!.letter;
+// 보호자에게는 선결제 A·B·C 종류를 보내지 않는다 — #{구분} = 사용·충전·변경
 
 /** 선결제 카드에서 충전·차감·수정 — 아이 하나 */
 export async function notifyPrepaid(child: Child, kind: '사용' | '충전' | '변경', day: string, before: number, delta: number, method: PrepaidKey = 'prepaid'): Promise<SendResult> {
@@ -52,7 +50,7 @@ export async function notifyPrepaid(child: Child, kind: '사용' | '충전' | '�
   if (!g?.kid?.guardianUserId) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };   // 보호자 계정과 안 이어진 아이
   return addAndSendOutbox([{
     templateId: 'prepaid_use', childId: child.id, userId: g.kid.guardianUserId, childName: childLabel(child), phone: g.m?.phone,
-    vars: { 이름: child.name, 구분: `${letterOf(method)} ${kind}`, 날짜: slash(day), 기존횟수: String(before), 변동: `${delta > 0 ? '+' : ''}${delta}회`, 남은횟수: String(before + delta) },
+    vars: { 이름: child.name, 구분: kind, 날짜: slash(day), 기존횟수: String(before), 변동: `${delta > 0 ? '+' : ''}${delta}회`, 남은횟수: String(before + delta) },
   }]);
 }
 
@@ -67,7 +65,7 @@ export async function notifyPrepaidUses(day: string, uses: { childId: string; co
     const after = prepaidTotalOf(x.kid, u.method) - (counts.get(u.childId)?.[u.method] ?? 0);
     return [{
       templateId: 'prepaid_use', childId: u.childId, userId: x.kid.guardianUserId, childName: childLabel(x.kid), phone: x.m?.phone,
-      vars: { 이름: x.kid.name, 구분: `${letterOf(u.method)} 사용`, 날짜: slash(day), 기존횟수: String(after + u.count), 변동: `-${u.count}회`, 남은횟수: String(after) },
+      vars: { 이름: x.kid.name, 구분: '사용', 날짜: slash(day), 기존횟수: String(after + u.count), 변동: `-${u.count}회`, 남은횟수: String(after) },
     }];
   }));
 }
