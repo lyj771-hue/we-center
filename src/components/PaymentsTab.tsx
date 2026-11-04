@@ -12,7 +12,7 @@ import BalanceModal from '@/components/BalanceModal';
 import MonthUseModal from '@/components/MonthUseModal';
 
 // 회원 관리 — "결제내역" 탭. 달을 골라 아이마다 그 달 결제별 사용 횟수(시간표 [결제 완료]로 확정된 것),
-// 선결제 잔여/충전([충전·차감·수정] 카드 창), 우진학교외부·자율·지원금 남은 금액, 그 달 메모, 보호자 승인 날짜를 본다. 선결제는 센터(아이)마다 따로.
+// 선결제 잔여/충전([수정] = 카드 창에서 충전·차감·수정), 우진학교외부·자율·지원금 남은 금액([수정] = 상세 창에서 남은 금액 고치기), 그 달 메모, 보호자 승인 날짜를 본다. 선결제는 센터(아이)마다 따로.
 
 // 굳센은 수색, 장맞춤은 의정부에서만
 const ALL_USE_COLS: { key: keyof MonthUse; label: string }[] = [
@@ -143,20 +143,21 @@ export default function PaymentsTab({ members, center, q }: { members: Member[];
                   })}
                   {PREPAID_KINDS.map(x => (
                     <td key={x.key} className={`${td} text-[12px] text-center whitespace-nowrap tabular-nums`}>
-                      {/* 선결제 잔여/충전 + [충전·차감·수정](카드 내역) */}
+                      {/* 선결제 잔여/충전 + [수정](카드 창 — 충전·차감·수정) */}
                       <button type="button" onClick={() => setCardFor({ child: k, method: x.key })} className="hover:underline" title={`${x.label} 카드 — 충전 · 차감 · 수정`}>
                         {prepaidTotalOf(k, x.key) || (allTime.get(k.id)?.[x.key] ?? 0)
                           ? <span className={prepaidLeft(k, x.key) <= 0 ? 'text-[#e11d48]' : ''}>{prepaidLeft(k, x.key)}/{prepaidTotalOf(k, x.key)}</span>
                           : <span className="text-[#bbb]">-</span>}
-                        <span className="ml-1 text-[10px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">충전·차감·수정</span>
+                        <span className="ml-1 text-[10px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">수정</span>
                       </button>
                     </td>
                   ))}
                   {/* 남은 금액을 누르면 상세(날짜·선생님·횟수·차감금액·잔여금액) */}
                   {BALANCE_COLS.map(key => (
                     <td key={key} className={`${td} text-right text-[13px] tabular-nums whitespace-nowrap`}>
-                      <button type="button" onClick={() => setBalanceFor({ child: k, method: key })} className="hover:underline" title="상세보기">
+                      <button type="button" onClick={() => setBalanceFor({ child: k, method: key })} className="hover:underline" title="상세보기 · 남은 금액 수정">
                         {won(balanceOf(k, key)) || <span className="text-[#ddd]">-</span>}
+                        <span className="ml-1 text-[10px] text-[var(--brand)] border border-[var(--brand)] rounded px-1">수정</span>
                       </button>
                     </td>
                   ))}

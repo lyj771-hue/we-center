@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { BalanceCharge, BalanceKey, BalanceUse, Child } from '@/lib/timetable';
-import { getBalanceCharges, getBalanceUses, WOOJIN_FEE } from '@/lib/timetable';
+import { getBalanceCharges, getBalanceUses, setChildBalance, WOOJIN_FEE } from '@/lib/timetable';
 import { getTeachers } from '@/lib/schedule';
 
-// 회원 관리 "결제내역" 탭에서 우진학교외부·자율·지원금 남은 금액을 누르면 여는 상세보기(보기만 — 충전 입력은 없다).
+// 회원 관리 "결제내역" 탭에서 우진학교외부·자율·지원금 남은 금액을 누르면 여는 상세보기. 아래 [수정]으로 남은 금액을 고친다(차이가 [수정] 기록으로 남는다).
 // 충전·수정 기록(balance_charges)과 확정된 수업(차감 6만원)을 날짜 순으로 늘어놓고, 줄마다 그 뒤 잔여금액을 붙인다.
 
 const LABEL: Record<BalanceKey, string> = { woojin_ext: '우진학교외부', woojin_self: '우진학교자율', subsidy: '지원금' };
@@ -22,6 +22,11 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
   const [noTable, setNoTable] = useState(false);
   const [teachers, setTeachers] = useState<Map<string, string>>(new Map());
   const [failed, setFailed] = useState('');
+  // 남은 금액 고치기 — 지금 금액과의 차이를 [수정] 기록으로 (표가 없으면 금액만)
+  const [editVal, setEditVal] = useState('');
+  const [editMemo, setEditMemo] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [savedNow, setSavedNow] = useState<number | null>(null);
 
   const load = useCallback(() => {
     Promise.all([
@@ -43,6 +48,7 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
   const delta = (r: Row) => (r.kind === 'charge' ? r.c.amount : r.u.deducted ? -WOOJIN_FEE : 0);
   const end = list.reduce((s, r) => s + delta(r), 0);
   const now = charges.length ? end : child[method === 'woojin_ext' ? 'woojinExtBalance' : method === 'woojin_self' ? 'woojinSelfBalance' : 'subsidyBalance'] ?? 0;
+  const shownNow = noTable && savedNow !== null ? savedNow : now;
   let bal = now - end;
   const rows = list.map(r => { bal += delta(r); return { r, left: bal }; });
 
@@ -90,9 +96,31 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
             </table>
           </div>
         )}
-        <p className="text-right text-[13px] text-[#27272a]">지금 남은 금액 <span className="text-[16px] tabular-nums text-[var(--brand)]">{won(now)}</span></p>
+        <p className="text-right text-[13px] text-[#27272a]">지금 남은 금액 <span className="text-[16px] tabular-nums text-[var(--brand)]">{won(shownNow)}</span></p>
 
-        <p className="text-[11px] text-[#aaa] leading-[1.7]">시간표 [결제 완료]로 확정한 수업이 한 번에 {won(WOOJIN_FEE)}씩 빠져요. 아이 명단에서 남은 금액을 직접 고치면 그 차이가 [수정]으로 남아요.</p>
+        {/* 수정 — 남은 금액을 바로 고친다 */}
+        <form className="bg-white rounded-xl border border-[#e4e4e7] p-3 flex flex-wrap items-center gap-2" onSubmit={async e => {
+          e.preventDefault();
+          const v = Number(editVal.replace(/[^\d]/g, ''));
+          if (editVal.trim() === '' || !Number.isFinite(v)) return;
+          setSaving(true);
+          try {
+            await setChildBalance(child.id, method, v, editMemo.trim() || '남은 금액 직접 수정');
+            setSavedNow(v); setEditVal(''); setEditMemo(''); load();
+          } catch (err) { setFailed((err as Error).message); }
+          finally { setSaving(false); }
+        }}>
+          <label htmlFor="balance-edit" className="text-[13px] text-[#27272a] whitespace-nowrap">수정</label>
+          <input id="balance-edit" inputMode="numeric" value={editVal} onChange={e => setEditVal(e.target.value)} placeholder={`남은 금액 (지금 ${won(shownNow)})`}
+            className="w-40 border-b border-[#ddd] py-1 text-[13px] text-right tabular-nums outline-none focus:border-[var(--brand)]" />
+          <span className="text-[13px] text-[#888]">원</span>
+          <input id="balance-edit-memo" value={editMemo} onChange={e => setEditMemo(e.target.value)} placeholder="메모 (선택)"
+            className="flex-1 min-w-[100px] border-b border-[#ddd] py-1 text-[13px] outline-none focus:border-[var(--brand)]" />
+          <button type="submit" disabled={saving || editVal.trim() === ''}
+            className="text-[13px] bg-[var(--brand)] text-white px-4 py-1.5 rounded-full hover:opacity-90 disabled:opacity-40">{saving ? '저장 중…' : '저장'}</button>
+        </form>
+
+        <p className="text-[11px] text-[#aaa] leading-[1.7]">시간표 [결제 완료]로 확정한 수업이 한 번에 {won(WOOJIN_FEE)}씩 빠져요. [수정]이나 아이 명단에서 남은 금액을 고치면 그 차이가 [수정] 기록으로 남아요.</p>
       </div>
     </div>
   );
