@@ -9,6 +9,7 @@ import { downloadCsv, downloadXlsx, type Sheet } from '@/lib/exportFile';
 import Portal from '@/components/Portal';
 import PrepaidModal from '@/components/PrepaidModal';
 import BalanceModal from '@/components/BalanceModal';
+import MonthUseModal from '@/components/MonthUseModal';
 
 // 회원 관리 — "결제내역" 탭. 달을 골라 아이마다 그 달 결제별 사용 횟수(시간표 [결제 완료]로 확정된 것),
 // 선결제 잔여/충전([충전·차감·수정] 카드 창), 우진학교외부·자율·지원금 남은 금액, 그 달 메모, 보호자 승인 날짜를 본다. 선결제는 센터(아이)마다 따로.
@@ -37,6 +38,7 @@ export default function PaymentsTab({ members, center, q }: { members: Member[];
   const [failed, setFailed] = useState('');
   const [cardFor, setCardFor] = useState<{ child: Child; method: PrepaidKey } | null>(null);    // 선결제 카드 창을 연 아이·종류
   const [balanceFor, setBalanceFor] = useState<{ child: Child; method: BalanceKey } | null>(null);   // 남은 금액 상세를 연 아이·종류
+  const [useFor, setUseFor] = useState<{ child: Child; method: keyof MonthUse; label: string } | null>(null);   // 그 달 사용 내역을 연 아이·결제
   const USE_COLS = ALL_USE_COLS.filter(c => methodInCenter(c.key, center));
 
   const load = useCallback(async () => {
@@ -132,7 +134,12 @@ export default function PaymentsTab({ members, center, q }: { members: Member[];
                   <td className={`${td} text-[12px] tabular-nums`}>{k.phoneLast4 ?? <span className="text-[#ccc]">-</span>}</td>
                   {USE_COLS.map(c => {
                     const n = u?.[c.key] ?? 0;
-                    return <td key={c.key} className={`${td} text-center tabular-nums ${n ? 'text-[var(--brand)]' : k.uses?.[c.key] ? 'text-[#999]' : 'text-[#ddd]'}`}>{n}</td>;
+                    return (
+                      <td key={c.key} className={`${td} text-center tabular-nums ${n ? 'text-[var(--brand)]' : k.uses?.[c.key] ? 'text-[#999]' : 'text-[#ddd]'}`}>
+                        {/* 누르면 그 달 사용 내역 (0회여도 빈 표로) */}
+                        <button type="button" onClick={() => setUseFor({ child: k, method: c.key, label: c.label })} className="min-w-6 hover:underline" title={`${m}월 ${c.label} 사용 내역`}>{n}</button>
+                      </td>
+                    );
                   })}
                   {PREPAID_KINDS.map(x => (
                     <td key={x.key} className={`${td} text-[12px] text-center whitespace-nowrap tabular-nums`}>
@@ -167,6 +174,7 @@ export default function PaymentsTab({ members, center, q }: { members: Member[];
         </table>
       </div>
       {cardFor && <Portal><PrepaidModal child={cardFor.child} method={cardFor.method} onClose={() => { setCardFor(null); load(); }} /></Portal>}
+      {useFor && <Portal><MonthUseModal child={useFor.child} method={useFor.method} label={useFor.label} month={month} onClose={() => setUseFor(null)} /></Portal>}
       {balanceFor && <Portal><BalanceModal child={balanceFor.child} method={balanceFor.method} onClose={() => setBalanceFor(null)} /></Portal>}
     </div>
   );

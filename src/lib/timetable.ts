@@ -690,6 +690,32 @@ export async function getMonthUses(month: string): Promise<Map<string, MonthUse>
   return map;
 }
 
+/** 결제내역 칸 상세 — 그 달 그 아이의 그 결제 사용 한 줄 (선결제 카드에서 직접 차감한 것은 manual) */
+export interface MonthUseRow { day: string; time?: string; teacherId: string | null; center?: string; note?: string; count: number; manual?: boolean }
+
+/** 그 달 그 아이의 그 결제 사용 내역 — getMonthUses 와 같은 기준(확정된 것, 휴직 중인 선생님 수업 빼고, 선결제는 직접 차감 포함), 날짜·시간 순 */
+export async function getMonthUseRows(childId: string, month: string, method: keyof MonthUse): Promise<MonthUseRow[]> {
+  const [y, m] = month.split('-').map(Number);
+  const start = `${month}-01`;
+  const end = `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+  const [lp, pc, skip] = await Promise.all([
+    supabase.from('lesson_payments').select('day, time, teacher_id, center, note').eq('child_id', childId).eq('method', method).eq('confirmed', true)
+      .gte('day', start).lte('day', end).order('day').order('time'),
+    isPrepaid(method) ? supabase.from('prepaid_charges').select('*').eq('child_id', childId).gte('day', start).lte('day', end).lt('count', 0) : Promise.resolve({ data: [], error: null }),
+    countExcluder(),
+  ]);
+  if (lp.error) throw lp.error;
+  if (pc.error) throw pc.error;
+  const rows: MonthUseRow[] = (lp.data ?? []).filter(r => !skip(r.teacher_id, r.day)).map(r => ({
+    day: r.day as string, time: r.time as string, teacherId: (r.teacher_id as string | null) ?? null, center: (r.center as string | null) ?? undefined, note: (r.note as string | null) ?? undefined, count: 1,
+  }));
+  for (const r of (pc.data ?? []) as Record<string, unknown>[]) {
+    if (r.adjust || ((r.method as PrepaidKey | null) ?? 'prepaid') !== method) continue;
+    rows.push({ day: r.day as string, teacherId: null, note: (r.memo as string | null) ?? undefined, count: -(r.count as number), manual: true });
+  }
+  return rows.sort((a, b) => a.day.localeCompare(b.day) || (a.time ?? '').localeCompare(b.time ?? ''));
+}
+
 /** 그 달 메모 — 아이 id → 메모 */
 export async function getMonthNotes(month: string): Promise<Map<string, string>> {
   const { data, error } = await supabase.from('child_month_notes').select('child_id, memo').eq('month', `${month}-01`);
