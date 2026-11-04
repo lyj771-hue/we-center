@@ -62,6 +62,8 @@ const defaultMethod = defaultPayMethod;
 export default function TimetableView({ testChildName, fixedCenter }: { testChildName?: string; fixedCenter?: Center } = {}) {
   const { isAdmin } = useAdmin();
   const [mode, setMode] = useState<Mode>('day');
+  // [고정 수정]을 켰을 때만 고정 수업(앞으로 매주)에 반영한다. 끄면 날짜별 칸은 그날만 바뀌고, 고정 시간표는 고칠 수 없다
+  const [fixEdit, setFixEdit] = useState(false);
   const [center, setCenter] = useState<Center>(fixedCenter ?? 'eunpyeong');
   // 접어 둔 선생님(이름만 보이고 칸은 숨김) — 이원재 선생님은 병가라 처음부터 접어 둔다
   const [folded, setFolded] = useState<Set<string>>(() => new Set(HIDDEN_TEACHERS));
@@ -324,7 +326,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const opKey = (o: Op) => o.kind === 'fixed' ? `fixed|${o.teacherId}|${o.time}` : `day|${o.teacherId}|${o.time}|${o.kind === 'from' ? 'fixed' : o.side}`;
   const putOps = (list: Op[]) => setOps(m => { const n = new Map(m); for (const o of list) n.set(opKey(o), o); return n; });
   const stage = ({ teacher, time, side, cell }: Editing, input: CellInput | 'reset', from?: boolean) => {
-    const o: Op = from && mode === 'day'
+    if (mode === 'fixed' && !fixEdit) { showAlert('고정 시간표는 위의 [고정 수정]을 누른 뒤 고칠 수 있어요.'); return; }
+    const o: Op = from && fixEdit && mode === 'day'
       ? { kind: 'from', teacherId: teacher.id, time, input: input !== 'reset' && input.status === 'child' ? input : null }
       : mode === 'fixed' ? { kind: 'fixed', teacherId: teacher.id, time, input, start: cell.startDate }
       : { kind: 'day', teacherId: teacher.id, time, side, input };
@@ -392,6 +395,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   // 선생님 시간표 비우기 — 날짜별: 그날 칸 모두 / 고정 시간표: 그 요일 고정 수업 모두
   const clearTeacher = async (t: Teacher) => {
     if (mode === 'fixed') {
+      if (!fixEdit) { showAlert('고정 시간표는 위의 [고정 수정]을 누른 뒤 고칠 수 있어요.'); return; }
       if (!(await askConfirm(`${t.name} 선생님의 ${DOW[weekday]}요일 고정 수업을 모두 비울까요?\n[스케줄 변경 완료]를 눌러야 반영돼요.`))) return;
       const list: Op[] = rows.filter(time => cellOf(view.fixed, t.id, time).status !== 'empty').map(time => ({ kind: 'fixed', teacherId: t.id, time, input: 'reset', start: cellOf(board.fixed, t.id, time).startDate }));
       putOps(list);
@@ -403,8 +407,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   };
   // 그날만 빼기 — 표에서 숨기고 그날 칸도 모두 비운다. 결제 체크도 버린다
   const hideTeacher = async (t: Teacher) => {
-    // 이 날만 / 앞으로 계속 (일요일은 이 날만)
-    const r = wd === 0 ? 'a' : await askChoice(`${t.name} 선생님을\n이 날(${d.getMonth() + 1}/${d.getDate()})만 뺄까요,\n앞으로 매주 ${DOW[wd]}요일 계속 뺄까요?`, '이 날만', '앞으로 계속');
+    // 이 날만 / 앞으로 계속 (일요일·[고정 수정]을 안 켰을 때는 이 날만)
+    const r = wd === 0 || !fixEdit ? 'a' : await askChoice(`${t.name} 선생님을\n이 날(${d.getMonth() + 1}/${d.getDate()})만 뺄까요,\n앞으로 매주 ${DOW[wd]}요일 계속 뺄까요?`, '이 날만', '앞으로 계속');
     if (!r) return;
     if (r === 'b') { await hideForever(t); return; }
     if (!(await askConfirm(`${t.name} 선생님을 이 날 시간표에서 뺄까요?\n그날 칸도 모두 비워져요(보호자 신청 칸은 그대로).\n[스케줄 변경 완료]를 누르기 전에는 [되돌리기]로 취소할 수 있어요.`))) return;
@@ -435,7 +439,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     } catch (e) { showAlert(`넣지 못했어요.\n${(e as Error).message}`); }
   };
   const addTeacher = async (t: Teacher) => {
-    if (wd === 0) { showTeacher(t); return; }   // 일요일은 그날만 (일요일 선생님은 따로 정해 둠)
+    if (wd === 0 || !fixEdit) { showTeacher(t); return; }   // 일요일은 그날만 (일요일 선생님은 따로 정해 둠), [고정 수정]을 안 켰으면 그날만
     const r = await askChoice(`${t.name} 선생님을\n이 날(${d.getMonth() + 1}/${d.getDate()})만 넣을까요,\n앞으로 매주 ${DOW[wd]}요일 계속 넣을까요?`, '이 날만', '앞으로 계속');
     if (r === 'a') showTeacher(t);
     else if (r === 'b') await addForever(t, wd);
@@ -852,7 +856,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                 <button key={w} onClick={() => guard(() => setWeekday(w))}
                   className={`text-[13px] w-9 h-8 border ${weekday === w ? 'border-[#0a0a0a] bg-[#0a0a0a] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>{DOW[w]}</button>
               ))}
-              {!isTest && addable.length > 0 && weekday !== 0 && (
+              {!isTest && fixEdit && addable.length > 0 && weekday !== 0 && (
                 <select value="" onChange={e => { const t = teachers.find(x => x.id === e.target.value); if (t) addForever(t, weekday); }}
                   className="ml-2 text-[12px] border border-[#f59e0b] text-[#b45309] bg-white px-2 h-8" title="앞으로 계속 이 요일에 이 센터 시간표에 선생님 넣기">
                   <option value="">+ 선생님 추가</option>
@@ -863,7 +867,16 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           )}
         </div>
         <div className={`flex flex-wrap items-center gap-3 mb-3 ${isTest ? 'hidden' : ''}`}>
-          <span className="text-[11px] text-[#999]">칸을 고친 뒤 아래 [스케줄 변경 완료]를 눌러야 저장돼요.</span>
+          {/* 고정 수정 — 켰을 때만 고정 수업(앞으로 매주)이 바뀐다 */}
+          <button onClick={() => setFixEdit(v => !v)} aria-pressed={fixEdit}
+            title={fixEdit ? '눌러서 끄기 — 끄면 날짜별 칸은 그날만 바뀌어요' : '켜면 고정 수업(앞으로 매주)을 고칠 수 있어요'}
+            className={`whitespace-nowrap text-[12px] px-3 h-8 border ${fixEdit ? 'border-[#c026d3] bg-[#c026d3] text-white' : 'border-[#c026d3] text-[#c026d3] hover:bg-[#fdf4ff]'}`}>
+            {fixEdit ? '고정 수정 중 ✓' : '고정 수정'}
+          </button>
+          <span className="text-[11px] text-[#999]">
+            {fixEdit ? (mode === 'day' ? '고정 칸을 고치면 이 날부터 매주 바뀌어요. ' : '') : mode === 'day' ? '칸을 고치면 이 날만 바뀌어요. 고정 수업을 바꾸려면 [고정 수정]을 눌러 주세요. ' : '고정 시간표는 [고정 수정]을 눌러야 고칠 수 있어요. '}
+            칸을 고친 뒤 아래 [스케줄 변경 완료]를 눌러야 저장돼요.
+          </span>
           <span className="ml-auto flex items-center gap-1.5">
             <input type="month" value={exportMonth} onChange={e => e.target.value && setExportMonth(e.target.value)} className="text-[12px] border border-[#ddd] px-2 h-8" title="내려받을 달" />
             <button onClick={() => exportFile('xlsx')} disabled={!!exporting} title="엑셀 파일(.xlsx) — 주마다 시트 하나. 맥 Numbers 에서도 열려요"
@@ -1087,6 +1100,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           editing={editing}
           methods={payMethodsFor(center)}
           mode={mode}
+          fixEdit={fixEdit}
           dayLabel={mode === 'day' ? `${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]})` : `${DOW[weekday]}요일 고정`}
           kids={pickKids}
           onClose={() => setEditing(null)}
@@ -1286,11 +1300,13 @@ function ChildPicker({ picking, kids, onPick, onSave, onMore, onClose }: {
   );
 }
 
-function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, onRestoreCancel, openBusy }: {
+function CellEditor({ editing, methods, mode, fixEdit, dayLabel, kids, onClose, onSave, onRestoreCancel, openBusy }: {
   editing: Editing;
   /** 이 센터에서 쓰는 결제 (수색 굳센 / 의정부 장맞춤) */
   methods: typeof PAY_METHODS;
   mode: Mode;
+  /** [고정 수정]을 켰는지 — 끄면 날짜별 고정 칸도 그날만 바꾼다 */
+  fixEdit: boolean;
   dayLabel: string;
   kids: Child[];
   onClose: () => void;
@@ -1348,13 +1364,15 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
   // 고정 자리 — 아이·구강·결제방식만 고르고 [이 날부터 고정](날짜별) / [저장](고정 시간표)
   if (side === 'fixed') {
     const base = defaultMethod(payment);
+    // 날짜별 화면 — [고정 수정]을 켰으면 이 날부터 매주, 아니면 이 날만
+    const weekly = mode === 'day' && fixEdit;
     const saveFixedSeat = async () => {
       if (!name.trim()) {
-        if (mode === 'day' && cell.status === 'child' && !(await askConfirm(`${dayLabel}부터 이 자리 고정 수업을 없앨까요?`))) return;
-        onSave(mode === 'day' ? { status: 'none' } : 'reset', mode === 'day');
+        if (mode === 'day' && cell.status === 'child' && !(await askConfirm(weekly ? `${dayLabel}부터 이 자리 고정 수업을 없앨까요?` : `${dayLabel} 이 날만 이 자리 수업을 비울까요?`))) return;
+        onSave(mode === 'day' ? { status: 'none' } : 'reset', weekly);
         return;
       }
-      onSave({ status: 'child', childId: child?.id ?? null, name: child?.name ?? name.trim(), payment, kind, absent: false, moved: false }, mode === 'day');
+      onSave({ status: 'child', childId: child?.id ?? null, name: child?.name ?? name.trim(), payment, kind, absent: false, moved: false }, weekly);
     };
     return (
       <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
@@ -1387,7 +1405,7 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
           </div>
           <div className="flex flex-wrap gap-1.5">
             <button onClick={saveFixedSeat} disabled={!!name.trim() && !child} className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white disabled:opacity-40`}>
-              {mode === 'day' ? '이 날부터 반영' : '오늘부터 반영'}
+              {mode === 'day' ? (weekly ? '이 날부터 반영' : '이 날만 반영') : '오늘부터 반영'}
             </button>
             {/* 이 날만 결석 — 고정 수업은 그대로, 그날 칸에만 결석(x) */}
             {mode === 'day' && cell.status === 'child' && !guardianCancelled && (
@@ -1398,7 +1416,9 @@ function CellEditor({ editing, methods, mode, dayLabel, kids, onClose, onSave, o
             )}
             <button onClick={onClose} className={`${chip} border-transparent text-[#888]`}>닫기</button>
           </div>
-          <p className="text-[11px] text-[#aaa] leading-[1.7]">[스케줄 변경 완료]를 누르면 {mode === 'day' ? dayLabel : '오늘'}부터 매주 이렇게(아이·수업·결제방식) 바뀌어요. 지난 날짜는 그대로 남아요.</p>
+          <p className="text-[11px] text-[#aaa] leading-[1.7]">{mode === 'day' && !weekly
+            ? <>[스케줄 변경 완료]를 누르면 {dayLabel} 하루만 이렇게 바뀌어요(고정 수업은 그대로). 고정 수업을 바꾸려면 위의 [고정 수정]을 켜 주세요.</>
+            : <>[스케줄 변경 완료]를 누르면 {mode === 'day' ? dayLabel : '오늘'}부터 매주 이렇게(아이·수업·결제방식) 바뀌어요. 지난 날짜는 그대로 남아요.</>}</p>
           {mode === 'day' && cell.status === 'child' && <p className="text-[11px] text-[#aaa] leading-[1.7] -mt-2">[이 날만 결석]은 {dayLabel} 하루만 결석으로 바꿔요(고정 수업은 그대로).</p>}
         </div>
       </div>
