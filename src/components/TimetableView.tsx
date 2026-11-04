@@ -650,14 +650,6 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       return n;
     });
   };
-  // 고정 아이 결제방식을 "앞으로 계속"으로 바꿀 때 — 고정 수업 결제를 이 날부터 바꾼다([스케줄 변경 완료]로 저장)
-  const setFixedPayment = (t: Teacher, time: string, method: PayMethod) => {
-    const base = cellOf(board.fixed, t.id, time);
-    const short = PAY_METHODS.find(m => m.key === method)?.short;
-    if (base.status !== 'child' || !short) return;
-    stage({ teacher: t, time, side: 'fixed', cell: base },
-      { status: 'child', childId: base.childId ?? null, name: base.name, payment: short, kind: base.kind ?? null, note: base.note }, true);
-  };
   // 그날 진행된 수업 — 고정·빈타임에 아이가 있고(빈타임 아이가 있으면 그 아이), 결석·옮김이 아닌 명단 아이
   const lessons = mode === 'day' ? shown.flatMap(t => rows.flatMap(time => {
     if (isTest) {
@@ -1016,8 +1008,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                                 round={c.childId ? rounds.get(keyOf(c.childId, time)) : undefined}
                                 left={c.childId ? (m => remaining(c.childId!, m)) : undefined}
                                 blocked={c.childId ? (m => woojinBlocked(c.childId!, m)) : undefined}
-                                askAlways={c !== right && !!c.childId && c.childId === cellOf(board.fixed, t.id, time).childId}
-                                onPay={c.childId ? (e, always) => { pay(c.childId!, t.id, time, e); if (always && e && !isLaterPay(e.method)) setFixedPayment(t, time, e.method); } : undefined} />
+                                onPay={c.childId ? e => pay(c.childId!, t.id, time, e) : undefined} />
                             ))}
                           </td>
                           {memoTd}
@@ -1153,7 +1144,7 @@ function payErrorText(e: unknown): string {
 const ABC_PRICE: Partial<Record<PayMethod, number>> = { prepaid: 60000, prepaid_b: 55000, prepaid_c: 50000, card: 60000, card_b: 55000, card_c: 50000 };
 
 /** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
-function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, blocked, askAlways, onPay }: {
+function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, blocked, onPay }: {
   cell: CellView;
   /** 이 센터에서 쓰는 결제 (수색 굳센 / 의정부 장맞춤) */
   methods: typeof PAY_METHODS;
@@ -1169,9 +1160,7 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
   left?: (m: PayMethod) => string | undefined;
   /** 고를 수 없는 결제 — 까닭(예: 우진학교 남은 금액이 6만원보다 적음). 지금 고른 결제는 막지 않는다 */
   blocked?: (m: PayMethod) => string | undefined;
-  /** 고정 아이 — 기본과 다른 결제를 고르면 이번만인지 앞으로 계속인지 묻는다 */
-  askAlways?: boolean;
-  onPay?: (e: PayEntry | null, always?: boolean) => void;
+  onPay?: (e: PayEntry | null) => void;
 }) {
   if (cell.absent) return <span className="block text-[10px] text-[#c4c4cc]">결석</span>;
   const base = noBase ? undefined : defaultMethod(cell.payment);
@@ -1220,10 +1209,7 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
           } else if (v === 'custom') {
             const t = await askPrompt('결제 방식을 적어 주세요', paid?.note ?? '');
             if (t?.trim()) onPay({ method: 'other', note: t.trim() });
-          } else if (askAlways && v !== base && !isLaterPay(v as PayMethod)) {
-            const r = await askChoice(`${cell.name} — ${label(v as PayMethod)}\n이번 수업만 바꿀까요,\n앞으로 계속 ${label(v as PayMethod)}(으)로 할까요?`, '이번만', '앞으로 계속');
-            if (r) onPay({ method: v as PayMethod }, r === 'b');
-          } else onPay({ method: v as PayMethod });
+          } else onPay({ method: v as PayMethod });   // 이 수업만 — 고정 결제방식은 칸 [수정]에서 바꾼다
         }}
         className="absolute inset-0 w-full opacity-0 cursor-pointer" aria-label={`${cell.name} 결제 체크`}>
         <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
