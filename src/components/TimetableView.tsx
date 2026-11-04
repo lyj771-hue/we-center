@@ -15,7 +15,7 @@ import { getMembers } from '@/lib/store';
 import { notifyFixedChanges, notifyLessonDay, notifyPrepaidUses, sendSummary } from '@/lib/alimtalkNotify';
 import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
-  balanceOf, isWoojin, isBalancePay, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
+  balanceOf, isWoojin, isBalancePay, isCountExcludedName, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
   getLaterPayments, isLaterPay, roundMethod, RETRO_BASE,
   isPrepaid, prepaidTotalOf,
@@ -660,6 +660,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     const l = cellOf(view.fixed, t.id, time), rr = cellOf(view.open, t.id, time);
     const c = rr.status === 'child' ? rr : l;
     if (c.status !== 'child' || c.moved || c.absent || !c.childId) return [];
+    // 휴직 중인 이원재 선생님 수업은 결제를 고르지 않는다 — [결제 완료]도 막지 않는다 (복직하면 timetable.ts 의 COUNT_EXCLUDE 에서 빼기)
+    if (isCountExcludedName(t.name, day)) return [];
     // 빈타임 아이는 기본 결제 없이 비워 두고 직접 고른다
     return [{ teacherId: t.id, time, childId: c.childId, base: rr.status === 'child' ? undefined : defaultMethod(c.payment) }];
   })) : [];
@@ -700,6 +702,13 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const laterToday = lessons.filter(x => isLaterPay(effMethod(x))).length;
   const schedPending = ops.size + assignDraft.size;
   const canPay = !missingPay.size && !overRound && !schedPending && (toConfirm.length > 0 || laterToday > 0);
+  // [결제 완료]를 막는 칸 — "14:00 허홍석 김하정" 처럼 3개까지 (어느 칸인지 찾기 쉽게)
+  const whereOf = (keys: string[]) => {
+    const list = lessons.filter(x => keys.includes(keyOf(x.childId, x.time))).sort((a, b) => a.time.localeCompare(b.time));
+    const names = list.slice(0, 3).map(x => `${x.time.replace(/^0/, '')} ${shown.find(t => t.id === x.teacherId)?.name ?? ''} ${children.find(c => c.id === x.childId)?.name ?? ''}`.replace(/\s+/g, ' ').trim());
+    return names.length ? ` (${names.join(', ')}${list.length > 3 ? ' …' : ''})` : '';
+  };
+  const overKeys = [...rounds].filter(([, r]) => r.over).map(([k]) => k);
 
   // [결제 완료] — 그날 진행된 수업을 모두 확정 (스케줄 변경을 먼저 저장해야 누를 수 있다)
   const savePayments = async () => {
@@ -1001,7 +1010,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                           {kindTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
-                            {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved && !locked(c)).map((c, i) => (
+                            {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved && !locked(c) && !isCountExcludedName(t.name, day)).map((c, i) => (
                               <PayCell key={i} cell={c} methods={payMethodsFor(center)} noBase={c === right} paid={c.childId ? paidOf(c.childId, time) : undefined}
                                 pending={!!c.childId && draft.has(keyOf(c.childId, time))}
                                 missing={!!c.childId && missingPay.has(keyOf(c.childId, time))}
@@ -1048,9 +1057,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             <>
               <span className="w-px h-6 bg-[#e5e5e5] mx-1" />
               <span className={`text-[12px] ${missingPay.size || overRound ? 'text-red-400' : 'text-[#888]'}`}>
-                {missingPay.size ? `결제방식이 빈 수업 ${missingPay.size}개 — 빨간 테두리 칸을 채워 주세요`
-                  : overRound ? `월 횟수를 넘은 수업 ${overRound}개 — 빨간 글씨 칸의 결제방식을 바꿔 주세요`
-                  : schedPending ? '시간표 변경을 먼저 저장해 주세요'
+                {missingPay.size ? `결제방식이 빈 수업 ${missingPay.size}개${whereOf([...missingPay])} — 빨간 테두리 칸을 채워 주세요`
+                  : overRound ? `월 횟수를 넘은 수업 ${overRound}개${whereOf(overKeys)} — 빨간 글씨 칸의 결제방식을 바꿔 주세요`
+                  : schedPending ? `시간표 변경 ${schedPending}건을 먼저 [스케줄 변경 완료]로 저장해 주세요`
                   : toConfirm.length ? `확정할 결제 ${toConfirm.length}건${laterToday ? ` · 소급·미결 ${laterToday}건 남음` : ''}`
                   : laterToday ? `소급·미결 ${laterToday}건 남음 — 결제한 뒤 결제방식을 바꿔 [결제 완료]`
                   : lessons.length ? '결제가 모두 확정됐어요' : ''}
