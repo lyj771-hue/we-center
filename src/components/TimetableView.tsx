@@ -573,10 +573,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     // 고른 결제방식은 "선택"으로 저장 (확정은 [결제 완료]). 숨긴 선생님 수업은 버린다
     const shownIds = new Set(shown.map(t => t.id));
     const failedPay: string[] = [];
+    let payError = '';
     for (const [k, v] of draft) {
       if (!shownIds.has(v.teacherId)) continue;
       try { await setLessonPayment(v.childId, day, v.time, v.teacherId, center, v.entry && { ...v.entry, confirmed: false }); }
-      catch { failedPay.push(k); }
+      catch (e) { failedPay.push(k); payError ||= payErrorText(e); }
     }
     setDraft(dr => new Map([...dr].filter(([k]) => failedPay.includes(k))));
     failedOps.push(...failedPay);
@@ -585,7 +586,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     setSavingSched(false);
     await load();
     notifyScheduleChanged(center);   // 선생님 시간표·수업스케쥴 화면에 바로 알림
-    if (failedOps.length + failedAssign.length) showAlert(`${failedOps.length + failedAssign.length}건을 저장하지 못했어요. 다시 [스케줄 변경 완료]를 눌러 주세요.`);
+    if (failedOps.length + failedAssign.length) showAlert(`${failedOps.length + failedAssign.length}건을 저장하지 못했어요. 다시 [스케줄 변경 완료]를 눌러 주세요.${payError ? `\n${payError}` : ''}`);
     // 저장된 취소만 알림
     const okCancels = cancels.filter(x => ![...failedOps].some(k => k.includes(x.teacherId) && k.includes(x.time)));
     if (okCancels.length) await notifyCancelled(okCancels);
@@ -717,6 +718,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
     setSavingPay(true);
     const failedKeys: string[] = [];
+    let payError = '';
     const prepaidUses = new Map<string, { childId: string; method: PrepaidKey; count: number }>();   // 이번에 선결제로 확정한 아이·종류 → 횟수 (알림톡)
     for (const x of toConfirm) {
       const k = keyOf(x.childId, x.time);
@@ -730,12 +732,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { ...e, confirmed: !isLaterPay(e.method) });
         if (isPrepaid(e.method) && !e.note && !wasPrepaid) { const pk = `${x.childId}|${e.method}`; prepaidUses.set(pk, { childId: x.childId, method: e.method, count: (prepaidUses.get(pk)?.count ?? 0) + 1 }); }
       }
-      catch { failedKeys.push(k); }
+      catch (err) { failedKeys.push(k); payError ||= payErrorText(err); }
     }
     setDraft(dr => new Map([...dr].filter(([k]) => failedKeys.includes(k))));
     setSavingPay(false);
     await load();
-    if (failedKeys.length) showAlert(`${failedKeys.length}건을 저장하지 못했어요. 다시 [결제 완료]를 눌러 주세요.`);
+    if (failedKeys.length) showAlert(`${failedKeys.length}건을 저장하지 못했어요. 다시 [결제 완료]를 눌러 주세요.${payError ? `\n${payError}` : ''}`);
     // 선결제 사용 — 아이마다 그날 한 번 '선결제 사용' 알림톡
     if (prepaidUses.size) {
       try {
@@ -1137,6 +1139,14 @@ function CellText({ cell, label, muted, nonMember, posted }: { cell: CellView; l
         : cell.note && <span className="ml-0.5 text-[9px] text-[#f59e0b]">●</span>}
     </span>
   );
+}
+
+/** 결제 저장 실패 까닭 — 디비가 모르는 결제방식(SQL을 안 돌림)이면 돌릴 SQL을 알려 준다 */
+function payErrorText(e: unknown): string {
+  const msg = (e as { message?: string })?.message ?? String(e);
+  return /method_check/.test(msg)
+    ? '디비가 아직 이 결제방식을 몰라요 — Supabase에서 supabase/visit-payment.sql 을 실행해 주세요.'
+    : `(${msg})`;
 }
 
 /** 선결제·신용카드 A·B·C 한 번 수업 금액 — 고르는 목록에서 이름 뒤에 붙인다 (선결제A(60000)) */
