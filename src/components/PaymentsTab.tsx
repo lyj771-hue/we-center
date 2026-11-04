@@ -175,7 +175,7 @@ export default function PaymentsTab({ members, center, q }: { members: Member[];
       </div>
       {cardFor && <Portal><PrepaidModal child={cardFor.child} method={cardFor.method} onClose={() => { setCardFor(null); load(); }} /></Portal>}
       {useFor && <Portal><MonthUseModal child={useFor.child} method={useFor.method} label={useFor.label} month={month} onClose={() => setUseFor(null)} /></Portal>}
-      {balanceFor && <Portal><BalanceModal child={balanceFor.child} method={balanceFor.method} onClose={() => setBalanceFor(null)} /></Portal>}
+      {balanceFor && <Portal><BalanceModal child={balanceFor.child} method={balanceFor.method} onClose={() => { setBalanceFor(null); load(); }} /></Portal>}
     </div>
   );
 }

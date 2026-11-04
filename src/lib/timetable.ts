@@ -152,11 +152,37 @@ export async function getChildren(): Promise<Child[]> {
   }));
 }
 
-/** 우진학교외부·우진학교자율·지원금 남은 금액(원) 적기 */
-export async function setChildBalance(childId: string, key: BalanceKey, won: number): Promise<void> {
-  const { error } = await supabase.from('children').update({ [`${key}_balance`]: Math.max(0, Math.floor(won) || 0) }).eq('id', childId);
+/** 우진학교외부·우진학교자율·지원금 남은 금액(원) 적기 — 지금 금액과의 차이를 [수정] 기록으로 남긴다(디비가 남은 금액을 맞춘다, supabase/balance-charges.sql) */
+export async function setChildBalance(childId: string, key: BalanceKey, won: number, memo = '남은 금액 직접 수정'): Promise<void> {
+  const { data, error } = await supabase.from('children').select(`${key}_balance`).eq('id', childId).single();
+  if (error) throw error;
+  const diff = Math.max(0, Math.floor(won) || 0) - (((data as Record<string, number | null>)[`${key}_balance`]) ?? 0);
+  if (!diff) return;
+  try { await addBalanceCharge(childId, key, todayYmd(), diff, memo, true); }
+  catch (e) {
+    // balance-charges.sql 을 아직 안 돌렸으면(표 없음) 예전처럼 금액만 바꾼다
+    if (!['PGRST205', '42P01'].includes((e as { code?: string }).code ?? '')) throw e;
+    const { error: e2 } = await supabase.from('children').update({ [`${key}_balance`]: Math.max(0, Math.floor(won) || 0) }).eq('id', childId);
+    if (e2) throw e2;
+  }
+}
+
+/** 충전·수정 기록 한 줄 — amount 만큼 남은 금액이 늘거나(+) 준다(−) */
+export async function addBalanceCharge(childId: string, key: BalanceKey, day: string, amount: number, memo?: string, adjust = false): Promise<void> {
+  const { error } = await supabase.from('balance_charges').insert({ child_id: childId, method: key, day, amount, memo: memo?.trim() || null, adjust });
   if (error) throw error;
 }
+
+/** 충전·수정 기록 한 줄 */
+export interface BalanceCharge { day: string; amount: number; memo?: string; adjust: boolean; seed: boolean; at: string }
+
+export async function getBalanceCharges(childId: string, key: BalanceKey): Promise<BalanceCharge[]> {
+  const { data, error } = await supabase.from('balance_charges').select('day, amount, memo, adjust, seed, created_at').eq('child_id', childId).eq('method', key).order('day').order('created_at');
+  if (error) throw error;
+  return (data ?? []).map(r => ({ day: r.day, amount: r.amount, memo: r.memo ?? undefined, adjust: !!r.adjust, seed: !!r.seed, at: r.created_at }));
+}
+
+const todayYmd = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 /** 남은 금액 상세 한 줄 — 확정된 수업 하나. deducted = 그 수업으로 6만원을 뺐는지(supabase/balance-detail.sql 전 지원금은 false) */
 export interface BalanceUse { day: string; time: string; teacherId: string | null; center: Center; deducted: boolean }

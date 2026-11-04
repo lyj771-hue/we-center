@@ -270,9 +270,9 @@ export default function MembersView({ center }: { center: Center }) {
           await addCharge(k.id, `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, diff, '승인할 때 잔여 입력', true, x.key);
         }
       }
-      await setChildBalance(k.id, 'woojin_ext', wExt);
-      await setChildBalance(k.id, 'woojin_self', wSelf);
-      await setChildBalance(k.id, 'subsidy', subsidy);
+      await setChildBalance(k.id, 'woojin_ext', wExt, '승인할 때 잔액 입력');
+      await setChildBalance(k.id, 'woojin_self', wSelf, '승인할 때 잔액 입력');
+      await setChildBalance(k.id, 'subsidy', subsidy, '승인할 때 잔액 입력');
       setApproveInput(mp => { const n = new Map(mp); APPROVE_FIELDS.forEach(f => n.delete(`${m.userId}|${f.key}`)); return n; });
       loadKids();
     } catch (e) { await showAlert(`선결제·우진학교·지원금을 저장하지 못했어요.\n${(e as Error).message}`); }

@@ -81,7 +81,7 @@ export default function ChildrenTab({ members, center, q, onLinked, onMembersCha
     const won = Number(text.replace(/[^\d]/g, '')) || 0;
     if (won === balOf(k, key)) return;
     setKids(list => list.map(x => (x.id === k.id ? { ...x, [key === 'woojin_ext' ? 'woojinExtBalance' : key === 'woojin_self' ? 'woojinSelfBalance' : 'subsidyBalance']: won } : x)));
-    try { await setChildBalance(k.id, key, won); }
+    try { await setChildBalance(k.id, key, won, '아이 명단에서 남은 금액 수정'); }
     catch (e) { showAlert(`저장하지 못했어요 — SQL(supabase/payment-balance.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); load(); }
   };
   // 선결제 남은 횟수 = 충전 합 − 쓴 횟수
