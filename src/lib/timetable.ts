@@ -109,8 +109,13 @@ const SUNDAY_ROWS = ['11:00', '11:50', '12:40', '13:30', '14:20', '15:10', '16:0
 export const SUNDAY_FROM = '2026-10-01';
 /** 일요일에 일하는 선생님 — 센터마다 */
 export const SUNDAY_TEACHERS: Record<Center, string[]> = { eunpyeong: ['설영수', '이정길'], uijeongbu: ['설영수'] };
-/** 아무도 없을 때 칸에 흐리게 보이는 글 */
+/** 아무도 없을 때 칸에 흐리게 보이는 글 — 평일 (월~금) */
 export const ROW_LABEL: Record<string, string> = { '12:20': 'Lunch', '16:30': '쉬는 시간' };
+/** 토·일요일은 13:10 점심 */
+const WEEKEND_ROW_LABEL: Record<string, string> = { '13:10': 'Lunch' };
+/** 요일에 맞는 줄 이름 (weekday 0 = 일 … 6 = 토) */
+export const rowLabel = (time: string, weekday: number): string | undefined =>
+  (weekday === 0 || weekday === 6 ? WEEKEND_ROW_LABEL : ROW_LABEL)[time];
 
 /** 시간 줄 — 요일마다 정해진 줄 + 그 줄에 없는 시간에 들어 있는 칸(cellKeys = "선생님|시간")이 있으면 그 시간도 */
 //  일요일 — 은평은 일요일 줄, 의정부는 토요일과 같은 줄

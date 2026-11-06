@@ -15,7 +15,7 @@ import { getMembers } from '@/lib/store';
 import { notifyFixedChanges, notifyLessonDay, notifyPrepaidUses, sendSummary } from '@/lib/alimtalkNotify';
 import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
-  balanceOf, isWoojin, isBalancePay, isCountExcludedName, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, ROW_LABEL, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
+  balanceOf, isWoojin, isBalancePay, isCountExcludedName, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, rowLabel, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
   getLaterPayments, isLaterPay, roundMethod, RETRO_BASE,
   isPrepaid, prepaidTotalOf,
@@ -178,7 +178,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         out.push(['시간', ...ts.flatMap(t => [t.name, '', ''])]);
         out.push(['', ...ts.flatMap(() => ['고정', '빈타임', '결제방식'])]);
         for (const time of rowsForDay(dd, [...b.fixed.keys(), ...b.open.keys()], center)) {
-          const row: Cell[] = [`${time.replace(/^0/, '')}${ROW_LABEL[time] ? ` ${ROW_LABEL[time]}` : ''}`];
+          const row: Cell[] = [`${time.replace(/^0/, '')}${rowLabel(time, wdd) ? ` ${rowLabel(time, wdd)}` : ''}`];
           for (const t of ts) {
             const l = cellOf(b.fixed, t.id, time), rr = cellOf(b.open, t.id, time);
             const c = rr.status === 'child' ? rr : l;
@@ -962,7 +962,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             <tbody>
               {rows.map(time => (
                 <tr key={time}>
-                  <td className={`border border-[#d4d4d8] px-1 text-center whitespace-nowrap sticky left-0 z-10 bg-white ${ROW_LABEL[time] ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
+                  <td className={`border border-[#d4d4d8] px-1 text-center whitespace-nowrap sticky left-0 z-10 bg-white ${rowLabel(time, wd) ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
                   {shown.map(t => {
                     if (folded.has(t.name)) return <td key={t.id} className="border border-[#e4e4e7] bg-[#f4f4f5] w-6" />;
                     const left = cellOf(view.fixed, t.id, time);
@@ -1008,7 +1008,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                         left={lockL ? lockedTd :
                           <td className={`${td} ${pendL ? 'bg-[#fff6d5]' : mode === 'day' && right.status === 'child' ? 'bg-[#f4f4f5]' : ''}`} onClick={() => setEditing({ teacher: t, time, side: 'fixed', cell: left })}>
                             {/* 빈타임에 아이가 채워지면 옆 고정 칸은 회색으로 흐리게 */}
-                            <CellText cell={left} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} muted={mode === 'day' && right.status === 'child'} />
+                            <CellText cell={left} label={postedOpen.has(`${t.id}|${time}`) ? undefined : rowLabel(time, wd)} muted={mode === 'day' && right.status === 'child'} />
                           </td>
                         }
                         right={mode === 'day' ? (<>
@@ -1018,7 +1018,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                             const b = e.currentTarget.getBoundingClientRect();
                             setPicking({ teacher: t, time, side: 'open', cell: right, rect: { left: b.left, top: b.top, bottom: b.bottom } });
                           }}>
-                            <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : ROW_LABEL[time]} nonMember={isNonMember(right)} posted={mode === 'day' ? postedOpen.get(`${t.id}|${time}`) : undefined} />
+                            <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : rowLabel(time, wd)} nonMember={isNonMember(right)} posted={mode === 'day' ? postedOpen.get(`${t.id}|${time}`) : undefined} />
                           </td>}
                           {kindTd}
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">

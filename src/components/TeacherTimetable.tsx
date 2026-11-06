@@ -6,7 +6,7 @@ import { useMember } from '@/components/MemberContext';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getHolidayNames, getPostedOpenSlots, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
 import type { Center, PayMethod } from '@/lib/timetable';
-import { PAY_METHODS, ROUND_LIMIT, ROW_LABEL, SUNDAY_TEACHERS, defaultPayMethod, isLaterPay, RETRO_BASE, rowsForDay, worksAt } from '@/lib/timetable';
+import { PAY_METHODS, ROUND_LIMIT, rowLabel, SUNDAY_TEACHERS, defaultPayMethod, isLaterPay, RETRO_BASE, rowsForDay, worksAt } from '@/lib/timetable';
 import type { TeacherLesson } from '@/lib/teacher';
 import { getTeacherLessons, getTeacherRounds } from '@/lib/teacher';
 import { onScheduleChanged } from '@/lib/sync';
@@ -200,7 +200,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           <tbody>
             {rows.map(time => (
               <tr key={time}>
-                <td className={`border border-[#d4d4d8] px-1 text-center sticky left-0 z-10 bg-white ${ROW_LABEL[time] ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
+                <td className={`border border-[#d4d4d8] px-1 text-center sticky left-0 z-10 bg-white ${rowLabel(time, wd) ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
                 {shown.map(t => {
                   if (folded.has(t.name)) return <td key={t.id} className={`${td} bg-[#fafafa]`} />;
                   const f = cellOf(t.id, time, 'fixed'), o = cellOf(t.id, time, 'open');
@@ -208,7 +208,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
                   return (
                     <FragmentCols key={t.id}>
                       {/* 빈타임에 아이가 있으면 그 시간은 빈타임 아이 수업 — 고정 칸은 흐리게 */}
-                      <td className={`${td} ${openKid ? 'bg-[#f4f4f5] opacity-60' : ''}`}>{text(f) ?? (ROW_LABEL[time] && !postedOpen.has(`${t.id}|${time}`) && <span className="text-[#c4c4cc]">{ROW_LABEL[time]}</span>)}</td>
+                      <td className={`${td} ${openKid ? 'bg-[#f4f4f5] opacity-60' : ''}`}>{text(f) ?? (rowLabel(time, wd) && !postedOpen.has(`${t.id}|${time}`) && <span className="text-[#c4c4cc]">{rowLabel(time, wd)}</span>)}</td>
                       <td className={`${td} bg-[#fcfcfd]`}>{(!o || o.status === 'off') && postedOpen.has(`${t.id}|${time}`)
                         ? <span className={`text-[10px] px-1 rounded ${postedOpen.get(`${t.id}|${time}`) === '게시 중' ? 'bg-[#ecfdf5] text-[#047857]' : 'bg-[#fef3c7] text-[#b45309]'}`}>{postedOpen.get(`${t.id}|${time}`)}</span>
                         : text(o)}</td>
