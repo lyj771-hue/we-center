@@ -608,26 +608,29 @@ export default function MembersView({ center }: { center: Center }) {
                   })}
                   {filter === 'methods' && SUPPORTS.map(x => (
                     <td key={x.key} className={`${td} text-center`}>
-                      {familyOf(m.userId).length > 1 ? kidChecks(m, x.key, x.label) : <input type="checkbox" checked={supportOf(m, x.key)} disabled={!m.nickname || (KID_ONLY.includes(x.key) && !kidOf(m.userId))} aria-label={`${m.nickname} ${x.label}`}
+                      {familyOf(m.userId).length > 1 ? kidChecks(m, x.key, x.label) : <input type="checkbox" checked={supportOf(m, x.key)} aria-label={`${m.nickname} ${x.label}`}
                         title={KID_ONLY.includes(x.key) && !kidOf(m.userId) ? '아이 명단과 연결된 뒤에 체크할 수 있어요' : undefined}
-                        onChange={() => toggleSupport(m, x.key)} className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed" />}
+                        onChange={() => (!m.nickname ? showAlert('가입 창(아이 이름)을 아직 안 채운 계정이라 체크할 수 없어요.')
+                          : KID_ONLY.includes(x.key) && !kidOf(m.userId) ? showAlert(`${m.nickname} — 아이 명단과 연결되지 않아 ${x.label}를 체크할 수 없어요.\n[수정]에서 아이 명단의 아이와 이은 뒤 체크해 주세요.`)
+                          : toggleSupport(m, x.key))}
+                        className={`w-4 h-4 accent-[var(--brand)] cursor-pointer ${!m.nickname || (KID_ONLY.includes(x.key) && !kidOf(m.userId)) ? 'opacity-30' : ''}`} />}
                     </td>
                   ))}
                   {filter === 'methods' && PREPAID_KINDS.map(p => (
                     <td key={p.key} className={`${td} text-center`}>
                       {/* 선결제 — 아이 명단의 체크와 같은 칸(연결된 아이가 있어야 체크할 수 있다) */}
-                      {familyOf(m.userId).length > 1 ? kidChecks(m, p.key, p.label) : <input type="checkbox" checked={!!kidOf(m.userId)?.uses?.[p.key]} disabled={!kidOf(m.userId)}
+                      {familyOf(m.userId).length > 1 ? kidChecks(m, p.key, p.label) : <input type="checkbox" checked={!!kidOf(m.userId)?.uses?.[p.key]}
                         title={kidOf(m.userId) ? `${p.label}를 쓰는 아이` : '아이 명단과 연결된 뒤에 체크할 수 있어요'}
                         onChange={async e => {
                           const k = kidOf(m.userId);
-                          if (!k) return;
+                          if (!k) { showAlert(`${m.nickname} — 아이 명단과 연결되지 않아 ${p.label}를 체크할 수 없어요.\n[수정]에서 아이 명단의 아이와 이은 뒤 체크해 주세요.`); return; }
                           const on = e.target.checked;
                           try {
                             await setChildUses(k.id, p.key, on);
                             setKids(list => list.map(x => (x.id === k.id && x.uses ? { ...x, uses: { ...x.uses, [p.key]: on } } : x)));
                           } catch { showAlert('저장하지 못했어요. 다시 시도해 주세요.'); }
                         }}
-                        className="w-4 h-4 accent-[var(--brand)] cursor-pointer disabled:cursor-not-allowed disabled:opacity-30" />}
+                        className={`w-4 h-4 accent-[var(--brand)] cursor-pointer ${kidOf(m.userId) ? "" : "opacity-30"}`} />}
                     </td>
                   ))}
                   {SHOW_PREPAID && (
@@ -667,8 +670,8 @@ export default function MembersView({ center }: { center: Center }) {
                         <>
                           {m.nickname && (approvedHere(m)
                             ? <button onClick={() => setApprovedHere(m, false)} className={`${btn} border-[#e5e5e5] text-[#888] hover:bg-[#f8f8f8]`}>승인 취소</button>
-                            : <button onClick={() => setApprovedHere(m, true)} disabled={blockers(m).length > 0}
-                                className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed`}>승인</button>)}
+                            : <button onClick={() => { const why = blockers(m); if (why.length) showAlert(`${m.nickname} — 아직 승인할 수 없어요.\n${why.map(w => `· ${w}`).join('\n')}`); else setApprovedHere(m, true); }}
+                                className={`${btn} border-[var(--brand)] bg-[var(--brand)] text-white hover:opacity-90 ${blockers(m).length ? 'opacity-30' : ''}`}>승인</button>)}
                           <button onClick={() => startEdit(m)} className={`${btn} border-[#e5e5e5] hover:bg-[#f8f8f8]`}>수정</button>
                           {m.nickname && <button onClick={() => remove(m)} className={`${btn} border-[#e5e5e5] text-red-400 hover:bg-red-50`}>삭제</button>}
                         </>

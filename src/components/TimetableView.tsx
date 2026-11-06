@@ -709,6 +709,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const fixedPending = [...ops.values()].filter(o => o.kind !== 'day').length;
   const bottomPending = schedPending + draft.size - (fixEdit ? fixedPending : 0);
   const canPay = !missingPay.size && !overRound && !schedPending && (toConfirm.length > 0 || laterToday > 0);
+  // [결제 완료]를 못 누르는 까닭 — 누르면 팝업으로 알려 준다
+  const payBlockReason = () => missingPay.size ? `결제방식이 빈 수업이 ${missingPay.size}개 있어요${whereOf([...missingPay])}.\n빨간 테두리 칸의 결제방식을 골라 주세요.`
+    : overRound ? `월 횟수를 넘은 수업이 ${overRound}개 있어요${whereOf(overKeys)}.\n빨간 글씨 칸의 결제방식을 바꿔 주세요.`
+    : schedPending ? `시간표 변경 ${schedPending}건이 저장되지 않았어요.\n먼저 [스케줄 변경 완료]를 눌러 주세요.`
+    : lessons.length ? '확정할 결제가 없어요. 이 날 결제가 모두 확정됐어요.' : '이 날은 결제할 수업이 없어요.';
   // [결제 완료]를 막는 칸 — "14:00 허홍석 김하정" 처럼 3개까지 (어느 칸인지 찾기 쉽게)
   const whereOf = (keys: string[]) => {
     const list = lessons.filter(x => keys.includes(keyOf(x.childId, x.time))).sort((a, b) => a.time.localeCompare(b.time));
@@ -982,7 +987,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                     const right = cellOf(view.open, t.id, time);
                     // 테스트 화면: 다른 아이 칸은 잠금(내용 숨김)
                     const lockL = locked(left), lockR = locked(right);
-                    const lockedTd = <td className="border border-[#e4e4e7] h-9 bg-[#fafafa] text-center text-[10px] text-[#d4d4d8]" title="테스트 화면에선 다른 아이 칸을 고칠 수 없어요">·</td>;
+                    const lockedTd = <td className="border border-[#e4e4e7] h-9 bg-[#fafafa] text-center text-[10px] text-[#d4d4d8]" title="테스트 화면에선 다른 아이 칸을 고칠 수 없어요" onClick={() => showAlert('테스트 화면에선 다른 아이 칸을 고칠 수 없어요.')}>·</td>;
                     // 수업 칸 — 그 시간 수업(빈타임 아이가 있으면 그 아이, 없으면 고정 아이)의 종류를 좁은 칸에서 고른다
                     const kc = mode === 'day' && right.status === 'child' ? right : left;
                     const kSide: Side = mode === 'day' && right.status === 'child' ? 'open' : 'fixed';
@@ -1034,7 +1039,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                             <CellText cell={right} label={postedOpen.has(`${t.id}|${time}`) ? undefined : rowLabel(time, wd)} nonMember={isNonMember(right)} posted={mode === 'day' ? postedOpen.get(`${t.id}|${time}`) : undefined} />
                           </td>}
                           {kindTd}
-                          <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
+                          <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]"
+                            // 휴직 중인 선생님(이원재) 칸은 결제를 받지 않는다 — 눌렀을 때 까닭을 알려 준다
+                            onClick={() => { if (isCountExcludedName(t.name, day) && (left.status === 'child' || right.status === 'child')) showAlert(`${t.name} 선생님은 휴직 중이라 결제방식을 고르지 않아요.\n(이 선생님 수업은 모든 횟수에서 빠져요)`); }}>
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
                             {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved && !locked(c) && !isCountExcludedName(t.name, day)).map((c, i) => (
                               <PayCell key={i} cell={c} methods={payMethodsFor(center)} noBase={c === right} paid={c.childId ? paidOf(c.childId, time) : undefined}
@@ -1069,14 +1076,16 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
               className="text-[13px] border border-[#ddd] px-4 py-2 hover:bg-[#f8f8f8]">되돌리기</button>
           )}
           {mode === 'day' && !isTest && (
-            <button onClick={sendLessonDay} disabled={!!schedPending || !lessons.length || sendingDay}
+            <button onClick={() => (schedPending ? showAlert(`시간표 변경 ${schedPending}건이 저장되지 않았어요.\n먼저 [스케줄 변경 완료]를 누른 뒤 보낼 수 있어요.`)
+                : !lessons.length ? showAlert('이 날은 알림을 보낼 수업이 없어요.\n(결석·옮긴 수업은 빼고 세요)') : sendLessonDay())} disabled={sendingDay}
               title="이 날 수업이 있는 아이마다 보호자에게 '수업 일정' 알림톡 (결석·옮긴 수업 빼고, 시간표 변경을 먼저 저장해야 해요)"
-              className="text-[13px] border border-[#f59e0b] text-[#b45309] bg-white px-4 py-2 hover:bg-[#fffbeb] disabled:opacity-40">
+              className={`text-[13px] border border-[#f59e0b] text-[#b45309] bg-white px-4 py-2 hover:bg-[#fffbeb] disabled:opacity-40 ${schedPending || !lessons.length ? 'opacity-40' : ''}`}>
               {sendingDay ? '보내는 중…' : '이 날 수업 알림'}
             </button>
           )}
-          <button onClick={saveSchedule} disabled={!bottomPending || savingSched}
-            className="text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
+          <button onClick={() => (bottomPending ? saveSchedule()
+              : showAlert(fixEdit && fixedPending ? '고친 고정 칸은 위의 [고정 변경사항 저장]으로 저장해요.' : '저장할 변경이 없어요.\n칸이나 결제방식을 고친 뒤 눌러 주세요.'))} disabled={savingSched}
+            className={`text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40 ${bottomPending ? '' : 'opacity-40'}`}>
             {savingSched ? '저장 중…' : '스케줄 변경 완료'}
           </button>
           {mode === 'day' && (
@@ -1090,8 +1099,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                   : laterToday ? `소급·미결 ${laterToday}건 남음 — 결제한 뒤 결제방식을 바꿔 [결제 완료]`
                   : lessons.length ? '결제가 모두 확정됐어요' : ''}
               </span>
-              <button onClick={savePayments} disabled={!canPay || savingPay}
-                className="text-[13px] border border-[#16a34a] bg-[#16a34a] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40">
+              <button onClick={() => (canPay ? savePayments() : showAlert(`[결제 완료]를 누를 수 없어요.\n${payBlockReason()}`))} disabled={savingPay}
+                className={`text-[13px] border border-[#16a34a] bg-[#16a34a] text-white px-5 py-2 hover:opacity-90 disabled:opacity-40 ${canPay ? '' : 'opacity-40'}`}>
                 {savingPay ? '저장 중…' : '결제 완료'}
               </button>
             </>
@@ -1230,7 +1239,10 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
   const text = paid
     ? <span>{confirmed ? '✓' : ''}{paid.note || (retroBase ? cellLabel(retroBase) : cellLabel(paid.method))}{visitAmount && <span className="ml-0.5">{visitAmount}</span>}{rn}{retroBase && !paid.note && '소급'}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
     : <span>{pending ? '체크 풀기' : (cellLabel(base) ?? '')}{!pending && rn}</span>;
-  if (!onPay) return <span className="block text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요">{cellLabel(base) ?? ''}</span>;
+  if (!onPay) return (
+    <button type="button" className="block w-full min-h-[20px] text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요"
+      onClick={() => showAlert(`'${cell.name ?? ''}'은(는) 아이 명단에 없는 이름이라 결제방식을 고를 수 없어요.\n기존아이명단에 아이를 넣거나, 칸을 눌러 명단의 아이로 고쳐 주세요.`)}>{cellLabel(base) ?? ''}</button>
+  );
   return (
     <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone} ${missing && !round?.over ? 'ring-1 ring-red-300' : ''}`}
       title={round?.over ? `이번 달 ${round.n}회째 — 월 횟수를 넘었어요. 결제방식을 바꿔야 [결제 완료]를 누를 수 있어요` : later ? '나중에 결제(소급·미결) — 결제한 뒤 결제방식을 바꾸고 [결제 완료]를 눌러 주세요' : pending ? '저장 전 — [스케줄 변경 완료]로 저장, [결제 완료]로 확정' : paid?.confirmed ? '결제 완료로 확정됨' : paid ? '고른 결제 — [결제 완료]를 눌러야 확정돼요' : '기본 결제 — 눌러서 고르기'}>
@@ -1245,13 +1257,15 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
           } else if (v === 'custom') {
             const t = await askPrompt('결제 방식을 적어 주세요', paid?.note ?? '');
             if (t?.trim()) onPay({ method: 'other', note: t.trim() });
+          } else if (v !== paid?.method && blocked?.(v as PayMethod)) {
+            showAlert(`${label(v as PayMethod)}은(는) 고를 수 없어요 — ${blocked(v as PayMethod)}`);
           } else onPay({ method: v as PayMethod });   // 이 수업만 — 고정 결제방식은 칸 [수정]에서 바꾼다
         }}
         className="absolute inset-0 w-full opacity-0 cursor-pointer" aria-label={`${cell.name} 결제 체크`}>
         <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
         {options.map(m => {
           const why = paid?.method === m.key ? undefined : blocked?.(m.key);
-          return <option key={m.key} value={m.key} disabled={!!why}>{m.label}{ABC_PRICE[m.key] ? `(${ABC_PRICE[m.key]})` : ''}{m.key === base ? ' (기본)' : ''}{why ? ` (${why})` : ''}</option>;
+          return <option key={m.key} value={m.key}>{m.label}{ABC_PRICE[m.key] ? `(${ABC_PRICE[m.key]})` : ''}{m.key === base ? ' (기본)' : ''}{why ? ` (${why})` : ''}</option>;
         })}
         {paid?.method === 'visit' && <option value="visit-edit">방문 금액 고치기…</option>}
         <option value="custom">{paid?.note ? `${paid.note} (고치기)` : '직접 작성…'}</option>
@@ -1423,7 +1437,8 @@ function CellEditor({ editing, methods, mode, fixEdit, dayLabel, kids, onClose, 
           <div className="flex flex-wrap gap-1.5">
             {/* [고정 수정] 중 — [확인]으로 고친 칸을 쌓고, 위의 [고정 변경사항 저장]으로 저장 */}
             {!dayOnly && (
-              <button onClick={saveFixedSeat} disabled={!!name.trim() && !child} className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white disabled:opacity-40`}>확인</button>
+              <button onClick={() => (name.trim() && !child ? showAlert(`'${name.trim()}'은(는) 아이 명단에 없는 이름이에요.\n목록에서 골라 주세요(없으면 기존아이명단에 먼저 넣어 주세요).`) : saveFixedSeat())}
+                className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white ${name.trim() && !child ? 'opacity-40' : ''}`}>확인</button>
             )}
             {/* 이 날만 결석 — [고정 수정]이 아닐 때만. 고정 수업은 그대로, 그날 칸에만 결석(x) */}
             {dayOnly && cell.status === 'child' && !guardianCancelled && (
