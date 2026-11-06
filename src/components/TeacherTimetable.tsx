@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
-import { useMember } from '@/components/MemberContext';
+import { OtherAccountLogin, useMember } from '@/components/MemberContext';
 import type { Teacher } from '@/lib/schedule';
 import { addDays, getHolidayNames, getPostedOpenSlots, getTeachers, HIDDEN_TEACHERS, parseYmd, toYmd } from '@/lib/schedule';
 import type { Center, PayMethod } from '@/lib/timetable';
-import { PAY_METHODS, ROUND_LIMIT, rowLabel, SUNDAY_TEACHERS, defaultPayMethod, isLaterPay, RETRO_BASE, rowsForDay, worksAt } from '@/lib/timetable';
+import { PAY_METHODS, ROUND_LIMIT, rowLabel, SUNDAY_TEACHERS, defaultPayMethod, isLaterPay, RETRO_BASE, rowsForDay, worksAt, EMPTY_ROW, isCountExcludedName } from '@/lib/timetable';
 import type { TeacherLesson } from '@/lib/teacher';
 import { getTeacherLessons, getTeacherRounds } from '@/lib/teacher';
 import { onScheduleChanged } from '@/lib/sync';
@@ -94,6 +94,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
         ) : (<>
           <p className="text-[14px] leading-[2] text-[#666]">선생님은 카카오로 로그인한 뒤<br />[선생님]을 골라 인증하면 볼 수 있어요.</p>
           <button onClick={login} className="bg-[#e11d48] text-white text-[14px] px-6 py-2.5 rounded-full hover:opacity-90">카카오 로그인</button>
+          <OtherAccountLogin />
         </>)}
       </div>
     );
@@ -109,6 +110,9 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   // 그날 이 센터에 나오는 선생님 — 출근 요일(일요일은 일요일 선생님) 또는 그날 수업이 있는 선생님
   const shown = teachers.filter(t => hasLessons(t.id) || (wd === 0 ? SUNDAY_TEACHERS[center].includes(t.name) && t.centers.includes(center) : worksAt(t, center, wd)));
   const rows = rowsForDay(day, here.map(l => `${l.teacherId}|${l.time}`), center);
+  // 그 시간에 수업이 하나라도 있는지 — 없는 줄은 어둡게 (시간표 관리와 같은 기준: 결석·옮긴 수업, 휴직 중인 선생님 칸은 빼고)
+  const hasLessonAt = (time: string) => shown.some(t => !isCountExcludedName(t.name, day)
+    && here.some(l => l.teacherId === t.id && l.time === time && (l.status === 'child' || l.status === 'cancel_requested') && !l.absent && !l.moved));
 
   // 결제 칸 — 확정(✓ 빨강) · 고름(파랑) · 기본 결제(회색). 빈타임 아이는 기본 결제가 없다
   const payText = (l?: TeacherLesson) => {
@@ -199,7 +203,7 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           </thead>
           <tbody>
             {rows.map(time => (
-              <tr key={time}>
+              <tr key={time} className={hasLessonAt(time) ? '' : EMPTY_ROW}>
                 <td className={`border border-[#d4d4d8] px-1 text-center sticky left-0 z-10 bg-white ${rowLabel(time, wd) ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
                 {shown.map(t => {
                   if (folded.has(t.name)) return <td key={t.id} className={`${td} bg-[#fafafa]`} />;

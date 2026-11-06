@@ -1,7 +1,7 @@
 'use client';
 
 import { useAdmin } from '@/components/AdminContext';
-import { useMember } from '@/components/MemberContext';
+import { OtherAccountLogin, useMember } from '@/components/MemberContext';
 
 // 수업스케쥴은 관리자·선생님(두 지점 모두)과 승인된 보호자만 본다. 그 밖엔 로그인·승인 안내를 보여 준다.
 
@@ -26,6 +26,7 @@ export default function ScheduleGate({ children, center }: { children: React.Rea
           <button onClick={login} className="inline-flex items-center gap-2 bg-[#e11d48] text-white text-[15px] px-6 py-3 rounded-full hover:opacity-90">
             카카오 로그인/회원가입
           </button>
+          <OtherAccountLogin />
         </>
       ) : !profile ? (
         <p className="text-[15px] text-[#555]">먼저 보호자 닉네임을 정해 주세요.</p>

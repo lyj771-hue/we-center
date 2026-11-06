@@ -336,13 +336,17 @@ function keepDateParam(): string {
   return d ? `?d=${encodeURIComponent(d)}` : '';
 }
 
-export async function signInWithKakao(): Promise<void> {
+/** otherAccount = [다른 카카오계정으로 로그인] — 브라우저·카카오톡에 로그인된 계정으로 바로 넘어가지 않고 아이디를 새로 묻는다(prompt=login) */
+export async function signInWithKakao(otherAccount = false): Promise<void> {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'kakao',
     // 돌아올 곳은 지금 페이지 경로만 — 주소 뒤에 붙은 #토큰·?error 같은 꼬리까지 넘기면 주소가 계속 길어진다(414).
     // 알림톡 버튼의 ?d=날짜(마이페이지 주별 시간표)만 살려 둔다
     // phone_number — 카카오계정 전화번호(동의항목 필수). 이미 가입한 분도 다음 로그인 때 동의를 한 번 더 받는다
-    options: { redirectTo: window.location.origin + window.location.pathname + keepDateParam(), scopes: 'phone_number' },
+    options: {
+      redirectTo: window.location.origin + window.location.pathname + keepDateParam(), scopes: 'phone_number',
+      ...(otherAccount ? { queryParams: { prompt: 'login' } } : {}),
+    },
   });
   if (error) throw error;
 }

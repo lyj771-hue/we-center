@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAdmin } from '@/components/AdminContext';
-import { useMember } from '@/components/MemberContext';
+import { OtherAccountLogin, useMember } from '@/components/MemberContext';
 import MyPageView, { MYPAGE_CARD } from '@/components/MyPageView';
 import type { MyLedgers } from '@/lib/prepaid';
 import { getMyLedger, NO_LEDGERS } from '@/lib/prepaid';
@@ -72,6 +72,7 @@ export default function MyPage() {
     <div className={`${MYPAGE_CARD} text-center space-y-4`}>
       <p className="text-[15px] text-[#555]">로그인하면 우리 아이 수업과 지원 현황을 볼 수 있어요.</p>
       <button onClick={login} className="bg-[#e11d48] text-white text-[15px] px-6 py-3 rounded-full hover:opacity-90">카카오 로그인/회원가입</button>
+      <OtherAccountLogin />
     </div>,
   );
 

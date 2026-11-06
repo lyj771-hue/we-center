@@ -19,6 +19,8 @@ interface MemberCtx {
   profile: Profile | null;
   loading: boolean;
   login: () => void;
+  /** 다른 카카오계정으로 로그인 — 아이디를 새로 묻는다 */
+  loginOther: () => void;
   logout: () => void;
   /** 지점(수색/의정부) 가입 상태 — 처음 가입한 지점 + 추가 신청한 지점 */
   branches: MyBranch[];
@@ -32,7 +34,7 @@ interface MemberCtx {
 }
 
 const Ctx = createContext<MemberCtx>({
-  userId: null, profile: null, loading: true, login: () => {}, logout: () => {},
+  userId: null, profile: null, loading: true, login: () => {}, loginOther: () => {}, logout: () => {},
   branches: [], refreshBranches: () => {}, refreshProfile: () => {}, canUse: () => false, teacher: null,
 });
 
@@ -112,6 +114,9 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const login = useCallback(() => {
     signInWithKakao().catch(() => showAlert('카카오 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'));
   }, []);
+  const loginOther = useCallback(() => {
+    signInWithKakao(true).catch(() => showAlert('카카오 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+  }, []);
   const logout = useCallback(() => { supabase.auth.signOut(); }, []);
 
   const refreshProfile = useCallback(() => {
@@ -126,7 +131,7 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const needsNickname = !!memberId && !loading && !profile && !teacher && !unsure;
 
   return (
-    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse, teacher: memberId ? teacher : null }}>
+    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, loginOther, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse, teacher: memberId ? teacher : null }}>
       {children}
       {needsNickname && <NicknameSetup userId={memberId} kakaoPhone={kakaoPhone} onDone={setProfile} onTeacher={setTeacher} onCancel={logout} />}
     </Ctx.Provider>
@@ -134,6 +139,12 @@ export function MemberProvider({ children }: { children: ReactNode }) {
 }
 
 export const useMember = () => useContext(Ctx);
+
+/** 로그인 버튼 아래 — 브라우저·카카오톡에 다른 카카오 아이디가 로그인돼 있을 때 */
+export function OtherAccountLogin() {
+  const { loginOther } = useMember();
+  return <button type="button" onClick={loginOther} className="block mx-auto mt-2 text-[12px] text-[#999] underline underline-offset-2 hover:text-[#666]">다른 카카오계정으로 로그인</button>;
+}
 
 /** 처음 로그인한 보호자가 닉네임(아이 이름)을 한 번 정하는 창. 이후 변경은 관리자만 */
 function NicknameSetup({ userId, kakaoPhone, onDone, onTeacher, onCancel }: { userId: string; kakaoPhone: string | null; onDone: (p: Profile) => void; onTeacher: (t: MyTeacher) => void; onCancel: () => void }) {
@@ -185,6 +196,8 @@ function NicknameSetup({ userId, kakaoPhone, onDone, onTeacher, onCancel }: { us
     const child = name.trim();
     if (!child) { setError('아이 이름을 적어 주세요.'); return; }
     if (!center) { setError('다니는 센터를 골라 주세요.'); return; }
+    // 카카오 전화번호는 카카오에서 막 로그인했을 때만 받는다 — 로그인된 채로 계정이 지워졌으면 번호가 없다
+    if (!/^\d{4}$/.test(phone)) { setError('카카오계정 전화번호를 받지 못했어요. 오른쪽 위 ✕를 눌러 로그아웃한 뒤 카카오로 다시 로그인해 주세요.'); return; }
     if (!(await askConfirm(`센터: ${center === 'uijeongbu' ? '의정부' : '수색'}\n아이 이름: ${child}\n\n이대로 가입할까요?\n(아이 이름은 나중에 센터에서만 바꿀 수 있어요)`))) return;
     setSaving(true);
     try {
@@ -193,8 +206,13 @@ function NicknameSetup({ userId, kakaoPhone, onDone, onTeacher, onCancel }: { us
       if (kakaoPhone) await saveMyPhone(kakaoPhone).catch(() => {});
       const p = await getMyProfile(userId);
       if (p) onDone(p);
-    } catch {
-      setError('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } catch (err) {
+      // 까닭을 알 수 있는 것은 알려 준다 — 23505 = 같은 아이 이름으로 가입된 계정이 있음, 42501 = 가입 조건(카카오 전화번호 등)에 안 맞음
+      const code = (err as { code?: string }).code;
+      setError(code === '23505' ? '같은 아이 이름으로 이미 가입된 계정이 있어요. 센터에 말씀해 주세요.'
+        : code === '23514' ? '카카오계정 전화번호를 받지 못했어요. 오른쪽 위 ✕를 눌러 로그아웃한 뒤 카카오로 다시 로그인해 주세요.'
+        : code === '42501' ? '가입 정보를 저장할 수 없어요(카카오계정 전화번호가 없거나 이미 가입된 계정). 센터에 말씀해 주세요.'
+        : `저장하지 못했어요. 잠시 후 다시 시도해 주세요.${code ? ` (${code})` : ''}`);
     } finally {
       setSaving(false);
     }

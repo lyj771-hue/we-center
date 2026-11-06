@@ -110,6 +110,8 @@ export const SUNDAY_FROM = '2026-10-01';
 /** 일요일에 일하는 선생님 — 센터마다 */
 export const SUNDAY_TEACHERS: Record<Center, string[]> = { eunpyeong: ['설영수', '이정길'], uijeongbu: ['설영수'] };
 /** 아무도 없을 때 칸에 흐리게 보이는 글 — 평일 (월~금) */
+/** 시간표 관리·시간표 보기 — 수업이 하나도 없는 줄(시간)은 칸 바탕을 어둡게 (칸마다 정한 바탕보다 앞서게 !) */
+export const EMPTY_ROW = '[&>td]:bg-[#e4e4e7]!';
 export const ROW_LABEL: Record<string, string> = { '12:20': 'Lunch', '16:30': '쉬는 시간' };
 /** 토·일요일은 13:10 점심 */
 const WEEKEND_ROW_LABEL: Record<string, string> = { '13:10': 'Lunch' };

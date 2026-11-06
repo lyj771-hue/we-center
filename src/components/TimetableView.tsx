@@ -18,7 +18,7 @@ import {
   balanceOf, isWoojin, isBalancePay, isCountExcludedName, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, rowLabel, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
   getLaterPayments, isLaterPay, roundMethod, RETRO_BASE,
-  isPrepaid, prepaidTotalOf,
+  isPrepaid, prepaidTotalOf, EMPTY_ROW,
 } from '@/lib/timetable';
 
 // 관리자 시간표 — 센터 스프레드시트 "스케줄표" 모양. 시간 줄 × 선생님마다 [고정 | 빈타임 | 결제방식] 세 칸.
@@ -775,6 +775,11 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     return isPrepaid(method) ? `${limit - used}` : `${limit - used}/${limit}`;
   };
 
+  // 그 시간에 수업이 하나라도 있는지 — 없는 줄은 어둡게. 결석·옮긴 수업, 휴직 중인 선생님 칸은 수업으로 치지 않는다
+  const isLesson = (c: CellView) => c.status === 'child' && !c.absent && !c.moved;
+  const hasLessonAt = (time: string) => shown.some(t => !isCountExcludedName(t.name, day)
+    && (isLesson(cellOf(view.fixed, t.id, time)) || (mode === 'day' && isLesson(cellOf(view.open, t.id, time)))));
+
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
   const th = 'border border-[#d4d4d8] px-1 py-1.5 font-normal overflow-hidden whitespace-nowrap';
@@ -969,7 +974,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             </thead>
             <tbody>
               {rows.map(time => (
-                <tr key={time}>
+                <tr key={time} className={hasLessonAt(time) ? '' : EMPTY_ROW}>
                   <td className={`border border-[#d4d4d8] px-1 text-center whitespace-nowrap sticky left-0 z-10 bg-white ${rowLabel(time, wd) ? 'text-[#c026d3]' : ''}`}>{time.replace(/^0/, '')}</td>
                   {shown.map(t => {
                     if (folded.has(t.name)) return <td key={t.id} className="border border-[#e4e4e7] bg-[#f4f4f5] w-6" />;
