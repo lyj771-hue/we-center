@@ -185,7 +185,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             let pay = '';
             if (c.status === 'child' && !c.moved && !c.absent) {
               const e = c.childId ? pays.get(`${c.childId}|${time}`) : undefined;
-              pay = e ? `${e.note || label(e.method)}${e.confirmed ? '' : ' (선택)'}` : rr.status === 'child' ? '' : label(defaultMethod(c.payment));
+              pay = e ? `${e.note || label(e.method)}${e.confirmed ? '' : ' (선택)'}` : label(defaultMethod(c.payment));
             }
             row.push(txt(l), txt(rr), pay);
           }
@@ -666,8 +666,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     if (c.status !== 'child' || c.moved || c.absent || !c.childId) return [];
     // 휴직 중인 이원재 선생님 수업은 결제를 고르지 않는다 — [결제 완료]도 막지 않는다 (복직하면 timetable.ts 의 COUNT_EXCLUDE 에서 빼기)
     if (isCountExcludedName(t.name, day)) return [];
-    // 빈타임 아이는 기본 결제 없이 비워 두고 직접 고른다
-    return [{ teacherId: t.id, time, childId: c.childId, base: rr.status === 'child' ? undefined : defaultMethod(c.payment) }];
+    // 기본 결제 — 칸의 결제 글자(엑셀 b·e·c …). 빈타임도 글자가 있으면 그 결제, 없으면(보호자 신청 등) 비워 두고 직접 고른다
+    return [{ teacherId: t.id, time, childId: c.childId, base: defaultMethod(c.payment) }];
   })) : [];
   // 결제방식이 빈 수업(고른 것도 기본 결제도 없음) — 하나라도 있으면 [결제 완료]를 누를 수 없다
   const missingPay = new Set(lessons.filter(x => !paidOf(x.childId, x.time) && !x.base).map(x => keyOf(x.childId, x.time)));
@@ -1024,7 +1024,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                           <td className="border border-[#e4e4e7] h-9 px-1 text-center align-middle whitespace-nowrap bg-[#f9fdfa]">
                             {/* 빈타임에 아이가 채워지면 그 아이 결제만 (옆 고정 칸은 흐리게 = 그 시간엔 빈타임 아이 수업) */}
                             {(right.status === 'child' ? [right] : [left]).filter(c => c.status === 'child' && !c.moved && !locked(c) && !isCountExcludedName(t.name, day)).map((c, i) => (
-                              <PayCell key={i} cell={c} methods={payMethodsFor(center)} noBase={c === right} paid={c.childId ? paidOf(c.childId, time) : undefined}
+                              <PayCell key={i} cell={c} methods={payMethodsFor(center)} paid={c.childId ? paidOf(c.childId, time) : undefined}
                                 pending={!!c.childId && draft.has(keyOf(c.childId, time))}
                                 missing={!!c.childId && missingPay.has(keyOf(c.childId, time))}
                                 round={c.childId ? rounds.get(keyOf(c.childId, time)) : undefined}

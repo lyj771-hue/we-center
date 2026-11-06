@@ -578,7 +578,7 @@ export function defaultPayMethod(payment: string | undefined): PayMethod | undef
 }
 
 /** 이번 달 1일 ~ upTo 날까지 두 센터 시간표의 바우처·굳센·꿈이든 수업 — 시간표의 월 회차용.
- *  결제를 아직 안 했어도 센다: 결제 기록이 있으면 그 결제, 없으면 칸의 기본 결제(빈타임 아이는 기본 결제가 없어 기록이 있을 때만).
+ *  결제를 아직 안 했어도 센다: 결제 기록이 있으면 그 결제, 없으면 칸의 결제 글자(빈타임도 엑셀 글자가 있으면 그 결제, 보호자 신청 칸은 글자가 없어 기록이 있을 때만).
  *  결석·옮긴 수업, 공휴일의 고정 수업, 그날 뺀 선생님 수업, COUNT_EXCLUDE(휴직 중인 이원재)는 세지 않는다 */
 export async function getMonthRoundLessons(upTo: string, children: Child[]): Promise<{ childId: string; day: string; time: string; method: PayMethod }[]> {
   const from = `${upTo.slice(0, 7)}-01`;
@@ -629,11 +629,10 @@ export async function getMonthRoundLessons(upTo: string, children: Child[]): Pro
         if (off.has(`${day}|${center}|${teacherId}`) || skip(teacherId, day)) continue;
         const o = open.get(k);
         const oc = o?.cell?.status === 'child' ? o.cell : undefined;
-        const isOpen = !!oc || !!o?.childId;
         const c = oc ?? (o?.childId ? undefined : fixed.get(k));
         const childId = oc?.childId ?? o?.childId ?? c?.childId;
         if (!childId || (c && (c.status !== 'child' || c.moved || c.absent))) continue;
-        const pm = paid.get(`${childId}|${day}|${time}`) ?? (isOpen ? undefined : defaultPayMethod(c?.payment));
+        const pm = paid.get(`${childId}|${day}|${time}`) ?? defaultPayMethod(c?.payment);   // 빈타임도 칸의 결제 글자가 있으면 그 결제(보호자 신청 칸은 글자가 없다)
         const method = pm && roundMethod(pm);
         if (method && method in ROUND_LIMIT) out.push({ childId, day, time, method });
       }
