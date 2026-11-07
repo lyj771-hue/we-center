@@ -9,15 +9,17 @@ import { addCharge, getChildLedger } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import { notifyPrepaid, sendSummary } from '@/lib/alimtalkNotify';
 
-// 회원 관리 "결제내역" 탭에서 여는 선결제 카드 창. 선결제는 아이(=센터)마다, A·B·C 종류마다 따로다.
+// 회원 관리 "결제정보" 탭에서 여는 선결제 카드 창. 선결제는 아이(=센터)마다, A·B·C 종류마다 따로다.
 
-/** 선결제 카드 창 — 카드 내역(충전·사용·남은 횟수·메모)과 [충전] · [차감] · [수정] */
+/** 선결제 카드 창 — 카드 내역(충전·사용·남은 횟수·메모)과 [충전] · [차감] · [수정] 중 고른 칸 하나 */
 export default function PrepaidModal({ child, method: first = 'prepaid', onClose }: { child: Child; method?: PrepaidKey; onClose: () => void }) {
   const [method, setMethod] = useState<PrepaidKey>(first);
   const kindLabel = PREPAID_KINDS.find(x => x.key === method)!.label;
   const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
   const [rows, setRows] = useState<LedgerRow[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // 아래 칸 — 충전 / 차감 / 수정 중 하나
+  const [act, setAct] = useState<'charge' | 'deduct' | 'fix'>('charge');
   // 충전
   const [day, setDay] = useState(today);
   const [count, setCount] = useState('');
@@ -72,7 +74,6 @@ export default function PrepaidModal({ child, method: first = 'prepaid', onClose
   const input = 'border-b border-[#ddd] py-1 text-[14px] outline-none focus:border-[var(--brand)]';
   const label = 'text-[11px] text-[#999]';
   const section = 'flex flex-wrap items-end gap-3';
-  const title = 'w-full text-[11px] text-[#777]';
 
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
@@ -89,35 +90,47 @@ export default function PrepaidModal({ child, method: first = 'prepaid', onClose
         </div>
         {rows === null ? <p className="text-[13px] text-[#aaa]">불러오는 중…</p> : <PrepaidCard rows={rows} name={child.name} />}
 
-        <div className="bg-white rounded-xl p-4 space-y-4">
-          {/* 충전 */}
-          <div className={section}>
-            <p className={title}>충전</p>
-            <label className={label}>날짜<input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} className={`${input} block`} /></label>
-            <label className={label}>횟수<input value={count} inputMode="numeric" placeholder="50" onChange={e => setCount(e.target.value.replace(/\D/g, '').slice(0, 4))} className={`${input} block w-14 text-center`} /></label>
-            <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={memo} onChange={e => setMemo(e.target.value)} placeholder="예: 카드 남은 횟수 옮김" className={`${input} block w-full`} /></label>
-            <button onClick={charge} disabled={busy} className="text-[12px] border border-[var(--brand)] bg-[var(--brand)] text-white px-3.5 py-1.5 rounded-full disabled:opacity-50">충전</button>
+        {/* 충전 · 차감 · 수정 — 하나를 골라 그 칸만 */}
+        <div className="bg-white rounded-xl p-4 space-y-3">
+          <div role="tablist" className="flex gap-1.5">
+            {([['charge', '충전'], ['deduct', '차감'], ['fix', '수정']] as const).map(([k, t]) => (
+              <button key={k} type="button" role="tab" aria-selected={act === k} onClick={() => setAct(k)}
+                className={`text-[13px] px-4 py-1.5 rounded-full border ${act === k ? 'border-[#27272a] bg-[#27272a] text-white' : 'border-[#ddd] bg-white text-[#555] hover:bg-[#f8f8f8]'}`}>{t}</button>
+            ))}
           </div>
 
-          {/* 차감 */}
-          <div className={`${section} pt-4 border-t border-[#f0f0f0]`}>
-            <p className={title}>차감 <span className="text-[11px] text-[#aaa]">(임시)</span></p>
-            <label className={label}>날짜<input type="date" value={useDay} onChange={e => e.target.value && setUseDay(e.target.value)} className={`${input} block`} /></label>
-            <label className={label}>횟수<input value={useCount} inputMode="numeric" onChange={e => setUseCount(e.target.value.replace(/\D/g, '').slice(0, 3))} className={`${input} block w-14 text-center`} /></label>
-            <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={useMemo} onChange={e => setUseMemo(e.target.value)} placeholder="예: 10/7 수업" className={`${input} block w-full`} /></label>
-            <button onClick={deduct} disabled={busy} className="text-[12px] border border-[#e11d48] text-[#e11d48] px-3.5 py-1.5 rounded-full hover:bg-red-50 disabled:opacity-50">차감</button>
-          </div>
+          {act === 'charge' && (
+            <div className={section}>
+              <label className={label}>날짜<input type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} className={`${input} block`} /></label>
+              <label className={label}>충전 횟수<input value={count} inputMode="numeric" placeholder="10" onChange={e => setCount(e.target.value.replace(/\D/g, '').slice(0, 4))} className={`${input} block w-16 text-center`} /></label>
+              <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={memo} onChange={e => setMemo(e.target.value)} placeholder="예: 11월 카드 결제" className={`${input} block w-full`} /></label>
+              <p className="w-full text-[13px] text-[#555]">지금 {left}회{Number(count) > 0 && <> → 저장하면 <b className="font-medium text-[var(--brand)]">{left + Number(count)}회</b></>}</p>
+              <button onClick={charge} disabled={busy} className="text-[13px] border border-[var(--brand)] bg-[var(--brand)] text-white px-4 py-1.5 rounded-full disabled:opacity-50">충전 저장</button>
+            </div>
+          )}
 
-          {/* 수정 — 남은 횟수를 직접 */}
-          <div className={`${section} pt-4 border-t border-[#f0f0f0]`}>
-            <p className={title}>수정 <span className="text-[#aaa]">(남은 횟수를 직접 · 지금 {left}회)</span></p>
-            <label className={label}>날짜<input type="date" value={fixDay} onChange={e => e.target.value && setFixDay(e.target.value)} className={`${input} block`} /></label>
-            <label className={label}>남은 횟수<input value={fixLeft} inputMode="numeric" placeholder={String(left)} onChange={e => setFixLeft(e.target.value.replace(/\D/g, '').slice(0, 4))} className={`${input} block w-14 text-center`} /></label>
-            <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={fixMemo} onChange={e => setFixMemo(e.target.value)} placeholder="예: 종이 카드와 맞춤" className={`${input} block w-full`} /></label>
-            <button onClick={fix} disabled={busy} className="text-[12px] border border-[#0a0a0a] bg-[#0a0a0a] text-white px-3.5 py-1.5 rounded-full disabled:opacity-50">수정</button>
-          </div>
+          {act === 'deduct' && (
+            <div className={section}>
+              <label className={label}>날짜<input type="date" value={useDay} onChange={e => e.target.value && setUseDay(e.target.value)} className={`${input} block`} /></label>
+              <label className={label}>차감 횟수<input value={useCount} inputMode="numeric" onChange={e => setUseCount(e.target.value.replace(/\D/g, '').slice(0, 3))} className={`${input} block w-16 text-center`} /></label>
+              <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={useMemo} onChange={e => setUseMemo(e.target.value)} placeholder="예: 10/7 수업" className={`${input} block w-full`} /></label>
+              <p className="w-full text-[13px] text-[#555]">지금 {left}회{Number(useCount) > 0 && <> → 저장하면 <b className="font-medium text-[#e11d48]">{left - Number(useCount)}회</b></>}</p>
+              <p className="w-full text-[11px] text-[#aaa] -mt-1">시간표에 없는 사용만 직접 빼요. 시간표 [결제 완료]로 쓴 수업은 저절로 빠져요.</p>
+              <button onClick={deduct} disabled={busy} className="text-[13px] border border-[#e11d48] bg-[#e11d48] text-white px-4 py-1.5 rounded-full disabled:opacity-50">차감 저장</button>
+            </div>
+          )}
 
-          <p className="text-[11px] text-[#aaa] leading-[1.7]">시간표 [결제 완료]에서 {kindLabel}(으)로 확정한 수업도 사용으로 자동으로 들어가요(이건 시간표에서 고쳐요). 종이 카드에서 옮길 때는 지금 남은 횟수를 오늘 날짜로 충전하면 돼요.</p>
+          {act === 'fix' && (
+            <div className={section}>
+              <label className={label}>날짜<input type="date" value={fixDay} onChange={e => e.target.value && setFixDay(e.target.value)} className={`${input} block`} /></label>
+              <label className={label}>남은 횟수를<input value={fixLeft} inputMode="numeric" placeholder={String(left)} onChange={e => setFixLeft(e.target.value.replace(/\D/g, '').slice(0, 4))} className={`${input} block w-16 text-center`} /></label>
+              <label className={`${label} flex-1 min-w-[110px]`}>메모<input value={fixMemo} onChange={e => setFixMemo(e.target.value)} placeholder="예: 종이 카드와 맞춤" className={`${input} block w-full`} /></label>
+              <p className="w-full text-[13px] text-[#555]">지금 {left}회{fixLeft !== '' && <> → <b className="font-medium text-[#b45309]">{fixLeft}회</b>로 맞춤 ({Number(fixLeft) - left >= 0 ? '+' : ''}{Number(fixLeft) - left})</>}</p>
+              <button onClick={fix} disabled={busy} className="text-[13px] border border-[#0a0a0a] bg-[#0a0a0a] text-white px-4 py-1.5 rounded-full disabled:opacity-50">수정 저장</button>
+            </div>
+          )}
+
+          <p className="text-[11px] text-[#aaa] leading-[1.7]">저장하면 보호자에게 알림톡이 가요(보호자 계정과 이어진 아이만). 종이 카드에서 옮길 때는 [수정]으로 남은 횟수를 맞추면 돼요.</p>
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import type { BalanceCharge, BalanceKey, BalanceUse, Child } from '@/lib/timetab
 import { getBalanceCharges, getBalanceUses, setChildBalance, WOOJIN_FEE } from '@/lib/timetable';
 import { getTeachers } from '@/lib/schedule';
 
-// 회원 관리 "결제내역" 탭에서 우진학교외부·자율·지원금 남은 금액을 누르면 여는 상세보기. 아래 [수정]으로 남은 금액을 고친다(차이가 [수정] 기록으로 남는다).
+// 회원 관리 "결제정보" 탭에서 우진학교외부·자율·지원금 남은 금액을 누르면 여는 상세보기. 아래 [수정]으로 남은 금액을 고친다(차이가 [수정] 기록으로 남는다).
 // 충전·수정 기록(balance_charges)과 확정된 수업(차감 6만원)을 날짜 순으로 늘어놓고, 줄마다 그 뒤 잔여금액을 붙인다.
 
 const LABEL: Record<BalanceKey, string> = { woojin_ext: '우진학교외부', woojin_self: '우진학교자율', subsidy: '지원금' };

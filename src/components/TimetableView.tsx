@@ -1241,7 +1241,7 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
     : <span>{pending ? '체크 풀기' : (cellLabel(base) ?? '')}{!pending && rn}</span>;
   if (!onPay) return (
     <button type="button" className="block w-full min-h-[20px] text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요"
-      onClick={() => showAlert(`'${cell.name ?? ''}'은(는) 아이 명단에 없는 이름이라 결제방식을 고를 수 없어요.\n기존아이명단에 아이를 넣거나, 칸을 눌러 명단의 아이로 고쳐 주세요.`)}>{cellLabel(base) ?? ''}</button>
+      onClick={() => showAlert(`'${cell.name ?? ''}'은(는) 아이 명단에 없는 이름이라 결제방식을 고를 수 없어요.\n아이명단에 아이를 넣거나, 칸을 눌러 명단의 아이로 고쳐 주세요.`)}>{cellLabel(base) ?? ''}</button>
   );
   return (
     <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone} ${missing && !round?.over ? 'ring-1 ring-red-300' : ''}`}
@@ -1437,7 +1437,7 @@ function CellEditor({ editing, methods, mode, fixEdit, dayLabel, kids, onClose, 
           <div className="flex flex-wrap gap-1.5">
             {/* [고정 수정] 중 — [확인]으로 고친 칸을 쌓고, 위의 [고정 변경사항 저장]으로 저장 */}
             {!dayOnly && (
-              <button onClick={() => (name.trim() && !child ? showAlert(`'${name.trim()}'은(는) 아이 명단에 없는 이름이에요.\n목록에서 골라 주세요(없으면 기존아이명단에 먼저 넣어 주세요).`) : saveFixedSeat())}
+              <button onClick={() => (name.trim() && !child ? showAlert(`'${name.trim()}'은(는) 아이 명단에 없는 이름이에요.\n목록에서 골라 주세요(없으면 아이명단에 먼저 넣어 주세요).`) : saveFixedSeat())}
                 className={`${chip} border-[#0a0a0a] bg-[#0a0a0a] text-white ${name.trim() && !child ? 'opacity-40' : ''}`}>확인</button>
             )}
             {/* 이 날만 결석 — [고정 수정]이 아닐 때만. 고정 수업은 그대로, 그날 칸에만 결석(x) */}
