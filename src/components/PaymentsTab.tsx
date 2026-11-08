@@ -48,12 +48,11 @@ export function PayInfoCell({ col, on, main, used, monthNo, low, childName, onTo
           {main}
         </button>
       </span>
-      {col.kind !== 'month' && <span className={`block text-[10px] tabular-nums ${used ? 'text-[#888]' : 'text-[#ddd]'}`}>{monthNo}월 {used}회</span>}
     </td>
   );
 }
 /** 결제 칸 머리글 아래 작은 글씨 */
-export const payInfoSub = (c: PayInfoCol, monthNo: number) => (c.kind === 'month' ? `${monthNo}월 사용` : c.kind === 'prepaid' ? `남은 횟수 · ${monthNo}월` : `남은 금액 · ${monthNo}월`);
+export const payInfoSub = (c: PayInfoCol, monthNo: number) => (c.kind === 'month' ? `${monthNo}월 사용` : c.kind === 'prepaid' ? '남은 횟수' : '남은 금액');
 
 export default function PaymentsTab({ members, center, q }: { members: Member[]; center: Center; /** 찾기 — 위 회원 관리 칸 */ q: string }) {
   const [month, setMonth] = useState(thisMonth);
