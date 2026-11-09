@@ -17,7 +17,7 @@ import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
   balanceOf, isWoojin, isBalancePay, isCountExcludedName, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, rowLabel, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
-  getLaterPayments, getGusenExtraDue, isLaterPay, roundMethod, RETRO_BASE, GUSEN_EXTRA_ROUND,
+  getLaterPayments, getGusenExtraDue, getUnconfirmedDays, UNCONFIRMED_FROM, isLaterPay, roundMethod, RETRO_BASE, GUSEN_EXTRA_ROUND,
   isPrepaid, prepaidTotalOf, EMPTY_ROW,
 } from '@/lib/timetable';
 
@@ -83,6 +83,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const [savingPay, setSavingPay] = useState(false);
   // 아직 결제 안 한 소급·미결(이 센터 전부) — 시간표 관리 위 안내
   const [laterPays, setLaterPays] = useState<{ day: string; method: PayMethod }[]>([]);
+  // [결제 완료]를 안 한 지난 날(11/1 ~ 어제, 이 센터) — 앞 날짜가 남아 있으면 뒤 날짜는 [결제 완료]를 못 한다
+  const [unconfirmed, setUnconfirmed] = useState<{ day: string; n: number }[]>([]);
   // 그날만 이 센터에 더한 선생님(공휴일 등)·뺀 선생님
   const [assigns, setAssigns] = useState<{ added: string[]; removed: string[] }>({ added: [], removed: [] });
   const [board, setBoard] = useState<{ fixed: Map<string, CellView>; open: Map<string, CellView> }>({ fixed: new Map(), open: new Map() });
@@ -127,6 +129,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       // 소급·미결 + 굳센3회차 미납(추가금액 아직 안 받음)
       const [lp, gx] = await Promise.all([getLaterPayments(center).catch(() => []), getGusenExtraDue(center).catch(() => [])]);
       setLaterPays([...lp, ...gx].sort((a, b) => a.day.localeCompare(b.day)));
+      setUnconfirmed(await getUnconfirmedDays(center, c).catch(() => []));
       setFailed('');
     } catch (e) {
       setFailed((e as Error).message);
@@ -710,9 +713,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   // 고정 수업 변경(이 날부터 매주 · 고정 시간표) — [고정 수정] 중엔 위의 [고정 변경사항 저장]으로 저장한다
   const fixedPending = [...ops.values()].filter(o => o.kind !== 'day').length;
   const bottomPending = schedPending + draft.size - (fixEdit ? fixedPending : 0);
-  const canPay = !missingPay.size && !overRound && !schedPending && (toConfirm.length > 0 || laterToday > 0);
+  // 이 날보다 앞 날짜에 [결제 완료]를 안 한 날이 있으면 막는다 (11/1 부터, 차례대로)
+  const earlierUnconfirmed = unconfirmed.filter(u => u.day < day);
+  const canPay = !earlierUnconfirmed.length && !missingPay.size && !overRound && !schedPending && (toConfirm.length > 0 || laterToday > 0);
   // [결제 완료]를 못 누르는 까닭 — 누르면 팝업으로 알려 준다
-  const payBlockReason = () => missingPay.size ? `결제방식이 빈 수업이 ${missingPay.size}개 있어요${whereOf([...missingPay])}.\n빨간 테두리 칸의 결제방식을 골라 주세요.`
+  const payBlockReason = () => earlierUnconfirmed.length ? `앞 날짜에 [결제 완료]를 안 한 날이 있어요 — ${earlierUnconfirmed.slice(0, 3).map(u => `${u.day.slice(5, 7)}/${u.day.slice(8)}(${u.n}건)`).join(', ')}${earlierUnconfirmed.length > 3 ? ' …' : ''}.\n앞 날짜부터 차례로 [결제 완료]를 해 주세요(위 안내에서 날짜를 누르면 그날로 가요).`
+    : missingPay.size ? `결제방식이 빈 수업이 ${missingPay.size}개 있어요${whereOf([...missingPay])}.\n빨간 테두리 칸의 결제방식을 골라 주세요.`
     : overRound ? `월 횟수를 넘은 수업이 ${overRound}개 있어요${whereOf(overKeys)}.\n빨간 글씨 칸의 결제방식을 바꿔 주세요.`
     : schedPending ? `시간표 변경 ${schedPending}건이 저장되지 않았어요.\n먼저 [스케줄 변경 완료]를 눌러 주세요.`
     : lessons.length ? '확정할 결제가 없어요. 이 날 결제가 모두 확정됐어요.' : '이 날은 결제할 수업이 없어요.';
@@ -819,9 +825,21 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         )}
 
         {/* 아직 결제 안 한 소급·미결 — 날짜마다 몇 건인지. 누르면 그날로 */}
-        {!isTest && laterPays.length > 0 && (
-          <div className="mb-4 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-[13px] text-[#991b1b]">
-            {(() => {
+        {!isTest && (laterPays.length > 0 || unconfirmed.length > 0) && (
+          <div className="mb-4 rounded-lg border border-[#fecaca] bg-[#fef2f2] px-4 py-3 text-[13px] text-[#991b1b] space-y-3">
+            {/* [결제 완료]를 안 한 지난 날 — 앞 날짜부터 차례로 (11/1 부터) */}
+            {unconfirmed.length > 0 && <div>
+              <p className="font-semibold mb-1.5">[결제 완료]를 안 한 날이 {unconfirmed.length}일 있어요({Number(UNCONFIRMED_FROM.slice(5, 7))}월부터). 앞 날짜부터 차례로 해야 다음 날짜를 [결제 완료]할 수 있어요.</p>
+              <div className="flex flex-wrap gap-1.5">
+                {unconfirmed.map(u => (
+                  <button key={u.day} onClick={() => guard(() => { setMode('day'); setDay(u.day); })}
+                    className={`text-[12px] border border-[#fca5a5] rounded-full px-2.5 py-0.5 hover:bg-white tabular-nums ${u.day === day && mode === 'day' ? 'bg-white font-semibold' : 'bg-[#fff7f7]'}`}>
+                    {u.day.slice(0, 4)}/{u.day.slice(5, 7)}/{u.day.slice(8)}({DOW[parseYmd(u.day).getDay()]}) {u.n}건
+                  </button>
+                ))}
+              </div>
+            </div>}
+            {laterPays.length > 0 && (() => {
               // 날짜마다 몇 건인지만 (어떤 소급인지는 그날 칸에서)
               const byDay = [...laterPays.reduce((m, r) => m.set(r.day, (m.get(r.day) ?? 0) + 1), new Map<string, number>())];
               const gusenDueN = laterPays.filter(r => r.method === 'gusen').length;
@@ -1094,8 +1112,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           {mode === 'day' && (
             <>
               <span className="w-px h-6 bg-[#e5e5e5] mx-1" />
-              <span className={`text-[12px] ${missingPay.size || overRound ? 'text-red-400' : 'text-[#888]'}`}>
-                {missingPay.size ? `결제방식이 빈 수업 ${missingPay.size}개${whereOf([...missingPay])} — 빨간 테두리 칸을 채워 주세요`
+              <span className={`text-[12px] ${earlierUnconfirmed.length || missingPay.size || overRound ? 'text-red-400' : 'text-[#888]'}`}>
+                {earlierUnconfirmed.length ? `앞 날짜 ${earlierUnconfirmed.length}일의 [결제 완료]가 남아 있어요 — ${earlierUnconfirmed[0].day.slice(5, 7)}/${earlierUnconfirmed[0].day.slice(8)}부터 해 주세요`
+                  : missingPay.size ? `결제방식이 빈 수업 ${missingPay.size}개${whereOf([...missingPay])} — 빨간 테두리 칸을 채워 주세요`
                   : overRound ? `월 횟수를 넘은 수업 ${overRound}개${whereOf(overKeys)} — 빨간 글씨 칸의 결제방식을 바꿔 주세요`
                   : schedPending ? `시간표 변경 ${schedPending}건을 먼저 [스케줄 변경 완료]로 저장해 주세요`
                   : toConfirm.length ? `확정할 결제 ${toConfirm.length}건${laterToday ? ` · 소급·미결 ${laterToday}건 남음` : ''}`

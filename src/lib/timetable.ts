@@ -192,16 +192,16 @@ export async function getBalanceCharges(childId: string, key: BalanceKey): Promi
 const todayYmd = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 /** 남은 금액 상세 한 줄 — 확정된 수업 하나. deducted = 그 수업으로 6만원을 뺐는지(supabase/balance-detail.sql 전 지원금은 false) */
-export interface BalanceUse { day: string; time: string; teacherId: string | null; center: Center; deducted: boolean }
+export interface BalanceUse { day: string; time: string; teacherId: string | null; center: Center; deducted: boolean; /** [결제 완료]를 누른 시각 (supabase/payment-confirmed-at.sql) */ confirmedAt?: string }
 
 /** 우진학교외부·자율·지원금 — 그 아이의 확정된 수업 전부(오래된 순) */
 export async function getBalanceUses(childId: string, key: BalanceKey): Promise<BalanceUse[]> {
-  const { data, error } = await supabase.from('lesson_payments').select('day, time, teacher_id, center, balance_deducted')
+  const { data, error } = await supabase.from('lesson_payments').select('*')
     .eq('child_id', childId).eq('method', key).eq('confirmed', true).order('day').order('time');
   if (error) throw error;
   return (data ?? []).map(r => ({
     day: r.day, time: r.time, teacherId: r.teacher_id ?? null,
-    center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong', deducted: !!r.balance_deducted,
+    center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong', deducted: !!r.balance_deducted, confirmedAt: r.confirmed_at ?? undefined,
   }));
 }
 
@@ -507,6 +507,23 @@ export async function getGusenExtraDue(center: Center): Promise<{ day: string; m
   return due;
 }
 
+/** [결제 완료]를 안 한 지난 날 — 이 센터에서 11/1 ~ 어제 한 수업 중 확정된 결제가 없는 수업을 날짜마다 센다.
+ *  소급·미결로 골라 둔 수업은 따로 보이니 뺀다. 앞 날짜가 남아 있으면 뒤 날짜는 [결제 완료]를 못 한다(시간표 관리) */
+export const UNCONFIRMED_FROM = '2026-11-01';
+export async function getUnconfirmedDays(center: Center, children: Child[]): Promise<{ day: string; n: number }[]> {
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const now = new Date();
+  const yesterday = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+  if (yesterday < UNCONFIRMED_FROM) return [];
+  const rows = await scanLessons(UNCONFIRMED_FROM, yesterday, children);
+  const n = new Map<string, number>();
+  for (const r of rows) {
+    if (r.center !== center || r.paid?.confirmed || isLaterPay(r.paid?.method)) continue;
+    n.set(r.day, (n.get(r.day) ?? 0) + 1);
+  }
+  return [...n].map(([day, c]) => ({ day, n: c })).sort((a, b) => a.day.localeCompare(b.day));
+}
+
 /** 결제 체크 하나 — 직접 적은 결제는 method = 'other' + note */
 export interface PayEntry {
   method: PayMethod;
@@ -612,7 +629,18 @@ export function defaultPayMethod(payment: string | undefined): PayMethod | undef
  *  결제를 아직 안 했어도 센다: 결제 기록이 있으면 그 결제, 없으면 칸의 기본 결제(빈타임 아이는 기본 결제가 없어 기록이 있을 때만).
  *  결석·옮긴 수업, 공휴일의 고정 수업, 그날 뺀 선생님 수업, COUNT_EXCLUDE(휴직 중인 이원재)는 세지 않는다 */
 export async function getMonthRoundLessons(upTo: string, children: Child[]): Promise<{ childId: string; day: string; time: string; method: PayMethod }[]> {
-  const from = `${upTo.slice(0, 7)}-01`;
+  const rows = await scanLessons(`${upTo.slice(0, 7)}-01`, upTo, children);
+  return rows.flatMap(r => {
+    const pm = r.paid?.method ?? (r.isOpen ? undefined : defaultPayMethod(r.payment));
+    const method = pm && roundMethod(pm);
+    return method && method in ROUND_LIMIT ? [{ childId: r.childId, day: r.day, time: r.time, method }] : [];
+  });
+}
+
+/** from ~ upTo 두 센터 시간표에서 실제로 한(할) 수업 — 결석·옮긴 수업, 공휴일의 고정 수업, 그날 뺀 선생님 수업, COUNT_EXCLUDE 는 뺀다.
+ *  그 수업의 결제 기록(있으면, 확정 여부 포함)과 칸의 결제 글자도 함께 */
+type ScannedLesson = { childId: string; day: string; time: string; center: Center; isOpen: boolean; payment?: string; paid?: { method: PayMethod; confirmed: boolean } };
+async function scanLessons(from: string, upTo: string, children: Child[]): Promise<ScannedLesson[]> {
   const byId = new Map(children.map(c => [c.id, c]));
   // 한 번에 1000줄까지만 오므로 나눠 받는다
   const all = async (make: () => { range: (a: number, b: number) => PromiseLike<{ data: Row[] | null; error: unknown }> }) => {
@@ -628,17 +656,17 @@ export async function getMonthRoundLessons(upTo: string, children: Child[]): Pro
     all(() => supabase.from('fixed_lessons').select('*')),
     all(() => supabase.from('board_cells').select('*').gte('day', from).lte('day', upTo)),
     all(() => supabase.from('slots').select('*').gte('day', from).lte('day', upTo).not('booked_by', 'is', null)),
-    all(() => supabase.from('lesson_payments').select('child_id, day, time, method').gte('day', from).lte('day', upTo)),
+    all(() => supabase.from('lesson_payments').select('child_id, day, time, method, confirmed').gte('day', from).lte('day', upTo)),
     all(() => supabase.from('teacher_day_assign').select('day, teacher_id, center').eq('off', true).gte('day', from).lte('day', upTo)),
-    getKoreanHolidays(upTo.slice(0, 4)).catch(() => [] as string[]),
+    Promise.all([...new Set([from.slice(0, 4), upTo.slice(0, 4)])].map(y => getKoreanHolidays(y).catch(() => [] as string[]))).then(x => x.flat()),
     countExcluder(),
   ]);
-  const paid = new Map(payRows.map(r => [`${r.child_id}|${r.day}|${r.time}`, r.method as PayMethod]));
+  const paid = new Map(payRows.map(r => [`${r.child_id}|${r.day}|${r.time}`, { method: r.method as PayMethod, confirmed: r.confirmed !== false }]));
   const off = new Set(offRows.map(r => `${r.day}|${r.center}|${r.teacher_id}`));
   // 보호자 신청한 빈타임 — 그 시간엔 신청한 아이 수업(고정 아이 대신). 아이는 보호자 계정으로 찾는다
   const booked = new Map(slotRows.filter(s => s.cancel_state !== 'approved')
     .map(s => [`${s.day}|${s.teacher_id}|${s.time}`, (children.find(c => c.id === s.booked_child_id) ?? children.find(c => c.guardianUserId === s.booked_by))?.id]));
-  const out: { childId: string; day: string; time: string; method: PayMethod }[] = [];
+  const out: ScannedLesson[] = [];
   for (let d = parseYmd(from); ; d.setDate(d.getDate() + 1)) {
     const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     if (day > upTo) break;
@@ -664,9 +692,7 @@ export async function getMonthRoundLessons(upTo: string, children: Child[]): Pro
         const c = oc ?? (o?.childId ? undefined : fixed.get(k));
         const childId = oc?.childId ?? o?.childId ?? c?.childId;
         if (!childId || (c && (c.status !== 'child' || c.moved || c.absent))) continue;
-        const pm = paid.get(`${childId}|${day}|${time}`) ?? (isOpen ? undefined : defaultPayMethod(c?.payment));
-        const method = pm && roundMethod(pm);
-        if (method && method in ROUND_LIMIT) out.push({ childId, day, time, method });
+        out.push({ childId, day, time, center, isOpen, payment: c?.payment, paid: paid.get(`${childId}|${day}|${time}`) });
       }
     }
   }
@@ -753,7 +779,7 @@ export async function getMonthUses(month: string): Promise<Map<string, MonthUse>
 }
 
 /** 결제내역 칸 상세 — 그 달 그 아이의 그 결제 사용 한 줄 (선결제 카드에서 직접 차감한 것은 manual) */
-export interface MonthUseRow { day: string; time?: string; teacherId: string | null; center?: string; note?: string; count: number; manual?: boolean }
+export interface MonthUseRow { day: string; time?: string; teacherId: string | null; center?: string; note?: string; count: number; manual?: boolean; /** 처리일 — [결제 완료]를 누른 시각(직접 차감은 넣은 시각) */ confirmedAt?: string }
 
 /** 그 달(null = 처음부터 전부) 그 아이의 그 결제 사용 내역 — getMonthUses 와 같은 기준(확정된 것, 휴직 중인 선생님 수업 빼고, 선결제는 직접 차감 포함), 날짜·시간 순 */
 export async function getMonthUseRows(childId: string, month: string | null, method: keyof MonthUse): Promise<MonthUseRow[]> {
@@ -762,7 +788,7 @@ export async function getMonthUseRows(childId: string, month: string | null, met
   const start = month ? `${month}-01` : '2000-01-01';
   const end = month ? `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}` : '2999-12-31';
   const [lp, pc, skip] = await Promise.all([
-    fetchAll<Record<string, unknown>>((a, b) => supabase.from('lesson_payments').select('day, time, teacher_id, center, note').eq('child_id', childId).eq('method', method).eq('confirmed', true)
+    fetchAll<Record<string, unknown>>((a, b) => supabase.from('lesson_payments').select('*').eq('child_id', childId).eq('method', method).eq('confirmed', true)
       .gte('day', start).lte('day', end).order('day').order('time').range(a, b)).then(data => ({ data, error: null })),
     isPrepaid(method) ? supabase.from('prepaid_charges').select('*').eq('child_id', childId).gte('day', start).lte('day', end).lt('count', 0) : Promise.resolve({ data: [], error: null }),
     countExcluder(),
@@ -770,11 +796,11 @@ export async function getMonthUseRows(childId: string, month: string | null, met
   if (lp.error) throw lp.error;
   if (pc.error) throw pc.error;
   const rows: MonthUseRow[] = (lp.data ?? []).filter(r => !skip(r.teacher_id as string | null, r.day as string)).map(r => ({
-    day: r.day as string, time: r.time as string, teacherId: (r.teacher_id as string | null) ?? null, center: (r.center as string | null) ?? undefined, note: (r.note as string | null) ?? undefined, count: 1,
+    day: r.day as string, time: r.time as string, teacherId: (r.teacher_id as string | null) ?? null, center: (r.center as string | null) ?? undefined, note: (r.note as string | null) ?? undefined, count: 1, confirmedAt: (r.confirmed_at as string | null) ?? undefined,
   }));
   for (const r of (pc.data ?? []) as Record<string, unknown>[]) {
     if (r.adjust || ((r.method as PrepaidKey | null) ?? 'prepaid') !== method) continue;
-    rows.push({ day: r.day as string, teacherId: null, note: (r.memo as string | null) ?? undefined, count: -(r.count as number), manual: true });
+    rows.push({ day: r.day as string, teacherId: null, note: (r.memo as string | null) ?? undefined, count: -(r.count as number), manual: true, confirmedAt: (r.created_at as string | null) ?? undefined });
   }
   return rows.sort((a, b) => a.day.localeCompare(b.day) || (a.time ?? '').localeCompare(b.time ?? ''));
 }

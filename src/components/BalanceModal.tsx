@@ -11,6 +11,8 @@ import { getTeachers } from '@/lib/schedule';
 const LABEL: Record<BalanceKey, string> = { woojin_ext: '우진학교외부', woojin_self: '우진학교자율', subsidy: '지원금' };
 const ymd = (d: string) => d.replace(/-/g, '/');
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`;
+/** 처리일 — [결제 완료]를 누른 시각(ISO) → 한국 날짜 YYYY-MM-DD */
+const kstDay = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 type Row =
   | { kind: 'charge'; day: string; c: BalanceCharge }
@@ -83,7 +85,10 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
                         {r.c.memo && !r.c.seed && <span className="ml-1.5 text-[11px] text-[#999] break-keep">{r.c.memo}</span>}
                       </td>
                     ) : (
-                      <td className="py-2 px-2 text-[12px] whitespace-nowrap">{r.nth}회 · {(r.u.teacherId && teachers.get(r.u.teacherId)) || '-'}{r.u.time ? ` ${r.u.time.replace(/^0/, '')}` : ''}</td>
+                      <td className="py-2 px-2 text-[12px] whitespace-nowrap">{r.nth}회 · {(r.u.teacherId && teachers.get(r.u.teacherId)) || '-'}{r.u.time ? ` ${r.u.time.replace(/^0/, '')}` : ''}
+                        {/* 처리일 — [결제 완료]를 누른 날이 수업일과 다르면 */}
+                        {r.u.confirmedAt && kstDay(r.u.confirmedAt) !== r.u.day && <span className="ml-1.5 text-[11px] text-[#b45309]">처리 {ymd(kstDay(r.u.confirmedAt))}</span>}
+                      </td>
                     )}
                     <td className={`${td} text-right ${delta(r) > 0 ? 'text-[var(--brand)]' : delta(r) < 0 ? 'text-[#e11d48]' : 'text-[#bbb]'}`}>
                       {r.kind === 'use' && !r.u.deducted ? '차감 전 기록' : `${delta(r) > 0 ? '+' : '−'}${won(Math.abs(delta(r)))}`}
