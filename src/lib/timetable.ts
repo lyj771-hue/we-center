@@ -486,37 +486,23 @@ export async function getLaterPayments(center: Center): Promise<{ day: string; m
 /** 굳센 추가금액을 처음 받기 시작한 날 — 이 전 달 기록은 미납으로 치지 않는다 (supabase/gusen-extra.sql) */
 const GUSEN_EXTRA_FROM = '2026-11-01';
 
-/** 굳센3회차 미납 — 시간표 월 회차와 같은 기준(getMonthRoundLessons: [결제 완료] 전이어도 칸의 기본 결제로 센다)으로
- *  아이·달마다 굳센 3회째인데 추가금액을 아직 안 받은 수업. 오늘까지만, 이 센터 아이만.
- *  3회째가 굳센소급이면 이미 소급으로 따로 보이니 빼고, [굳센3회차완납](extra_paid)이면 끝 */
-export async function getGusenExtraDue(center: Center, children: Child[]): Promise<{ day: string; method: PayMethod }[]> {
-  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
-  if (today < GUSEN_EXTRA_FROM) return [];
-  // 달마다 1일 ~ 그 달 마지막 날(이번 달은 오늘)까지
-  const ups: string[] = [];
-  for (let ym = GUSEN_EXTRA_FROM.slice(0, 7); ym <= today.slice(0, 7);) {
-    const [y, m] = ym.split('-').map(Number);
-    const end = `${ym}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
-    ups.push(end < today ? end : today);
-    ym = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, '0')}`;
-  }
-  const here = new Set(children.filter(c => (c.center ?? 'eunpyeong') === center).map(c => c.id));
-  const [lessons, pays] = await Promise.all([
-    Promise.all(ups.map(u => getMonthRoundLessons(u, children))).then(x => x.flat()),
-    fetchAll<{ child_id: string; day: string; time: string; method: string; extra_paid: boolean | null }>((a, b) => supabase.from('lesson_payments')
-      .select('child_id, day, time, method, extra_paid').in('method', ['gusen', 'gusen_retro']).gte('day', GUSEN_EXTRA_FROM).order('id').range(a, b)),
+/** 굳센3회차 미납 — 이 센터에서 [결제 완료]로 확정된 굳센을 아이·달마다 날짜·시간 순으로 세어 3회째인데 추가금액을 아직 안 받은 수업
+ *  (휴직 중인 선생님 수업은 세지 않는다 — 시간표 회차와 같게) */
+export async function getGusenExtraDue(center: Center): Promise<{ day: string; method: PayMethod }[]> {
+  const [rows, skip] = await Promise.all([
+    fetchAll<{ child_id: string; day: string; time: string; teacher_id: string | null; extra_paid: boolean | null }>((a, b) => supabase.from('lesson_payments')
+      .select('child_id, day, time, teacher_id, extra_paid').eq('center', center).eq('method', 'gusen').eq('confirmed', true)
+      .gte('day', GUSEN_EXTRA_FROM).order('day').order('time').range(a, b)),
+    countExcluder(),
   ]);
-  const payOf = new Map(pays.map(r => [`${r.child_id}|${r.day}|${r.time}`, r]));
   const n = new Map<string, number>();
   const due: { day: string; method: PayMethod }[] = [];
-  for (const l of lessons.filter(x => x.method === 'gusen' && here.has(x.childId)).sort((a, b) => a.day.localeCompare(b.day) || a.time.localeCompare(b.time))) {
-    const k = `${l.childId}|${l.day.slice(0, 7)}`;
+  for (const r of rows) {
+    if (skip(r.teacher_id, r.day)) continue;
+    const k = `${r.child_id}|${r.day.slice(0, 7)}`;
     const c = (n.get(k) ?? 0) + 1;
     n.set(k, c);
-    if (c !== GUSEN_EXTRA_ROUND) continue;
-    const p = payOf.get(`${l.childId}|${l.day}|${l.time}`);
-    if (p?.method === 'gusen_retro' || p?.extra_paid) continue;
-    due.push({ day: l.day, method: 'gusen' });
+    if (c === GUSEN_EXTRA_ROUND && !r.extra_paid) due.push({ day: r.day, method: 'gusen' });
   }
   return due;
 }

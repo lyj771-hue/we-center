@@ -125,7 +125,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
       // 소급·미결 + 굳센3회차 미납(추가금액 아직 안 받음)
-      const [lp, gx] = await Promise.all([getLaterPayments(center).catch(() => []), getGusenExtraDue(center, c).catch(() => [])]);
+      const [lp, gx] = await Promise.all([getLaterPayments(center).catch(() => []), getGusenExtraDue(center).catch(() => [])]);
       setLaterPays([...lp, ...gx].sort((a, b) => a.day.localeCompare(b.day)));
       setFailed('');
     } catch (e) {
