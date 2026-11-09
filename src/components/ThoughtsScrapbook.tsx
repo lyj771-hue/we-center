@@ -114,7 +114,8 @@ function ScrapbookEntry({ post, basePath, isAdmin, onDelete }: EntryProps) {
           </figure>
         );
       })}
-      {viewing && <PhotoViewer src={viewing} onClose={() => setViewing(null)} />}
+      {/* 크게 보기 — 옆으로 넘겨 이 글의 다른 사진도 */}
+      {viewing && <PhotoViewer src={viewing} photos={images} onClose={() => setViewing(null)} />}
 
       {/* 왼쪽 메모 — 제목과 작성 날짜, 가로로 넓게. 본문 아래쪽을 살짝 가리고, 오른쪽 더보기 앞에서 끝난다 */}
       <div className="scrap-piece scrap-note" style={place(-690, 540, -2, 587)}>

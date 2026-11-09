@@ -16,7 +16,7 @@ const STAGE_HEIGHT = 30 + 425 + 100;
 const PHOTO_SHIFT = 70;
 
 // We슐랭 — 재활생각 스크랩북 모양을 빌려 쓴다. 가게 하나가 한 줄(가운데 하나씩).
-// 가운데 큰 사진 = 대표 사진(글쓰기에서 고른 것, 없으면 본문 첫 사진 — 누르면 게시글로), 오른쪽 작은 사진 = 나머지 사진(누르면 크게), 왼쪽 메모 = 가게 이름 · 위치(누르면 크게 — 크게 볼 때만 주소 복사).
+// 가운데 큰 사진 = 대표 사진(글쓰기에서 고른 것, 없으면 본문 첫 사진). 어느 사진을 눌러도 크게 — 옆으로 넘겨 이 글의 다른 사진도. 관리자는 메모의 [수정]으로 고친다, 오른쪽 작은 사진 = 나머지 사진(누르면 크게), 왼쪽 메모 = 가게 이름 · 위치(누르면 크게 — 크게 볼 때만 주소 복사).
 
 function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; basePath: string; isAdmin: boolean; onDelete: (id: string) => void }) {
   const [viewing, setViewing] = useState<string | null>(null);
@@ -33,14 +33,14 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
     // 높이 — PC(1/2 축소)·휴대폰(1/3 축소)
     <article className="scrap-frame scrap-lg h-[var(--h3)] md:h-[var(--h2)]" style={{ '--h2': `${height / 2}px`, '--h3': `${height / 3}px` } as React.CSSProperties}>
       <div className="scrap-stage" style={{ height: `${height}px` }}>
-        {/* 가운데 — 대표 사진. 누르면 게시글로 */}
-        <Link href={`${basePath}/${post.id}`} className="scrap-card block group" aria-label={`${post.title} 게시글 보기`}>
+        {/* 가운데 — 대표 사진. 누르면 크게(옆으로 넘겨 다른 사진도) */}
+        <button type="button" onClick={() => main && setViewing(main)} className="scrap-card block group w-full text-left cursor-zoom-in" aria-label={`${post.title} 사진 크게 보기`}>
           <div className="aspect-[8/5] bg-[#e4e4e7] overflow-hidden">
             {main
               ? <img src={main} alt={post.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
               : <div className="w-full h-full flex items-center justify-center text-[40px] text-[#a1a1aa]">{post.title}</div>}
           </div>
-        </Link>
+        </button>
 
         {/* 오른쪽 — 나머지 사진들 (누르면 크게) */}
         {rest.map((src, i) => {
@@ -57,7 +57,8 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
             </figure>
           );
         })}
-        {viewing && <PhotoViewer src={viewing} onClose={() => setViewing(null)} />}
+        {/* 크게 보기 — 옆으로 넘겨 이 글의 다른 사진도 (대표 사진 먼저) */}
+        {viewing && <PhotoViewer src={viewing} photos={[main, ...rest].filter(Boolean)} onClose={() => setViewing(null)} />}
 
         {/* 왼쪽 메모 — 가게 이름 · 위치 */}
         <div className="scrap-piece scrap-note cursor-zoom-in" style={place(-690, 275, -2, 587)}
@@ -68,7 +69,11 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
           <div className="mt-3 flex items-center gap-4">
             {post.location && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">📍 {post.location}</span>}
             {isAdmin && (
-              <button type="button" onClick={e => { e.stopPropagation(); onDelete(post.id); }} className="ml-auto px-3 py-2 text-[33px] text-[#aaa] hover:text-red-400 transition-colors">삭제</button>
+              <span className="ml-auto flex">
+                {/* 고치기 — 가게 이름·위치·사진·대표 사진 */}
+                <Link href={`${basePath}/${post.id}`} onClick={e => e.stopPropagation()} className="px-3 py-2 text-[33px] text-[#aaa] hover:text-[var(--brand)] transition-colors">수정</Link>
+                <button type="button" onClick={e => { e.stopPropagation(); onDelete(post.id); }} className="px-3 py-2 text-[33px] text-[#aaa] hover:text-red-400 transition-colors">삭제</button>
+              </span>
             )}
           </div>
         </div>

@@ -8,7 +8,7 @@ import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getPost, updatePost, deletePost } from '@/lib/store';
 import { extractImages } from '@/lib/postText';
-import MainPhotoPicker, { mainPhotoOf } from './MainPhotoPicker';
+import WeslangPhotos, { mainPhotoOf } from './WeslangPhotos';
 import RichContent from './RichContent';
 import PostTags from './PostTags';
 import NoticePicker from './NoticePicker';
@@ -105,12 +105,10 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
               className="w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a]" />
           )}
           {isNotice && isAdmin && <NoticePicker kinds={kinds} value={notice} onChange={setNotice} note="수정해도 알림톡은 다시 보내지 않아요. 고른 지점이 제목 앞에 표시돼요." />}
-          <RichTextEditor
-            initialContent={form.content}
-            onChange={html => setForm(f => ({ ...f, content: html }))}
-          />
-          {/* We슐랭 — 대표 사진(목록 가운데 큰 사진) 고르기 */}
-          {isWeslang && <MainPhotoPicker content={form.content} value={form.mainPhoto} onChange={url => setForm(f => ({ ...f, mainPhoto: url }))} />}
+          {/* We슐랭 — 본문 없이 사진만(여러 장, 대표 사진 고르기) */}
+          {isWeslang
+            ? <WeslangPhotos content={form.content} onChange={html => setForm(f => ({ ...f, content: html }))} main={form.mainPhoto} onMain={url => setForm(f => ({ ...f, mainPhoto: url }))} />
+            : <RichTextEditor initialContent={form.content} onChange={html => setForm(f => ({ ...f, content: html }))} />}
           <div className="flex gap-2 pt-2">
             <button onClick={handleSave} className="bg-[#0a0a0a] text-white text-[11px] px-7 py-2.5 tracking-widest hover:bg-[#333] transition-colors">저장</button>
             <button onClick={() => setEditing(false)} className="border border-[#e5e5e5] text-[11px] px-7 py-2.5 tracking-widest hover:bg-[#f8f8f8] transition-colors">취소</button>

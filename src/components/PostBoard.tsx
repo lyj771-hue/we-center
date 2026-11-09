@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost, updatePost } from '@/lib/store';
-import MainPhotoPicker, { mainPhotoOf } from './MainPhotoPicker';
+import WeslangPhotos, { mainPhotoOf } from './WeslangPhotos';
 import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
 import WeslangBoard from './WeslangBoard';
@@ -118,7 +118,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
           onClick={() => setEditing(false)}
         >
           <div
-            className="bg-white border border-[#e5e5e5] w-full max-w-4xl max-h-[92vh] shadow-2xl flex flex-col rounded-2xl"
+            className={`bg-white border border-[#e5e5e5] w-full ${isWeslang ? 'max-w-xl' : 'max-w-4xl'} max-h-[92vh] shadow-2xl flex flex-col rounded-2xl`}
             onClick={e => e.stopPropagation()}
           >
             <div className="p-8 pb-4 shrink-0">
@@ -131,7 +131,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 className="w-full border-b border-[#ddd] py-2 text-[15px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]"
               />
-              {/* We슐랭 — 가게 위치. 본문 첫 사진이 목록 가운데 큰 사진이 된다 */}
+              {/* We슐랭 — 가게 위치 */}
               {isWeslang && (
                 <input type="text" placeholder="위치 (예: 은평구 수색동, 수색역 2번 출구 앞)" value={form.location}
                   onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
@@ -143,12 +143,10 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
               )}
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-8">
-              <RichTextEditor
-                initialContent={form.content}
-                onChange={html => setForm(f => ({ ...f, content: html }))}
-              />
-              {/* We슐랭 — 대표 사진(목록 가운데 큰 사진) 고르기 */}
-              {isWeslang && <MainPhotoPicker content={form.content} value={form.mainPhoto} onChange={url => setForm(f => ({ ...f, mainPhoto: url }))} />}
+              {/* We슐랭 — 본문 없이 사진만(여러 장, 대표 사진 고르기) */}
+              {isWeslang
+                ? <WeslangPhotos content={form.content} onChange={html => setForm(f => ({ ...f, content: html }))} main={form.mainPhoto} onMain={url => setForm(f => ({ ...f, mainPhoto: url }))} />
+                : <RichTextEditor initialContent={form.content} onChange={html => setForm(f => ({ ...f, content: html }))} />}
             </div>
             <div className="flex gap-2 p-8 pt-4 shrink-0">
               <button
