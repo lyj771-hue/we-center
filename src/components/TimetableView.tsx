@@ -17,7 +17,7 @@ import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
   balanceOf, isWoojin, isBalancePay, isCountExcludedName, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, rowLabel, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
-  getLaterPayments, isLaterPay, roundMethod, RETRO_BASE, GUSEN_EXTRA_ROUND,
+  getLaterPayments, getGusenExtraDue, isLaterPay, roundMethod, RETRO_BASE, GUSEN_EXTRA_ROUND,
   isPrepaid, prepaidTotalOf, EMPTY_ROW,
 } from '@/lib/timetable';
 
@@ -124,7 +124,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
         setPostedOpen(await getPostedOpenSlots(day, center).catch(() => new Map<string, string>()));
       }
       else setBoard({ fixed: await getFixedBoard(weekday, c, center), open: new Map() });
-      setLaterPays(await getLaterPayments(center).catch(() => []));
+      // 소급·미결 + 굳센3회차 미납(추가금액 아직 안 받음)
+      const [lp, gx] = await Promise.all([getLaterPayments(center).catch(() => []), getGusenExtraDue(center).catch(() => [])]);
+      setLaterPays([...lp, ...gx].sort((a, b) => a.day.localeCompare(b.day)));
       setFailed('');
     } catch (e) {
       setFailed((e as Error).message);
@@ -822,8 +824,9 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
             {(() => {
               // 날짜마다 몇 건인지만 (어떤 소급인지는 그날 칸에서)
               const byDay = [...laterPays.reduce((m, r) => m.set(r.day, (m.get(r.day) ?? 0) + 1), new Map<string, number>())];
+              const gusenDueN = laterPays.filter(r => r.method === 'gusen').length;
               return <>
-                <p className="font-semibold mb-1.5">소급할 결제가 {byDay.length}일 · {laterPays.length}건 있어요. 결제한 뒤 그날 결제방식을 바꾸고 [결제 완료]를 눌러 주세요.</p>
+                <p className="font-semibold mb-1.5">소급할 결제가 {byDay.length}일 · {laterPays.length}건 있어요{gusenDueN ? ` (굳센${GUSEN_EXTRA_ROUND}회차 미납 ${gusenDueN}건 포함)` : ''}. 결제한 뒤 그날 결제방식을 바꾸고 [결제 완료]를 눌러 주세요.{gusenDueN ? ` 굳센${GUSEN_EXTRA_ROUND}회차는 추가금액을 받으면 [굳센${GUSEN_EXTRA_ROUND}회차완납]을 골라 주세요.` : ''}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {byDay.map(([d, n]) => (
                     <button key={d} onClick={() => guard(() => { setMode('day'); setDay(d); })}

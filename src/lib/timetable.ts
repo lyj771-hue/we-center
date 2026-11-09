@@ -483,6 +483,30 @@ export async function getLaterPayments(center: Center): Promise<{ day: string; m
   return (data ?? []).map(r => ({ day: r.day as string, method: r.method as PayMethod }));
 }
 
+/** 굳센 추가금액을 처음 받기 시작한 날 — 이 전 달 기록은 미납으로 치지 않는다 (supabase/gusen-extra.sql) */
+const GUSEN_EXTRA_FROM = '2026-11-01';
+
+/** 굳센3회차 미납 — 이 센터에서 [결제 완료]로 확정된 굳센을 아이·달마다 날짜·시간 순으로 세어 3회째인데 추가금액을 아직 안 받은 수업
+ *  (휴직 중인 선생님 수업은 세지 않는다 — 시간표 회차와 같게) */
+export async function getGusenExtraDue(center: Center): Promise<{ day: string; method: PayMethod }[]> {
+  const [rows, skip] = await Promise.all([
+    fetchAll<{ child_id: string; day: string; time: string; teacher_id: string | null; extra_paid: boolean | null }>((a, b) => supabase.from('lesson_payments')
+      .select('child_id, day, time, teacher_id, extra_paid').eq('center', center).eq('method', 'gusen').eq('confirmed', true)
+      .gte('day', GUSEN_EXTRA_FROM).order('day').order('time').range(a, b)),
+    countExcluder(),
+  ]);
+  const n = new Map<string, number>();
+  const due: { day: string; method: PayMethod }[] = [];
+  for (const r of rows) {
+    if (skip(r.teacher_id, r.day)) continue;
+    const k = `${r.child_id}|${r.day.slice(0, 7)}`;
+    const c = (n.get(k) ?? 0) + 1;
+    n.set(k, c);
+    if (c === GUSEN_EXTRA_ROUND && !r.extra_paid) due.push({ day: r.day, method: 'gusen' });
+  }
+  return due;
+}
+
 /** 결제 체크 하나 — 직접 적은 결제는 method = 'other' + note */
 export interface PayEntry {
   method: PayMethod;
