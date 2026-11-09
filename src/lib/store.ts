@@ -70,7 +70,7 @@ export async function updatePost(cat: Category, id: string, data: Partial<Pick<P
   const patch: Partial<PostRow> = {};
   if (data.title !== undefined) patch.title = data.title;
   if (data.content !== undefined) patch.content = data.content;
-  if (data.imageUrl !== undefined) patch.image_url = data.imageUrl ?? null;
+  if (data.imageUrl !== undefined) patch.image_url = data.imageUrl || null;   // '' = 대표 사진 없음
   if (data.location !== undefined) patch.location = data.location.trim() || null;
   if (data.tags !== undefined) patch.tags = data.tags.length ? data.tags : null;
   let { error } = await supabase.from('posts').update(patch).eq('category', cat).eq('id', id);

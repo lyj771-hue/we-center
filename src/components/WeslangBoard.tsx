@@ -16,14 +16,15 @@ const STAGE_HEIGHT = 30 + 425 + 100;
 const PHOTO_SHIFT = 70;
 
 // We슐랭 — 재활생각 스크랩북 모양을 빌려 쓴다. 가게 하나가 한 줄(가운데 하나씩).
-// 가운데 큰 사진 = 본문 첫 사진(누르면 게시글로), 오른쪽 작은 사진 = 나머지 사진(누르면 크게), 왼쪽 메모 = 가게 이름 · 위치(누르면 크게 — 크게 볼 때만 주소 복사).
+// 가운데 큰 사진 = 대표 사진(글쓰기에서 고른 것, 없으면 본문 첫 사진 — 누르면 게시글로), 오른쪽 작은 사진 = 나머지 사진(누르면 크게), 왼쪽 메모 = 가게 이름 · 위치(누르면 크게 — 크게 볼 때만 주소 복사).
 
 function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; basePath: string; isAdmin: boolean; onDelete: (id: string) => void }) {
   const [viewing, setViewing] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const images = extractImages(post.content);
-  const main = post.imageUrl ?? images[0];
-  const rest = (post.imageUrl ? images : images.slice(1));
+  // 대표 사진(글쓰기에서 고른 것, 없으면 본문 첫 사진) = 가운데 큰 사진, 나머지 = 오른쪽 작은 사진
+  const main = post.imageUrl || images[0];
+  const rest = images.filter(src => src !== main);
   const slots = layoutPhotos(rest.length).map(s => ({ ...s, x: s.x + PHOTO_SHIFT }));
   const photosBottom = Math.max(0, ...slots.map(s => 30 + s.y + (s.w * s.ratio[1]) / s.ratio[0] + 60));
   const height = Math.max(STAGE_HEIGHT, photosBottom);

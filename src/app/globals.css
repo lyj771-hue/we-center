@@ -122,6 +122,14 @@ body {
 .rich-content .post-gallery-row img { aspect-ratio: 1 / 1; }
 .rich-content .post-gallery-slide { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
 .rich-content .post-gallery-slide img { flex: 0 0 82%; aspect-ratio: 4 / 3; scroll-snap-align: center; }
+/* 슬라이드 사진 아래 표시 — 몇 번째인지 · 점 · 넘겨 보라는 말(넘기면 사라짐) (RichContent) */
+.rich-content .slide-indicator { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 6px 0 14px; font-size: 12px; color: #888; }
+.rich-content .slide-count { font-variant-numeric: tabular-nums; }
+.rich-content .slide-dots { display: inline-flex; gap: 5px; }
+.rich-content .slide-dots i { width: 6px; height: 6px; border-radius: 9999px; background: #d4d4d8; transition: background .2s, transform .2s; }
+.rich-content .slide-dots i.on { background: var(--brand); transform: scale(1.25); }
+.rich-content .slide-hint { color: var(--brand); }
+.rich-content .slide-indicator.moved .slide-hint { display: none; }
 /* 장소 카드 */
 .rich-content .place-card { display: flex; gap: 12px; align-items: flex-start; border: 1px solid #e4e4e7; border-radius: 16px; padding: 14px 16px; margin: 1.5em 0; background: #fff; }
 .rich-content .place-pin { font-size: 22px; line-height: 1; padding-top: 2px; }

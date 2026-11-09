@@ -424,7 +424,7 @@ export default function RichTextEditor({ initialContent, onChange, preview }: Pr
             {dialog.kind === 'gallery' && (<>
               <p className="text-[15px] text-[#27272a]">사진 {dialog.srcs.length}장을 어떻게 놓을까요?</p>
               <div className="grid grid-cols-3 gap-2 text-[12px] text-[#3f3f46]">
-                <button type="button" onClick={() => { const ch = c(); dialog.srcs.forEach(src => ch.setImage({ src })); ch.run(); setDialog(null); }}
+                <button type="button" onClick={() => { c().insertContent(dialog.srcs.map(src => ({ type: 'image', attrs: { src } }))).run(); setDialog(null); }}
                   className="rounded-xl border border-[#e4e4e7] p-2 hover:border-[var(--brand)]"><span className="gal-icon gal-icon-one" />한 장씩</button>
                 <button type="button" onClick={() => { c().insertContent({ type: 'gallery', attrs: { layout: 'row', images: dialog.srcs } }).run(); setDialog(null); }}
                   className="rounded-xl border border-[#e4e4e7] p-2 hover:border-[var(--brand)]"><span className="gal-icon gal-icon-row" />나란히</button>

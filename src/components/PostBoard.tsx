@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost, updatePost } from '@/lib/store';
+import MainPhotoPicker, { mainPhotoOf } from './MainPhotoPicker';
 import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
 import WeslangBoard from './WeslangBoard';
@@ -34,7 +35,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
   const { isAdmin } = useAdmin();
   const [posts, setPosts] = useState<Post[]>([]);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: '', content: '', location: '' });
+  const [form, setForm] = useState({ title: '', content: '', location: '', mainPhoto: '' });   // mainPhoto = We슐랭 대표 사진
   const isWeslang = category === 'weslang';
   // 공지사항 — 글을 올리며 공지 메시지(알림톡)를 보낼지. 종류에 #{센터}가 있으면 센터 필수, #{명절}이 있으면 명절 필수
   const isNotice = category === 'notices';
@@ -63,7 +64,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
     }
     // 고른 것 — 지점만 게시글 제목 앞에 보이고, 종류·명절은 수정 화면에서 다시 보이게 숨겨 둔다
     const tags = selectionToTags(notice, kind);
-    const post = await addPost(category, { title: form.title, content: form.content, tags, ...(isWeslang ? { location: form.location } : {}) });
+    const post = await addPost(category, { title: form.title, content: form.content, tags, ...(isWeslang ? { location: form.location, imageUrl: mainPhotoOf(form.content, form.mainPhoto) } : {}) });
     if (kind && who) {
       try {
         const r = await sendNotice(kind, post.id, wantCenter ? notice.center : null, wantHoliday ? notice.holiday : '', who.list);
@@ -72,7 +73,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
         await showAlert(`글은 올렸지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
       }
     }
-    setForm({ title: '', content: '', location: '' });
+    setForm({ title: '', content: '', location: '', mainPhoto: '' });
     setNotice(EMPTY_SELECTION);
     setEditing(false);
     refresh();
@@ -136,7 +137,6 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
                   onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
                   className="mt-3 w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]" />
               )}
-              {isWeslang && <p className="mt-2 text-[11px] text-[#aaa]">본문 첫 사진이 목록 가운데 큰 사진, 나머지 사진은 오른쪽 작은 사진이 돼요.</p>}
               {/* 공지사항 — 공지 메시지(알림톡) 고르기 */}
               {isNotice && isAdmin && (
                 <div className="mt-4"><NoticePicker kinds={kinds} value={notice} onChange={setNotice} note="저장하면 글을 올리고, 받을 사람 수를 확인한 뒤 알림톡을 보내요. 버튼은 이 공지 글로 가요." /></div>
@@ -147,6 +147,8 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
                 initialContent={form.content}
                 onChange={html => setForm(f => ({ ...f, content: html }))}
               />
+              {/* We슐랭 — 대표 사진(목록 가운데 큰 사진) 고르기 */}
+              {isWeslang && <MainPhotoPicker content={form.content} value={form.mainPhoto} onChange={url => setForm(f => ({ ...f, mainPhoto: url }))} />}
             </div>
             <div className="flex gap-2 p-8 pt-4 shrink-0">
               <button

@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getPost, updatePost, deletePost } from '@/lib/store';
+import { extractImages } from '@/lib/postText';
+import MainPhotoPicker, { mainPhotoOf } from './MainPhotoPicker';
 import RichContent from './RichContent';
 import PostTags from './PostTags';
 import NoticePicker from './NoticePicker';
@@ -31,7 +33,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
   const { isAdmin } = useAdmin();
   const [post, setPost] = useState<Post | null>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: '', content: '', location: '' });
+  const [form, setForm] = useState({ title: '', content: '', location: '', mainPhoto: '' });   // mainPhoto = We슐랭 대표 사진
   const isWeslang = category === 'weslang';
   // 공지사항 — 글을 올릴 때 고른 공지 메시지(종류·지점·명절). 수정 화면에서 보이고 고칠 수 있다(알림톡은 다시 보내지 않음)
   const isNotice = category === 'notices';
@@ -45,7 +47,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
     getPost(category, id).then(found => {
       if (found) {
         setPost(found);
-        setForm({ title: found.title, content: found.content, location: found.location ?? '' });
+        setForm({ title: found.title, content: found.content, location: found.location ?? '', mainPhoto: found.imageUrl ?? '' });
         setNotice(tagsToSelection(found.tags));
       }
     });
@@ -58,8 +60,9 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
     const problem = isNotice ? selectionProblem(notice, kind) : null;
     if (problem) { await showAlert(problem); return; }
     const tags = isNotice && kinds.length ? (selectionToTags(notice, kind) ?? []) : undefined;
-    await updatePost(category, id, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location } : {}), ...(tags ? { tags } : {}) });
-    setPost(p => p ? { ...p, ...form, ...(tags ? { tags } : {}) } : p);
+    const imageUrl = isWeslang ? mainPhotoOf(form.content, form.mainPhoto) : undefined;
+    await updatePost(category, id, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location, imageUrl: imageUrl ?? '' } : {}), ...(tags ? { tags } : {}) });
+    setPost(p => p ? { ...p, title: form.title, content: form.content, location: form.location, ...(isWeslang ? { imageUrl } : {}), ...(tags ? { tags } : {}) } : p);
     setEditing(false);
   };
 
@@ -106,6 +109,8 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             initialContent={form.content}
             onChange={html => setForm(f => ({ ...f, content: html }))}
           />
+          {/* We슐랭 — 대표 사진(목록 가운데 큰 사진) 고르기 */}
+          {isWeslang && <MainPhotoPicker content={form.content} value={form.mainPhoto} onChange={url => setForm(f => ({ ...f, mainPhoto: url }))} />}
           <div className="flex gap-2 pt-2">
             <button onClick={handleSave} className="bg-[#0a0a0a] text-white text-[11px] px-7 py-2.5 tracking-widest hover:bg-[#333] transition-colors">저장</button>
             <button onClick={() => setEditing(false)} className="border border-[#e5e5e5] text-[11px] px-7 py-2.5 tracking-widest hover:bg-[#f8f8f8] transition-colors">취소</button>
@@ -126,7 +131,8 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
           {post.location && <p className="text-[14px] text-[#52525b] mb-2">📍 {post.location}</p>}
           <p className="text-[11px] text-[#bbb] tracking-widest mb-9">{fmt(post.createdAt)}</p>
 
-          {post.imageUrl && (
+          {/* We슐랭 대표 사진은 본문 사진 중 하나라 위에 따로 보이지 않는다 */}
+          {post.imageUrl && !(isWeslang && extractImages(post.content).includes(post.imageUrl)) && (
             <div className="mb-9 overflow-hidden bg-[#f2f2f2] aspect-[16/9]">
               <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover" />
             </div>
