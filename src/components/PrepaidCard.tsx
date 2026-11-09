@@ -6,7 +6,7 @@ import type { LedgerRow } from '@/lib/prepaid';
 /** 한 쪽에 보이는 줄 수 — 1쪽이 가장 최근 3줄 */
 const PER_PAGE = 3;
 
-// 선결제 카드 — 센터에서 쓰던 종이 카드 모양 그대로(일자 · 충전/사용 · 남은 횟수). 마이페이지와 회원 관리에서 같이 쓴다.
+// 선결제 카드 — 센터에서 쓰던 종이 카드 모양 그대로(일자 · 변동 · 남은 횟수). 메모 칸을 넓게. 마이페이지와 회원 관리에서 같이 쓴다.
 // 메모가 있는 줄은 아래에 작게 메모를 보여 준다. 고치기·지우기는 회원 관리의 선결제 창 [수정]에서 한다.
 
 export default function PrepaidCard({ rows, name, editingId }: {
@@ -31,15 +31,15 @@ export default function PrepaidCard({ rows, name, editingId }: {
           {/* 홈 화면 인사("○○님 오셨군요♥")와 같은 하트 */}
           {name && <span className="text-[#555]">{name} 님<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span></span>}
         </p>
-        <div className="mt-3 grid grid-cols-[3fr_2.3fr_1.9fr_3.4fr] border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888]">
-          <span>일자</span><span className="text-right">충전·사용</span><span className="text-right">잔여</span><span className="pl-3">메모</span>
+        <div className="mt-3 grid grid-cols-[2.7fr_1.5fr_1.4fr_4.6fr] border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888]">
+          <span>일자</span><span className="text-right">변동</span><span className="text-right">잔여</span><span className="pl-3">메모</span>
         </div>
         {rows.length === 0 ? (
           <p className="py-6 text-center text-[13px] text-[#bbb]">아직 충전·사용 내역이 없어요.</p>
         ) : (
           <ul className="py-1 font-mono text-[14px] tabular-nums">
             {shown.map((r, i) => (
-              <li key={i} className={`grid grid-cols-[3fr_2.3fr_1.9fr_3.4fr] items-center py-1 ${editingId && r.chargeId === editingId ? 'bg-[#fff6d5] -mx-2 px-2 rounded' : ''}`}>
+              <li key={i} className={`grid grid-cols-[2.7fr_1.5fr_1.4fr_4.6fr] items-center py-1 ${editingId && r.chargeId === editingId ? 'bg-[#fff6d5] -mx-2 px-2 rounded' : ''}`}>
                 <span className="text-[#444]">{md(r.day)}</span>
                 <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : r.kind === 'adjust' ? 'text-[#b45309]' : 'text-[#555]'}`}>
                   {r.kind === 'charge' ? `+${r.count}` : r.kind === 'use' ? `-${r.count}` : <span className="font-sans text-[12px]">수정</span>}
