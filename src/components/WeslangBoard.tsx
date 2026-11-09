@@ -178,15 +178,16 @@ export default function WeslangBoard({ posts, isAdmin, onDelete, onEdit }: { pos
   const listPages = Math.max(1, Math.ceil(ordered.length / PER_PAGE));
   const lp = Math.min(listPage, listPages - 1);
   return (
-    <div className="md:flex md:items-start md:gap-6">
+    // 관리자 PC — 왼쪽 가게 목록과 같은 너비의 빈 칸을 오른쪽에도 둬서 게시글이 위 We슐랭 그림과 같은 가운데에 오게
+    <div className={isAdmin ? 'md:grid md:grid-cols-[210px_minmax(0,1fr)_210px] md:items-start md:gap-6' : ''}>
       {/* 왼쪽 가게 목록 — 관리자 화면에서만. PC는 옆에 고정(휴대폰은 맨 아래) */}
       {isAdmin && (
-      <aside className="hidden md:block w-[210px] shrink-0 sticky top-28 self-start rounded-xl bg-[#f6f6f7] p-3">
+      <aside className="hidden md:block w-[210px] sticky top-28 self-start rounded-xl bg-[#f6f6f7] p-3">
         <p className="px-2 pb-2 text-[11px] tracking-[0.15em] text-[#999]">가게 목록<span className="ml-1 tracking-normal text-[#bbb]">· ▲▼ 순서 바꾸기</span></p>
         {listOf(0, ordered.length)}
       </aside>
       )}
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0">
       <div className="flex flex-col items-center gap-y-16 md:gap-y-20">
         {shown.map(post => <div key={post.id} id={`weslang-${post.id}`} className="scroll-mt-28 w-full flex justify-center"><div className="relative"><WeslangEntry post={post} isAdmin={isAdmin} onDelete={onDelete} onEdit={onEdit} />
           {/* 관리자 — 게시물 오른쪽 [수정](같은 글쓰기 창으로) · [삭제] */}
