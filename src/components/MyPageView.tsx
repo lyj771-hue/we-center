@@ -1,14 +1,13 @@
 'use client';
 
 import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
-import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import UsageCard from '@/components/UsageCard';
 import type { MyLedgers } from '@/lib/prepaid';
 import { NO_LEDGERS } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import { useEffect, useState } from 'react';
 import type { Teacher } from '@/lib/schedule';
-import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday, toYmd, tomorrowsMonday, mondayOf } from '@/lib/schedule';
+import { addDays, getHolidayNames, getTeachers, parseYmd, thisMonday, tomorrowsMonday, mondayOf } from '@/lib/schedule';
 import type { PrepaidKey } from '@/lib/timetable';
 import { isCountExcludedName, isPrepaid, methodInCenter, PREPAID_KINDS, worksAt } from '@/lib/timetable';
 
@@ -37,7 +36,7 @@ export interface MyPageViewProps {
   /** 결제별 사용 기록 (바우처·굳센·꿈이든·지원금) — 지난 달도 쌓인다 */
   history?: MyPaymentUse[];
   today: string;
-  /** 보는 지점 — 사설 수업을 셀 때 이 지점 수업만 */
+  /** 보는 지점 */
   center?: string;
   failed?: string;
   /** 맨 위(보는 지점)·맨 아래(지점 가입) — 페이지가 만들어 넘긴다 */
@@ -49,13 +48,11 @@ export interface MyPageViewProps {
 
 // 결제별 사용 카드 — 선결제 카드 아래에 이 순서로 (쓰는 결제이거나 이번 달 기록이 있는 것만)
 const USAGE_CARDS: { method: MyPayment['method']; label: string }[] = [
-  { method: 'voucher', label: '바우처' }, { method: 'gusen', label: '굳센' }, { method: 'jangmatchum', label: '장맞춤' }, { method: 'kkumideun', label: '꿈이든' }, { method: 'subsidy', label: '지원금' },
-  { method: 'woojin_ext', label: '우진학교외부' }, { method: 'woojin_self', label: '우진학교자율' },
+  { method: 'voucher', label: '바우처' }, { method: 'gusen', label: '굳센' }, { method: 'jangmatchum', label: '장맞춤' }, { method: 'kkumideun', label: '꿈이든' },
+  { method: 'woojin_ext', label: '우진학교외부' }, { method: 'woojin_self', label: '우진학교자율' }, { method: 'subsidy', label: '지원금' },
 ];
 // 남은 금액으로 보는 카드
 const BALANCE_CARD = (m: MyPayment['method']) => m === 'subsidy' || m === 'woojin_ext' || m === 'woojin_self';
-// 우진학교 카드는 쓰는 아이만 (아이 명단 체크 · 남은 금액 · 사용 기록 중 하나라도 있으면)
-const WOOJIN_CARD = (m: MyPayment['method']) => m === 'woojin_ext' || m === 'woojin_self';
 // 굳센은 수색, 장맞춤은 의정부 지점에서만 보인다
 const inBranch = (method: string, center?: string) => methodInCenter(method, center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong');
 
@@ -73,8 +70,10 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   const shownKind = kinds.find(x => x.key === tab)?.key ?? kinds[0].key;
   const payRows = payments.filter(p => inBranch(p.method, center) && (!isPrepaid(p.method) || kinds.some(x => x.key === p.method)))
     .sort((a, b) => Number(isPrepaid(b.method)) - Number(isPrepaid(a.method)));   // 선결제를 맨 위로
-  const usageCards = USAGE_CARDS.filter(u => inBranch(u.method, center) && (!WOOJIN_CARD(u.method)
-    || child?.uses?.[u.method as 'woojin_ext' | 'woojin_self'] || (payments.find(p => p.method === u.method)?.total ?? 0) > 0 || history.some(h => h.method === u.method)));
+  // 결제별 사용 카드 — 다른 카드처럼 우진학교외부·자율도 늘 보인다(꿈이든과 지원금 사이)
+  const usageCards = USAGE_CARDS.filter(u => inBranch(u.method, center));
+  // 우진학교 — 외부·자율을 한 카드에 탭으로
+  const [woojinTab, setWoojinTab] = useState<'woojin_ext' | 'woojin_self'>('woojin_ext');
 
   const card = MYPAGE_CARD;
 
@@ -88,27 +87,6 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   const usedIn = (p: MyPayment) => payMonth === thisMonth ? p.used : history.filter(h => h.method === p.method && h.day.startsWith(payMonth)).length;
   const payMonthLabel = `${payMonth.slice(0, 4)}년 ${Number(payMonth.slice(5, 7))}월`;
 
-  // 사설 — 그 달(오늘까지) 실제로 한 수업 중 바우처·굳센·장맞춤·꿈이든·우진학교·지원금으로 하지 않은 수업 수 (선결제·카드·현금·결제 글자 없음 포함).
-  // 결석·옮김·미정·수업 안 함, 공휴일의 고정 수업은 세지 않는다
-  const [monthLessons, setMonthLessons] = useState<MyLesson[] | null>(null);
-  const [monthHols, setMonthHols] = useState<Record<string, string>>({});
-  useEffect(() => {
-    let alive = true;
-    const first = `${payMonth}-01`;
-    const last = toYmd(new Date(Number(payMonth.slice(0, 4)), Number(payMonth.slice(5, 7)), 0));
-    const end = last < today ? last : today;
-    if (first > end) { setMonthLessons([]); return; }
-    Promise.all([getMyLessons(first, end), getHolidayNames(payMonth.slice(0, 4)).catch(() => ({}))])
-      .then(([ls, h]) => { if (alive) { setMonthLessons(ls); setMonthHols(h); } })
-      .catch(() => { if (alive) setMonthLessons(null); });
-    return () => { alive = false; };
-  }, [payMonth, today, child?.childName]);   // 아이를 바꾸면 다시
-  const SUPPORT = ['voucher', 'gusen', 'jangmatchum', 'kkumideun', 'woojin', 'woojin_ext', 'woojin_self', 'subsidy'];
-  // 지원 결제로 한 수업인지 — [결제 완료] 기록이 있으면 그것, 없으면 칸의 결제 글자(b·e·c·우·외·자·지)
-  const bySupport = (l: MyLesson) => history.some(h => h.day === l.day && h.time === l.time && SUPPORT.includes(h.method))
-    || /[bec우외자지장]/.test(l.payment.toLowerCase().replace(/x/g, ''));
-  const privateCount = monthLessons?.filter(l => (!center || l.center === center) && isRealLesson(l) && !l.absent && !isCountExcludedName(l.teacher, l.day)
-    && !(monthHols[l.day] && l.source === 'fixed') && !bySupport(l)).length;
   // 공휴일 — 그 주에 걸친 해(연말·연초는 두 해)의 공휴일 이름
   const [holidays, setHolidays] = useState<Record<string, string>>({});
   const years = [...new Set([days[0].slice(0, 4), days[5].slice(0, 4)])].join(',');
@@ -142,7 +120,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
   if (!approved) return (
     <div className="space-y-6">
       {top}
-      {['주별 시간표', '결제 현황', '선결제 카드', ...USAGE_CARDS.filter(u => inBranch(u.method, center) && !WOOJIN_CARD(u.method)).map(u => u.label)].map(t => (
+      {['주별 시간표', '결제 현황', '선결제 카드', ...[...new Set(USAGE_CARDS.filter(u => inBranch(u.method, center)).map(u => (u.method === 'woojin_ext' || u.method === 'woojin_self' ? '우진학교' : u.label)))]].map(t => (
         <section key={t} className={card}>
           <h2 className="text-[17px] text-[#27272a] mb-3">{t}</h2>
           <p className="text-[14px] text-[#f59e0b]">승인 대기 중</p>
@@ -231,13 +209,6 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         {payRows.length === 0 ? <p className="text-[13px] text-[#bbb]">등록된 결제가 없어요.</p> : (
           <table className="w-full text-[15px]">
             <tbody>
-              {/* 사설 — 선결제 위 */}
-              <tr className="border-t border-[#f0f0f0] first:border-t-0">
-                <td className="py-2.5">사설</td>
-                <td className="py-2.5 text-right tabular-nums text-[var(--brand)]">
-                  <span className="text-[12px] text-[#999] mr-1">{payMonth === thisMonth ? '이번 달' : `${Number(payMonth.slice(5, 7))}월`}</span>{privateCount ?? '-'}<span className="text-[12px] text-[#999] ml-1">회</span>
-                </td>
-              </tr>
               {payRows.map(p => (
                 <tr key={p.method} className="border-t border-[#f0f0f0] first:border-t-0">
                   <td className="py-2.5">{isPrepaid(p.method) && kinds.length === 1 ? '선결제' : PAY_ROW_LABEL[p.method]}</td>
@@ -281,7 +252,10 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       </section>
 
       {/* 결제별 사용 카드 — 바우처·굳센·꿈이든·지원금·우진학교: 일자 · 그 달 회차 · 메모 (지난 달도 쌓인다) */}
-      {usageCards.map(u => {
+      {usageCards.filter(u => u.method !== 'woojin_self').map(card0 => {
+        // 우진학교외부 자리에 '우진학교' 카드 하나 — 외부·자율 탭
+        const isWoojin = card0.method === 'woojin_ext';
+        const u = isWoojin ? (USAGE_CARDS.find(x => x.method === woojinTab) ?? card0) : card0;
         const p = payments.find(x => x.method === u.method);
         // 회차는 달마다 1회부터 (11월 첫 사용 = 1회)
         const perMonth = new Map<string, number>();
@@ -291,9 +265,19 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
           return { day: h.day, nth: n, memo: [`${h.time.replace(/^0/, '')} ${h.teacher ? `${h.teacher} 선생님` : ''}`.trim(), h.note].filter(Boolean).join(' · ') };
         });
         return (
-          <section key={u.method} className={card}>
-            <h2 className="text-[17px] text-[#27272a] mb-4">{u.label}</h2>
-            <UsageCard label={u.label} rows={rows} name={child?.childName} used={p?.used ?? rows.length}
+          <section key={card0.method} className={card}>
+            {isWoojin ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-4">
+                <h2 className="text-[17px] text-[#27272a]">우진학교</h2>
+                <div role="tablist" className="flex gap-1">
+                  {([['woojin_ext', '외부'], ['woojin_self', '자율']] as const).map(([k, t]) => (
+                    <button key={k} type="button" role="tab" aria-selected={woojinTab === k} onClick={() => setWoojinTab(k)}
+                      className={`h-8 px-3 rounded-full text-[13px] ${woojinTab === k ? 'bg-[var(--brand)] text-white' : 'bg-[#f4f4f5] text-[#666]'}`}>{t}</button>
+                  ))}
+                </div>
+              </div>
+            ) : <h2 className="text-[17px] text-[#27272a] mb-4">{u.label}</h2>}
+            <UsageCard key={u.method} label={u.label} rows={rows} name={child?.childName} used={p?.used ?? rows.length}
               {...(BALANCE_CARD(u.method) ? { balance: p?.total ?? 0 } : { limit: p?.total })} />
           </section>
         );

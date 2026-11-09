@@ -16,12 +16,11 @@ export default function PrepaidCard({ rows, name, editingId }: {
   editingId?: string;
 }) {
   const left = rows.length ? rows[rows.length - 1].balance : 0;
-  // 쪽 나누기 — 뒤(최근)에서부터 3줄씩. 0쪽 = 최근 3줄
+  // 쪽 나누기 — 최근 날짜가 위, 3줄씩. 0쪽 = 최근 3줄
   const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   const [page, setPage] = useState(0);
   useEffect(() => { setPage(0); }, [rows.length]);
-  const end = rows.length - page * PER_PAGE;
-  const shown = rows.slice(Math.max(0, end - PER_PAGE), end);
+  const shown = [...rows].reverse().slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const md = (d: string) => `${d.slice(2, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}`;   // 26/10/11
   return (
     <div className="relative mx-auto max-w-[380px] rounded-[16px] border border-[#e4e4e7] bg-white px-5 pt-5 pb-4 shadow-[0_2px_10px_rgba(0,0,0,0.06)] overflow-hidden">
@@ -51,7 +50,7 @@ export default function PrepaidCard({ rows, name, editingId }: {
             ))}
           </ul>
         )}
-        {/* 쪽 번호 — 1쪽이 가장 최근 3줄(쪽 안에서는 날짜 순), 2쪽은 그 전 3줄 … */}
+        {/* 쪽 번호 — 1쪽이 가장 최근 3줄(최근 날짜가 위), 2쪽은 그 전 3줄 … */}
         {pages > 1 && (
           <div className="flex items-center justify-center gap-1 pt-1 pb-1 text-[12px]">
             <button type="button" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}

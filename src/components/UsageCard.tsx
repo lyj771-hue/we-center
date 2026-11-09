@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 // 결제별 사용 카드(바우처·굳센·꿈이든·지원금) — 선결제 카드와 같은 모양. 사용 기록: 일자 · 그 달 회차 · 메모. 지난 달 기록도 쌓인다.
-// 1쪽이 가장 최근 3줄(쪽 안에서는 날짜 순).
+// 1쪽이 가장 최근 3줄 — 최근 날짜가 위.
 
 /** nth = 그 달 몇 번째 사용인지 (매월 1회부터) */
 export interface UsageRow { day: string; nth: number; memo?: string }
@@ -24,9 +24,8 @@ export default function UsageCard({ label, rows, name, used, limit, balance }: {
   const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
   const [page, setPage] = useState(0);
   useEffect(() => { setPage(0); }, [rows.length]);
-  const end = rows.length - page * PER_PAGE;
-  const start = Math.max(0, end - PER_PAGE);
-  const shown = rows.slice(start, end);
+  // 최근 날짜가 위 — 뒤집어서 3줄씩
+  const shown = [...rows].reverse().slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
   const md = (d: string) => `${d.slice(2, 4)}/${d.slice(5, 7)}/${d.slice(8, 10)}`;
 
   return (
