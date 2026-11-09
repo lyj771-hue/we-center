@@ -68,9 +68,6 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
           <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[2.2]">{post.title}</h2>
           <div className="mt-3 flex items-center gap-4">
             {addressLines(post.location).length > 0 && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">{addressLines(post.location).map((a, i) => <span key={i} className="block">📍 {a}</span>)}</span>}
-            {isAdmin && (
-              <button type="button" onClick={e => { e.stopPropagation(); onDelete(post.id); }} className="ml-auto px-3 py-2 text-[33px] text-[#aaa] hover:text-red-400 transition-colors">삭제</button>
-            )}
           </div>
         </div>
       </div>
@@ -195,8 +192,13 @@ export default function WeslangBoard({ posts, isAdmin, onDelete, onEdit }: { pos
       <div className="flex-1 min-w-0">
       <div className="flex flex-col items-center gap-y-16 md:gap-y-20">
         {shown.map(post => <div key={post.id} id={`weslang-${post.id}`} className="scroll-mt-28 w-full flex justify-center"><div className="relative"><WeslangEntry post={post} isAdmin={isAdmin} onDelete={onDelete} onEdit={onEdit} />
-          {/* 관리자 — 게시물 오른쪽 [수정] (같은 글쓰기 창으로) */}
-          {isAdmin && onEdit && <button type="button" onClick={() => onEdit(post)} className="absolute right-0 top-2 z-10 translate-x-[calc(100%+8px)] max-md:translate-x-0 max-md:-top-2 rounded-full border border-[#e5e5e5] bg-white px-3 py-1.5 text-[12px] text-[#555] shadow-sm hover:border-[var(--brand)] hover:text-[var(--brand)]">수정</button>}
+          {/* 관리자 — 게시물 오른쪽 [수정](같은 글쓰기 창으로) · [삭제] */}
+          {isAdmin && (
+            <div className="absolute right-0 top-2 z-10 flex flex-col gap-1.5 translate-x-[calc(100%+8px)] max-md:flex-row max-md:translate-x-0 max-md:-top-2">
+              {onEdit && <button type="button" onClick={() => onEdit(post)} className="rounded-full border border-[#e5e5e5] bg-white px-3 py-1.5 text-[12px] text-[#555] shadow-sm hover:border-[var(--brand)] hover:text-[var(--brand)]">수정</button>}
+              <button type="button" onClick={() => onDelete(post.id)} className="rounded-full border border-[#e5e5e5] bg-white px-3 py-1.5 text-[12px] text-red-400 shadow-sm hover:border-red-300 hover:bg-red-50">삭제</button>
+            </div>
+          )}
         </div></div>)}
       </div>
       {/* 쪽 넘기기 — 한 쪽에 3개 */}
