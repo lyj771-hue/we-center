@@ -1,12 +1,6 @@
-import PostDetail from '@/components/PostDetail';
+import { redirect } from 'next/navigation';
 
-interface Props { params: Promise<{ id: string }> }
-
-export default async function WeSlangDetailPage({ params }: Props) {
-  const { id } = await params;
-  return (
-    <div className="max-w-3xl mx-auto px-8 pt-8 pb-14 md:pt-14">
-      <PostDetail category="weslang" id={id} backHref="/we-slang" backLabel="We슐랭 목록" />
-    </div>
-  );
+// We슐랭은 게시글 화면이 따로 없다 — 목록에서 사진을 크게 보고, 관리자는 목록의 [수정]으로 고친다. 예전 주소로 오면 목록으로
+export default function WeSlangDetailPage() {
+  redirect('/we-slang');
 }

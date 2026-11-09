@@ -9,6 +9,8 @@ import { getAllPosts, addPost, deletePost, updatePost } from '@/lib/store';
 import WeslangPhotos, { AddressInputs, mainPhotoOf } from './WeslangPhotos';
 import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
+import { extractImages } from '@/lib/postText';
+import { removeUnusedImages } from '@/lib/imageUpload';
 import WeslangBoard from './WeslangBoard';
 import CarrotBoard from './CarrotBoard';
 import PostTags from './PostTags';
@@ -35,6 +37,9 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
   const { isAdmin } = useAdmin();
   const [posts, setPosts] = useState<Post[]>([]);
   const [editing, setEditing] = useState(false);
+  // We슐랭 — 목록에서 [수정]을 누르면 같은 글쓰기 창을 그 글 내용으로 띄운다 (게시글 화면으로 가지 않는다)
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editBefore, setEditBefore] = useState('');
   const [form, setForm] = useState({ title: '', content: '', location: '', mainPhoto: '' });   // mainPhoto = We슐랭 대표 사진
   const isWeslang = category === 'weslang';
   // 공지사항 — 글을 올리며 공지 메시지(알림톡)를 보낼지. 종류에 #{센터}가 있으면 센터 필수, #{명절}이 있으면 명절 필수
@@ -79,6 +84,26 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
     refresh();
   };
 
+  const startEdit = (p: Post) => {
+    setForm({ title: p.title, content: p.content, location: p.location ?? '', mainPhoto: p.imageUrl ?? '' });
+    setEditBefore(p.content);
+    setEditId(p.id);
+    setEditing(true);
+  };
+  const closeModal = () => { setEditing(false); setEditId(null); setForm({ title: '', content: '', location: '', mainPhoto: '' }); };
+  const handleEditSave = async () => {
+    if (!editId) return;
+    if (!form.title.trim()) { await showAlert('가게 이름을 적어 주세요.'); return; }
+    try {
+      await updatePost(category, editId, { title: form.title, content: form.content, location: form.location, imageUrl: mainPhotoOf(form.content, form.mainPhoto) ?? '' });
+      // 고치면서 뺀 사진 파일은 저장소에서 지운다(다른 글이 쓰면 남긴다)
+      const kept = new Set(extractImages(form.content));
+      removeUnusedImages(extractImages(editBefore).filter(src => !kept.has(src)));
+      closeModal();
+      refresh();
+    } catch (e) { await showAlert(`저장하지 못했어요.\n${(e as Error).message}`); }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('삭제하시겠습니까?')) return;
     await deletePost(category, id);
@@ -115,14 +140,14 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       {editing && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/20 backdrop-blur-sm p-4"
-          onClick={() => setEditing(false)}
+          onClick={closeModal}
         >
           <div
             className={`bg-white border border-[#e5e5e5] w-full ${isWeslang ? 'max-w-xl' : 'max-w-4xl'} max-h-[92vh] shadow-2xl flex flex-col rounded-2xl`}
             onClick={e => e.stopPropagation()}
           >
             <div className="p-8 pb-4 shrink-0">
-              <p className="text-[11px] tracking-[0.2em] text-[#888] mb-6">새 글 작성</p>
+              <p className="text-[11px] tracking-[0.2em] text-[#888] mb-6">{editId ? '글 수정' : '새 글 작성'}</p>
               <input
                 type="text"
                 placeholder={isWeslang ? '가게 이름 (필수)' : '제목 (필수)'}
@@ -149,13 +174,13 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
             </div>
             <div className="flex gap-2 p-8 pt-4 shrink-0">
               <button
-                onClick={handleAdd}
+                onClick={editId ? handleEditSave : handleAdd}
                 className="flex-1 bg-[#0a0a0a] text-white text-[11px] py-3 tracking-widest hover:bg-[#333] transition-colors"
               >
                 저장
               </button>
               <button
-                onClick={() => setEditing(false)}
+                onClick={closeModal}
                 className="flex-1 border border-[#e5e5e5] text-[11px] py-3 tracking-widest hover:bg-[#f8f8f8] transition-colors"
               >
                 취소
@@ -175,7 +200,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
             catch (e) { showAlert(`바꾸지 못했어요 — SQL(supabase/post-tags.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); }
           }} />
       ) : variant === 'weslang' ? (
-        <WeslangBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
+        <WeslangBoard posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} onEdit={startEdit} />
       ) : variant === 'scrapbook' ? (
         <ThoughtsScrapbook posts={posts} basePath={basePath} isAdmin={isAdmin} onDelete={handleDelete} />
       ) : variant === 'notes' ? (

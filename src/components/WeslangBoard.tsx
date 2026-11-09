@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { savePostOrder } from '@/lib/store';
 import { showAlert } from '@/lib/dialog';
@@ -19,7 +18,7 @@ const PHOTO_SHIFT = 70;
 // We슐랭 — 재활생각 스크랩북 모양을 빌려 쓴다. 가게 하나가 한 줄(가운데 하나씩).
 // 가운데 큰 사진 = 대표 사진(글쓰기에서 고른 것, 없으면 본문 첫 사진). 어느 사진을 눌러도 크게 — 옆으로 넘겨 이 글의 다른 사진도. 관리자는 메모의 [수정]으로 고친다, 오른쪽 작은 사진 = 나머지 사진(누르면 크게), 왼쪽 메모 = 가게 이름 · 위치(누르면 크게 — 크게 볼 때만 주소 복사).
 
-function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; basePath: string; isAdmin: boolean; onDelete: (id: string) => void }) {
+function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin: boolean; onDelete: (id: string) => void; onEdit?: (p: Post) => void }) {
   const [viewing, setViewing] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const images = extractImages(post.content);
@@ -70,11 +69,7 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
           <div className="mt-3 flex items-center gap-4">
             {addressLines(post.location).length > 0 && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">{addressLines(post.location).map((a, i) => <span key={i} className="block">📍 {a}</span>)}</span>}
             {isAdmin && (
-              <span className="ml-auto flex">
-                {/* 고치기 — 가게 이름·위치·사진·대표 사진 */}
-                <Link href={`${basePath}/${post.id}`} onClick={e => e.stopPropagation()} className="px-3 py-2 text-[33px] text-[#aaa] hover:text-[var(--brand)] transition-colors">수정</Link>
-                <button type="button" onClick={e => { e.stopPropagation(); onDelete(post.id); }} className="px-3 py-2 text-[33px] text-[#aaa] hover:text-red-400 transition-colors">삭제</button>
-              </span>
+              <button type="button" onClick={e => { e.stopPropagation(); onDelete(post.id); }} className="ml-auto px-3 py-2 text-[33px] text-[#aaa] hover:text-red-400 transition-colors">삭제</button>
             )}
           </div>
         </div>
@@ -132,7 +127,7 @@ const sortPosts = (posts: Post[]) => [...posts].sort((a, b) =>
     : b.createdAt.localeCompare(a.createdAt));
 
 /** We슐랭 가게 글들 — 왼쪽 가게 목록(누르면 그 가게로, 관리자는 ▲▼로 순서 바꾸기) + 가운데에 하나씩 */
-export default function WeslangBoard({ posts, basePath, isAdmin, onDelete }: { posts: Post[]; basePath: string; isAdmin: boolean; onDelete: (id: string) => void }) {
+export default function WeslangBoard({ posts, isAdmin, onDelete, onEdit }: { posts: Post[]; basePath: string; isAdmin: boolean; onDelete: (id: string) => void; onEdit?: (p: Post) => void }) {
   const [page, setPage] = useState(0);
   // 순서 — 처음엔 디비 순서, 관리자가 바꾸면 바로 저장하고 화면도 바로 바꾼다
   const [ids, setIds] = useState<string[]>([]);
@@ -199,7 +194,10 @@ export default function WeslangBoard({ posts, basePath, isAdmin, onDelete }: { p
       </>}
       <div className="flex-1 min-w-0">
       <div className="flex flex-col items-center gap-y-16 md:gap-y-20">
-        {shown.map(post => <div key={post.id} id={`weslang-${post.id}`} className="scroll-mt-28 w-full flex justify-center"><WeslangEntry post={post} basePath={basePath} isAdmin={isAdmin} onDelete={onDelete} /></div>)}
+        {shown.map(post => <div key={post.id} id={`weslang-${post.id}`} className="scroll-mt-28 w-full flex justify-center"><div className="relative"><WeslangEntry post={post} isAdmin={isAdmin} onDelete={onDelete} onEdit={onEdit} />
+          {/* 관리자 — 게시물 오른쪽 [수정] (같은 글쓰기 창으로) */}
+          {isAdmin && onEdit && <button type="button" onClick={() => onEdit(post)} className="absolute right-0 top-2 z-10 translate-x-[calc(100%+8px)] max-md:translate-x-0 max-md:-top-2 rounded-full border border-[#e5e5e5] bg-white px-3 py-1.5 text-[12px] text-[#555] shadow-sm hover:border-[var(--brand)] hover:text-[var(--brand)]">수정</button>}
+        </div></div>)}
       </div>
       {/* 쪽 넘기기 — 한 쪽에 3개 */}
       {pages > 1 && (
