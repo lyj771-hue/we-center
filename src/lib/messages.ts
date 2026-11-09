@@ -7,7 +7,7 @@ export type MessageTemplate = { id: string; grp: string; label: string; body: st
 /** 묶음 — 이 순서로 보여 준다. vars = 그 묶음 메시지에 넣을 수 있는 #{변수} */
 export const MESSAGE_GROUPS: { key: string; label: string; vars: string[] }[] = [
   { key: 'lesson',    label: '수업·공지',   vars: ['이름', '날짜', '월일', '요일', '센터', '제목', '글번호', '선생님', '시간', '사유', '수업1', '수업2', '수업3', '수업4', '수업5', '수업6', '수업7', '수업8'] },
-  { key: 'timetable', label: '시간표 신청·취소', vars: ['이름', '날짜', '월일', '요일', '시간', '선생님', '센터', '신청결과', '남은시간', '구분', '내용'] },
+  { key: 'timetable', label: '시간표 신청·취소', vars: ['이름', '날짜', '월일', '요일', '시간', '선생님', '센터', '신청결과', '남은시간', '구분', '내용', '건수'] },
   { key: 'prepaid',   label: '선결제',      vars: ['이름', '구분', '날짜', '기존횟수', '변동', '남은횟수'] },
   { key: 'member',    label: '회원',        vars: ['이름', '날짜', '센터', '결과'] },
   { key: 'fixed',     label: '고정 스케줄', vars: ['이름', '구분', '날짜', '요일', '수업', '선생님', '변동내용'] },
@@ -42,7 +42,8 @@ const SEND_WIRING: Record<string, string> = {
   schedule_reserved: '예약 게시한 수업스케쥴 글이 올라가기 5분 전 (서버가 저절로)',
   schedule_updated: '수업스케쥴 글을 고쳐 저장·다시 올릴 때, 선생님이 게시글 시간을 더할 때',
   teacher_leave: '시간표 관리 선생님 [휴무] 저장할 때',
-  booking_result: '시간표 관리 [스케줄 변경 완료](수업 취소·확정), 보호자가 수업스케쥴 신청할 때, 신청 취소할 때',
+  booking_result: '시간표 관리 [스케줄 변경 완료](수업 취소·확정), 보호자가 수업스케쥴 신청할 때(매 정각에 모아서), 신청 취소할 때',
+  booking_digest: '보호자가 수업스케쥴에서 한 시간 안에 두 건 넘게 신청했을 때 — 매 정각에 묶어서',
   lesson_cancel_admin: '보호자 수업 취소 신청을 승인할 때 (관리자 번호로)',
   teacher_schedule_admin: '선생님이 수업스케쥴 게시글 시간을 더하거나 내릴 때 (관리자 번호로)',
   lesson_cancel_late: '수업 2시간 안 남기고 신청한 취소를 승인할 때',
@@ -141,6 +142,14 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
       body: '#{이름} 님, 신청하신 수업이 #{신청결과}되었습니다.\n변경이나 취소는 센터로 연락해 주세요.', button: { name: '주간 수업 보기', url: `${SITE}/mypage?d=#{날짜}` } },
     samples: { 날짜: '2026/10/20', 요일: '월' },
     condition: '보호자가 신청한 수업을 관리자가 확정하거나 취소할 때, 그 보호자에게 한 번.\n마이페이지 수업 취소 신청을 관리자가 승인할 때도 (2시간 넘게 남았을 때 신청한 것 — 아니면 늦은 취소 안내).\n#{신청결과} = 확정 / 취소',
+  },
+  {
+    id: 'booking_digest', grp: 'timetable', label: '수업 확정 모음 알림', sort: 12,
+    spec: { image: 'logo', title: '#{이름} 님 수업 확정 #{건수}건', sub: 'We 센터',
+      items: [{ name: '수업 1', value: '#{수업1}' }, { name: '수업 2', value: '#{수업2}' }],
+      body: '#{이름} 님, 신청하신 수업 #{건수}건이 확정되었습니다.\n변경이나 취소는 센터로 연락해 주세요.', button: { name: '주간 수업 보기', url: `${SITE}/mypage?d=#{날짜}` } },
+    samples: { 날짜: '2026/11/10', 건수: '2', 수업1: '11/10(화) 15:40 이정길', 수업2: '11/12(목) 16:30 허홍석' },
+    condition: '보호자가 수업스케쥴에서 신청한 수업은 바로 보내지 않고 모아 두었다가 매 정각에 아이마다 한 번.\n그 한 시간 안에 1건이면 [시간표 신청 확정/취소 알림], 2건 이상이면 이 알림(수업 개수 2~8개에 맞는 템플릿 — 2개용~8개용을 따로 심사받는다).\n#{수업N} = 11/10(화) 15:40 이정길 · #{날짜} = 첫 수업 날',
   },
   {
     id: 'lesson_cancel_admin', grp: 'timetable', label: '보호자 수업 취소 알림 (관리자에게)', sort: 20,

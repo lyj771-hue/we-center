@@ -9,7 +9,7 @@ import { askConfirm, showAlert } from '@/lib/dialog';
 
 // 알림톡 템플릿 심사 올리기 (관리자) — 메시지 모양 화면에 적어 둔 알림들을 솔라피에 한 번에 등록하고 카카오 검수 요청.
 // 솔라피 템플릿 이름 끝의 [알림 종류] 로 사이트 알림과 짝을 짓는다. 통과(APPROVED)하면 템플릿 ID를 자동 저장 → 바로 보낼 수 있다.
-// 수업 일정 알림은 수업 개수(1~8개)마다 따로 — lesson_tomorrow_1 ~ lesson_tomorrow_8.
+// 수업 일정 알림은 수업 개수(1~8개)마다 따로 — lesson_tomorrow_1 ~ lesson_tomorrow_8. 수업 확정 모음은 2~8개 — booking_digest_2 ~ booking_digest_8.
 
 type Row = { key: string; label: string; spec: MessageSpec; grp: string };
 type Remote = { templateId: string; name: string; status: string; dateCreated?: string; comment: string };
@@ -37,13 +37,15 @@ async function api(method: 'GET' | 'POST', body?: unknown) {
   return j;
 }
 
-/** 수업 일정 알림 → 1개용 ~ 8개용 */
+/** 수업 개수마다 따로 심사받는 알림 — 수업 일정 1~8개, 수업 확정 모음 2~8개 */
+const PER_COUNT: Record<string, number> = { lesson_tomorrow: 1, booking_digest: 2 };
 function expand(rows: Row[]): Row[] {
   return rows.flatMap(r => {
-    if (r.key !== 'lesson_tomorrow') return [r];
+    if (!(r.key in PER_COUNT)) return [r];
     const head = r.spec.items.filter(i => !/^수업\s*\d+$/.test(i.name.trim()));
-    return Array.from({ length: 8 }, (_, k) => {
-      const n = k + 1;
+    const from = PER_COUNT[r.key];
+    return Array.from({ length: 8 - from + 1 }, (_, k) => {
+      const n = k + from;
       const lessons = Array.from({ length: n }, (_, j) => ({ name: `수업 ${j + 1}`, value: `#{수업${j + 1}}` }));
       return { key: `${r.key}_${n}`, label: `${r.label} ${n}개`, spec: { ...r.spec, items: [...head, ...lessons] }, grp: r.grp };
     });
