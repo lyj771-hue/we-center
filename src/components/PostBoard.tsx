@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost, updatePost } from '@/lib/store';
-import WeslangPhotos, { mainPhotoOf } from './WeslangPhotos';
+import WeslangPhotos, { AddressInputs, mainPhotoOf } from './WeslangPhotos';
 import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
 import WeslangBoard from './WeslangBoard';
@@ -131,10 +131,9 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 className="w-full border-b border-[#ddd] py-2 text-[15px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]"
               />
-              {/* We슐랭 — 가게 위치 */}
+              {/* We슐랭 — 가게 주소(도로명 · 지번, 하나만 적어도 돼요) */}
               {isWeslang && (
-                <input type="text" placeholder="위치 (예: 은평구 수색동, 수색역 2번 출구 앞)" value={form.location}
-                  onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+                <AddressInputs value={form.location} onChange={v => setForm(f => ({ ...f, location: v }))}
                   className="mt-3 w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]" />
               )}
               {/* 공지사항 — 공지 메시지(알림톡) 고르기 */}

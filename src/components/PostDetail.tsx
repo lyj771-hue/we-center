@@ -8,7 +8,8 @@ import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getPost, updatePost, deletePost } from '@/lib/store';
 import { extractImages } from '@/lib/postText';
-import WeslangPhotos, { mainPhotoOf } from './WeslangPhotos';
+import { removeUnusedImages } from '@/lib/imageUpload';
+import WeslangPhotos, { AddressInputs, addressLines, mainPhotoOf } from './WeslangPhotos';
 import RichContent from './RichContent';
 import PostTags from './PostTags';
 import NoticePicker from './NoticePicker';
@@ -63,6 +64,9 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
     const imageUrl = isWeslang ? mainPhotoOf(form.content, form.mainPhoto) : undefined;
     await updatePost(category, id, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location, imageUrl: imageUrl ?? '' } : {}), ...(tags ? { tags } : {}) });
     setPost(p => p ? { ...p, title: form.title, content: form.content, location: form.location, ...(isWeslang ? { imageUrl } : {}), ...(tags ? { tags } : {}) } : p);
+    // 고치면서 뺀 사진 파일은 저장소에서 지운다(다른 글이 쓰면 남긴다)
+    const kept = new Set(extractImages(form.content));
+    removeUnusedImages(extractImages(post.content).filter(src => !kept.has(src)));
     setEditing(false);
   };
 
@@ -101,7 +105,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             className="w-full border-b border-[#ddd] py-2 text-xl font-medium outline-none focus:border-[#0a0a0a]"
           />
           {isWeslang && (
-            <input type="text" value={form.location} placeholder="위치" onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+            <AddressInputs value={form.location} onChange={v => setForm(f => ({ ...f, location: v }))}
               className="w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a]" />
           )}
           {isNotice && isAdmin && <NoticePicker kinds={kinds} value={notice} onChange={setNotice} note="수정해도 알림톡은 다시 보내지 않아요. 고른 지점이 제목 앞에 표시돼요." />}
@@ -126,7 +130,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             )}
           </div>
 
-          {post.location && <p className="text-[14px] text-[#52525b] mb-2">📍 {post.location}</p>}
+          {addressLines(post.location).map((a, i) => <p key={i} className="text-[14px] text-[#52525b] mb-1">📍 {a}</p>)}
           <p className="text-[11px] text-[#bbb] tracking-widest mb-9">{fmt(post.createdAt)}</p>
 
           {/* We슐랭 대표 사진은 본문 사진 중 하나라 위에 따로 보이지 않는다 */}

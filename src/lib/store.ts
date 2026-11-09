@@ -1,4 +1,6 @@
 import { supabase } from './supabaseClient';
+import { removeUnusedImages } from './imageUpload';
+import { extractImages } from './postText';
 import { Post, Category, CenterRoom, Subject, PaymentMethod, Profile, Member, MemberExtras } from './types';
 
 // ── Posts (thoughts / notices / etc) ─────────────────────────────────────────
@@ -83,8 +85,11 @@ export async function updatePost(cat: Category, id: string, data: Partial<Pick<P
 }
 
 export async function deletePost(cat: Category, id: string): Promise<void> {
+  // 지운 뒤 그 글에만 쓰던 사진 파일도 저장소에서 지운다(용량)
+  const { data: old } = await supabase.from('posts').select('content, image_url').eq('category', cat).eq('id', id).maybeSingle();
   const { error } = await supabase.from('posts').delete().eq('category', cat).eq('id', id);
   if (error) throw error;
+  if (old) await removeUnusedImages([...extractImages((old.content as string) ?? ''), ...(old.image_url ? [old.image_url as string] : [])]);
 }
 
 // ── Center Rooms ──────────────────────────────────────────────────────────────

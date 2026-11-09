@@ -13,6 +13,21 @@ export const mainPhotoOf = (content: string, picked?: string) => {
   return picked && images.includes(picked) ? picked : images[0];
 };
 
+/** 가게 주소 — 위치 칸(location)에 줄마다 하나(도로명 · 지번). 빈 줄은 뺀다 */
+export const addressLines = (location?: string) => (location ?? '').split('\n').map(x => x.trim()).filter(Boolean);
+
+/** 주소 두 칸 — 도로명 · 지번(하나만 적어도 된다). 위치 칸에 두 줄로 저장 */
+export function AddressInputs({ value, onChange, className }: { value: string; onChange: (v: string) => void; className: string }) {
+  const [road = '', lot = ''] = value.split('\n');
+  const set = (i: 0 | 1, v: string) => onChange(i === 0 ? `${v}\n${lot}` : `${road}\n${v}`);
+  return (
+    <>
+      <input type="text" placeholder="도로명 주소 (예: 서울 은평구 수색로 200)" value={road} onChange={e => set(0, e.target.value)} className={className} aria-label="도로명 주소" />
+      <input type="text" placeholder="지번 주소 (선택, 예: 서울 은평구 수색동 1-1)" value={lot} onChange={e => set(1, e.target.value)} className={className} aria-label="지번 주소" />
+    </>
+  );
+}
+
 export const photosToContent = (srcs: string[]) => srcs.map(src => `<p><img src="${src.replace(/"/g, '&quot;')}"></p>`).join('');
 
 export default function WeslangPhotos({ content, onChange, main, onMain }: {

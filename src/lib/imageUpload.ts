@@ -43,3 +43,23 @@ export async function uploadImage(file: File, folder: string): Promise<string> {
   const { data } = supabase.storage.from('images').getPublicUrl(path);
   return data.publicUrl;
 }
+
+/** 저장소(images)에 올린 사진 주소 → 저장소 안 경로 (다른 곳 주소면 null) */
+const storagePath = (url: string) => {
+  const m = url.match(/\/storage\/v1\/object\/public\/images\/([^?#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+};
+
+/** 게시글에서 빠진 사진 파일 지우기 — 다른 게시글이 아직 쓰는 사진은 남긴다. 실패해도 게시글 일은 그대로(조용히 넘어간다) */
+export async function removeUnusedImages(urls: string[]): Promise<void> {
+  const paths = [...new Set(urls.map(storagePath).filter((p): p is string => !!p))];
+  if (!paths.length) return;
+  try {
+    const unused: string[] = [];
+    for (const p of paths) {
+      const { count } = await supabase.from('posts').select('id', { count: 'exact', head: true }).or(`content.ilike.%${p}%,image_url.ilike.%${p}%`);
+      if (!count) unused.push(p);
+    }
+    if (unused.length) await supabase.storage.from('images').remove(unused);
+  } catch { /* 사진 정리는 실패해도 괜찮다 */ }
+}

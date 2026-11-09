@@ -9,6 +9,7 @@ import Portal from './Portal';
 import { Post } from '@/lib/types';
 import { extractImages } from '@/lib/postText';
 import { layoutPhotos, place } from './ThoughtsScrapbook';
+import { addressLines } from './WeslangPhotos';
 
 // 가운데 사진이 재활생각 카드보다 커서(680) 칸 높이·오른쪽 사진·메모 자리를 그만큼 옮긴다
 // 가운데 사진 680 × 425 (가로 8 : 세로 5 — 예전 4:5의 세로 절반)
@@ -67,7 +68,7 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
           <span aria-hidden="true" className="absolute -top-[28px] left-[56px] text-[38px] select-none">📌</span>
           <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[2.2]">{post.title}</h2>
           <div className="mt-3 flex items-center gap-4">
-            {post.location && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">📍 {post.location}</span>}
+            {addressLines(post.location).length > 0 && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">{addressLines(post.location).map((a, i) => <span key={i} className="block">📍 {a}</span>)}</span>}
             {isAdmin && (
               <span className="ml-auto flex">
                 {/* 고치기 — 가게 이름·위치·사진·대표 사진 */}
@@ -83,18 +84,20 @@ function WeslangEntry({ post, basePath, isAdmin, onDelete }: { post: Post; baseP
   );
 }
 
-/** 메모 크게 보기 — 가게 이름 · 위치. 위치 옆 복사 아이콘(크게 볼 때만) */
+/** 메모 크게 보기 — 가게 이름 · 주소(도로명 · 지번, 적은 것만). 주소마다 복사 버튼(크게 볼 때만) */
 function NoteViewer({ title, location, onClose }: { title: string; location?: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    if (!location) return;
-    try { await navigator.clipboard.writeText(location); }
+  const [copied, setCopied] = useState<number | null>(null);
+  const lines = addressLines(location);
+  const copy = async (i: number) => {
+    const text = lines[i];
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); }
     catch {
       // 클립보드를 못 쓰는 브라우저 — 숨은 글 칸으로 복사
-      const t = document.createElement('textarea'); t.value = location; document.body.appendChild(t); t.select();
+      const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
       try { document.execCommand('copy'); } finally { t.remove(); }
     }
-    setCopied(true); setTimeout(() => setCopied(false), 1500);
+    setCopied(i); setTimeout(() => setCopied(null), 1500);
   };
   return (
     <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/40 px-5" onClick={onClose}>
@@ -102,18 +105,18 @@ function NoteViewer({ title, location, onClose }: { title: string; location?: st
         <span aria-hidden="true" className="absolute -top-[16px] left-[28px] text-[26px] select-none">📌</span>
         <button type="button" onClick={onClose} aria-label="닫기" className="absolute top-2 right-3 text-[22px] leading-none text-[#999] hover:text-[#333]">×</button>
         <h2 className="break-keep text-[var(--brand)] text-[22px] leading-[1.7]">{title}</h2>
-        {location && (
-          <div className="mt-3 flex items-start gap-2 text-[16px] text-[#52525b]">
-            <span className="break-keep leading-[1.7]">📍 {location}</span>
-            <button type="button" onClick={copy} aria-label="주소 복사" title="주소 복사"
+        {lines.map((line, i) => (
+          <div key={i} className="mt-3 flex items-start gap-2 text-[16px] text-[#52525b]">
+            <span className="break-keep leading-[1.7]">📍 {line}</span>
+            <button type="button" onClick={() => copy(i)} aria-label="주소 복사" title="주소 복사"
               className="shrink-0 mt-0.5 inline-flex items-center gap-1 rounded-md border border-[#d4d4d8] bg-white px-2 py-1 text-[12px] text-[var(--brand)] hover:bg-[#fafafa]">
               <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
               </svg>
-              {copied ? '복사됨' : '복사'}
+              {copied === i ? '복사됨' : '복사'}
             </button>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );
