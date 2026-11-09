@@ -113,9 +113,9 @@ begin
         update outbox_messages set hold_until = null where outbox_messages.id = any(v_ids);
         v_send := v_send || v_ids;
       else
-        -- 모음 한 건 — 수업1~N = "11/10(월) 15:40 이정길"
+        -- 모음 한 건 — 수업1~N = "2026/11/10(화) 15:40 이정길" (날짜는 늘 년도까지)
         select o.child_name, o.phone, o.vars into v_first from outbox_messages o where o.id = v_ids[1];
-        select jsonb_object_agg('수업' || x.n, substr(o.vars->>'날짜', 6) || '(' || (o.vars->>'요일') || ') ' || (o.vars->>'시간') || ' ' || (o.vars->>'선생님'))
+        select jsonb_object_agg('수업' || x.n, (o.vars->>'날짜') || '(' || (o.vars->>'요일') || ') ' || (o.vars->>'시간') || ' ' || (o.vars->>'선생님'))
           into v_vars
         from unnest(v_ids) with ordinality as x(oid, n) join outbox_messages o on o.id = x.oid;
         v_vars := v_vars || jsonb_build_object('이름', v_first.vars->>'이름', '건수', v_n::text, '날짜', v_first.vars->>'날짜');
