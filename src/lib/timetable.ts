@@ -489,6 +489,8 @@ export interface PayEntry {
   note?: string;
   /** 방문 결제 금액(원) */
   amount?: number;
+  /** 굳센 3회차 추가금액을 받음(굳센3회차완납) — method 는 그대로 gusen 이라 횟수는 굳센으로 센다 (supabase/gusen-extra.sql) */
+  extra?: boolean;
   /** true = [결제 완료]로 확정, false = 고르기만 함([스케줄 변경 완료]로 저장) */
   confirmed?: boolean;
 }
@@ -497,7 +499,7 @@ export interface PayEntry {
 export async function getDayPayments(day: string): Promise<Map<string, PayEntry>> {
   const { data, error } = await supabase.from('lesson_payments').select('*').eq('day', day);
   if (error) throw error;
-  return new Map((data ?? []).map(r => [`${r.child_id}|${r.time}`, { method: r.method as PayMethod, note: (r.note as string | null) ?? undefined, amount: (r.amount as number | null) ?? undefined, confirmed: r.confirmed !== false }]));
+  return new Map((data ?? []).map(r => [`${r.child_id}|${r.time}`, { method: r.method as PayMethod, note: (r.note as string | null) ?? undefined, amount: (r.amount as number | null) ?? undefined, extra: (r.method === 'gusen' && r.extra_paid === true) || undefined, confirmed: r.confirmed !== false }]));
 }
 
 /** 결제 체크 저장 / 지우기(entry = null) */
@@ -509,7 +511,8 @@ export async function setLessonPayment(childId: string, day: string, time: strin
   }
   const { error } = await supabase.from('lesson_payments').upsert(
     { child_id: childId, day, time, teacher_id: teacherId, center, method: entry.method, note: entry.note ?? null, confirmed: !!entry.confirmed,
-      ...(entry.method === 'visit' ? { amount: entry.amount ?? null } : {}) },
+      ...(entry.method === 'visit' ? { amount: entry.amount ?? null } : {}),
+      ...(entry.method === 'gusen' ? { extra_paid: !!entry.extra } : {}) },
     { onConflict: 'child_id,day,time' },
   );
   if (error) throw error;
@@ -563,6 +566,8 @@ export async function getPaymentCounts(monthStart: string, monthEnd: string): Pr
 export const ROUND_LIMIT: Partial<Record<PayMethod, number>> = { voucher: 6, gusen: 4, jangmatchum: 9, kkumideun: 0 };
 /** 장맞춤 한 달 최대 횟수 */
 export const JANGMATCHUM_MAX = 8;
+/** 굳센은 이 회차에 추가금액을 받는다 — 받기 전엔 칸에 '3회차미납'(빨강), 관리자가 '굳센3회차완납'을 고르면 끝 */
+export const GUSEN_EXTRA_ROUND = 3;
 
 /** 지점마다 쓰는 결제 — 수색은 굳센, 의정부는 굳센 대신 장맞춤 */
 export const methodInCenter = (key: string, center: Center) =>

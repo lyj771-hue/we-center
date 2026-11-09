@@ -17,7 +17,7 @@ import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
   balanceOf, isWoojin, isBalancePay, isCountExcludedName, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, rowLabel, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
-  getLaterPayments, isLaterPay, roundMethod, RETRO_BASE,
+  getLaterPayments, isLaterPay, roundMethod, RETRO_BASE, GUSEN_EXTRA_ROUND,
   isPrepaid, prepaidTotalOf, EMPTY_ROW,
 } from '@/lib/timetable';
 
@@ -640,7 +640,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   // 수업 후 결제 체크 — 먼저 표에만 표시하고, [결제 완료]에서 한꺼번에 저장한다
   const keyOf = (childId: string, time: string) => `${childId}|${time}`;
   const sameEntry = (a?: PayEntry | null, b?: PayEntry | null) => (a?.method ?? null) === (b?.method ?? null) && (a?.note ?? '') === (b?.note ?? '')
-    && (a?.method !== 'visit' || (a?.amount ?? null) === (b?.amount ?? null));
+    && (a?.method !== 'visit' || (a?.amount ?? null) === (b?.amount ?? null)) && !!a?.extra === !!b?.extra;
   const paidOf = (childId: string, time: string): PayEntry | undefined => {
     const k = keyOf(childId, time);
     return draft.has(k) ? draft.get(k)!.entry ?? undefined : payments.get(k);
@@ -684,12 +684,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
     for (const x of lessons) { const m0 = effMethod(x), m = m0 && roundMethod(m0); if (m && m in ROUND_LIMIT) today.push({ childId: x.childId, time: x.time, method: m, mine: true }); }
     today.sort((a, b) => a.time.localeCompare(b.time));
-    const out = new Map<string, { n: number; over: boolean }>();
+    const out = new Map<string, { n: number; over: boolean; method: PayMethod }>();
     for (const r of today) {
       const k = `${r.childId}|${r.method}`;
       const n = (before.get(k) ?? 0) + 1;
       before.set(k, n);
-      if (r.mine) out.set(keyOf(r.childId, r.time), { n, over: !!ROUND_LIMIT[r.method] && n >= ROUND_LIMIT[r.method]! });
+      if (r.mine) out.set(keyOf(r.childId, r.time), { n, over: !!ROUND_LIMIT[r.method] && n >= ROUND_LIMIT[r.method]!, method: r.method });
     }
     return out;
   })();
@@ -1182,6 +1182,7 @@ function payErrorText(e: unknown): string {
   const msg = (e as { message?: string })?.message ?? String(e);
   return /method_check/.test(msg)
     ? '디비가 아직 이 결제방식을 몰라요 — Supabase에서 supabase/visit-payment.sql 을 실행해 주세요.'
+    : /extra_paid/.test(msg) ? '디비가 아직 굳센3회차완납을 몰라요 — Supabase에서 supabase/gusen-extra.sql 을 실행해 주세요.'
     : `(${msg})`;
 }
 
@@ -1201,7 +1202,7 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
   /** 결제방식이 비어 있음 — 채워야 [결제 완료]를 누를 수 있다 */
   missing?: boolean;
   /** 바우처·굳센·꿈이든 월 회차 — over = 빨간 글씨([결제 완료] 막힘) */
-  round?: { n: number; over: boolean };
+  round?: { n: number; over: boolean; method: PayMethod };
   left?: (m: PayMethod) => string | undefined;
   /** 고를 수 없는 결제 — 까닭(예: 우진학교 남은 금액이 6만원보다 적음). 지금 고른 결제는 막지 않는다 */
   blocked?: (m: PayMethod) => string | undefined;
@@ -1235,22 +1236,28 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
   const later = isLaterPay(paid?.method);
   // 소급은 회차를 가운데에 — "바우처3소급"
   const retroBase = paid ? RETRO_BASE[paid.method] : undefined;
-  const tone = round?.over ? 'bg-white text-[#dc2626] font-bold ring-2 ring-[#dc2626]' : later ? 'bg-white text-[#dc2626] font-semibold' : confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
+  // 굳센 3회차 — 추가금액을 받아야 한다. 받기 전엔 '굳센3회차미납'(빨강, 결제 완료는 그대로 됨), [굳센3회차완납]을 고르면 '굳센3회차완납'
+  const eff = paid ? (paid.note ? undefined : paid.method) : base;
+  const gusenDue = eff === 'gusen' && round?.method === 'gusen' && round.n === GUSEN_EXTRA_ROUND;
+  const extraDue = gusenDue && !paid?.extra;
+  const extraTag = gusenDue || paid?.extra ? (paid?.extra ? '회차완납' : '회차미납') : '';
+  const tone = round?.over ? 'bg-white text-[#dc2626] font-bold ring-2 ring-[#dc2626]' : extraDue ? 'bg-white text-[#dc2626] font-bold ring-1 ring-[#dc2626]' : later ? 'bg-white text-[#dc2626] font-semibold' : confirmed ? 'bg-[#fde2e2] text-[#b91c1c]' : pending || paid ? 'bg-[#e3edfc] text-[#1d4ed8]' : 'text-[#27272a]';
   const text = paid
-    ? <span>{confirmed ? '✓' : ''}{paid.note || (retroBase ? cellLabel(retroBase) : cellLabel(paid.method))}{visitAmount && <span className="ml-0.5">{visitAmount}</span>}{rn}{retroBase && !paid.note && '소급'}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
-    : <span>{pending ? '체크 풀기' : (cellLabel(base) ?? '')}{!pending && rn}</span>;
+    ? <span>{confirmed ? '✓' : ''}{paid.note || (retroBase ? cellLabel(retroBase) : cellLabel(paid.method))}{visitAmount && <span className="ml-0.5">{visitAmount}</span>}{rn}{extraTag}{retroBase && !paid.note && '소급'}{rest && <span className="ml-0.5 text-[10px] opacity-80">{rest}</span>}</span>
+    : <span>{pending ? '체크 풀기' : (cellLabel(base) ?? '')}{!pending && rn}{!pending && extraTag}</span>;
   if (!onPay) return (
     <button type="button" className="block w-full min-h-[20px] text-[11px] text-[#27272a]" title="아이 명단에 없는 이름이라 체크할 수 없어요"
       onClick={() => showAlert(`'${cell.name ?? ''}'은(는) 아이 명단에 없는 이름이라 결제방식을 고를 수 없어요.\n아이명단에 아이를 넣거나, 칸을 눌러 명단의 아이로 고쳐 주세요.`)}>{cellLabel(base) ?? ''}</button>
   );
   return (
     <label className={`relative block min-h-[20px] text-[11px] cursor-pointer rounded px-1 ${tone} ${missing && !round?.over ? 'ring-1 ring-red-300' : ''}`}
-      title={round?.over ? `이번 달 ${round.n}회째 — 월 횟수를 넘었어요. 결제방식을 바꿔야 [결제 완료]를 누를 수 있어요` : later ? '나중에 결제(소급·미결) — 결제한 뒤 결제방식을 바꾸고 [결제 완료]를 눌러 주세요' : pending ? '저장 전 — [스케줄 변경 완료]로 저장, [결제 완료]로 확정' : paid?.confirmed ? '결제 완료로 확정됨' : paid ? '고른 결제 — [결제 완료]를 눌러야 확정돼요' : '기본 결제 — 눌러서 고르기'}>
+      title={round?.over ? `이번 달 ${round.n}회째 — 월 횟수를 넘었어요. 결제방식을 바꿔야 [결제 완료]를 누를 수 있어요` : extraDue ? `굳센 ${GUSEN_EXTRA_ROUND}회차 — 추가금액을 받으면 눌러서 [굳센${GUSEN_EXTRA_ROUND}회차완납]을 골라 주세요` : later ? '나중에 결제(소급·미결) — 결제한 뒤 결제방식을 바꾸고 [결제 완료]를 눌러 주세요' : pending ? '저장 전 — [스케줄 변경 완료]로 저장, [결제 완료]로 확정' : paid?.confirmed ? '결제 완료로 확정됨' : paid ? '고른 결제 — [결제 완료]를 눌러야 확정돼요' : '기본 결제 — 눌러서 고르기'}>
       {text}
-      <select value={paid ? (paid.note ? 'custom' : paid.method) : ''}
+      <select value={paid ? (paid.note ? 'custom' : paid.extra ? 'gusen_extra' : paid.method) : ''}
         onChange={async e => {
           const v = e.target.value;
           if (!v) onPay(null);
+          else if (v === 'gusen_extra') onPay({ method: 'gusen', extra: true });
           else if (v === 'visit' || v === 'visit-edit') {
             const n = await askAmount();
             if (n) onPay({ method: 'visit', amount: n });
@@ -1265,7 +1272,11 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
         <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
         {options.map(m => {
           const why = paid?.method === m.key ? undefined : blocked?.(m.key);
-          return <option key={m.key} value={m.key}>{m.label}{ABC_PRICE[m.key] ? `(${ABC_PRICE[m.key]})` : ''}{m.key === base ? ' (기본)' : ''}{why ? ` (${why})` : ''}</option>;
+          return <Fragment key={m.key}>
+            <option value={m.key}>{m.label}{ABC_PRICE[m.key] ? `(${ABC_PRICE[m.key]})` : ''}{m.key === base ? ' (기본)' : ''}{why ? ` (${why})` : ''}</option>
+            {/* 굳센3회차완납 — 굳센 바로 아래. 굳센 3회차 칸에서만 고를 수 있다 */}
+            {m.key === 'gusen' && <option value="gusen_extra" disabled={!gusenDue && !paid?.extra}>굳센{GUSEN_EXTRA_ROUND}회차완납{gusenDue || paid?.extra ? '' : ` (굳센 ${GUSEN_EXTRA_ROUND}회차에만)`}</option>}
+          </Fragment>;
         })}
         {paid?.method === 'visit' && <option value="visit-edit">방문 금액 고치기…</option>}
         <option value="custom">{paid?.note ? `${paid.note} (고치기)` : '직접 작성…'}</option>
