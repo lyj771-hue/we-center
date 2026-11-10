@@ -12,6 +12,7 @@ interface PostRow {
   content: string;
   image_url: string | null;
   location?: string | null;
+  memo?: string | null;
   tags?: string[] | null;
   sort_order?: number | null;
   created_at: string;
@@ -25,6 +26,7 @@ function fromPostRow(row: PostRow): Post {
     content: row.content,
     imageUrl: row.image_url ?? undefined,
     location: row.location ?? undefined,
+    memo: row.memo ?? undefined,
     tags: row.tags?.length ? row.tags : undefined,
     order: row.sort_order ?? undefined,
     createdAt: row.created_at,
@@ -59,8 +61,9 @@ export async function getPost(cat: Category, id: string): Promise<Post | null> {
   return data ? fromPostRow(data as PostRow) : null;
 }
 
-export async function addPost(cat: Category, data: Pick<Post, 'title' | 'content' | 'imageUrl' | 'location' | 'tags'>): Promise<Post> {
-  const base = { category: cat, title: data.title, content: data.content, image_url: data.imageUrl ?? null, ...(data.location !== undefined ? { location: data.location.trim() || null } : {}) };
+export async function addPost(cat: Category, data: Pick<Post, 'title' | 'content' | 'imageUrl' | 'location' | 'tags'> & { memo?: string }): Promise<Post> {
+  const base = { category: cat, title: data.title, content: data.content, image_url: data.imageUrl ?? null, ...(data.location !== undefined ? { location: data.location.trim() || null } : {}),
+    ...(data.memo?.trim() ? { memo: data.memo.trim() } : {}) };
   let r = await supabase.from('posts').insert({ ...base, ...(data.tags?.length ? { tags: data.tags } : {}) }).select().single();
   // tags 칸이 아직 없으면(SQL 전) 표시 없이 올린다
   if (r.error && data.tags?.length && (r.error.code === '42703' || r.error.code === 'PGRST204')) r = await supabase.from('posts').insert(base).select().single();
@@ -68,17 +71,19 @@ export async function addPost(cat: Category, data: Pick<Post, 'title' | 'content
   return fromPostRow(r.data as PostRow);
 }
 
-export async function updatePost(cat: Category, id: string, data: Partial<Pick<Post, 'title' | 'content' | 'imageUrl' | 'location' | 'tags'>>): Promise<void> {
+export async function updatePost(cat: Category, id: string, data: Partial<Pick<Post, 'title' | 'content' | 'imageUrl' | 'location' | 'memo' | 'tags'>>): Promise<void> {
   const patch: Partial<PostRow> = {};
   if (data.title !== undefined) patch.title = data.title;
   if (data.content !== undefined) patch.content = data.content;
   if (data.imageUrl !== undefined) patch.image_url = data.imageUrl || null;   // '' = 대표 사진 없음
   if (data.location !== undefined) patch.location = data.location.trim() || null;
+  if (data.memo !== undefined) patch.memo = data.memo.trim() || null;
   if (data.tags !== undefined) patch.tags = data.tags.length ? data.tags : null;
   let { error } = await supabase.from('posts').update(patch).eq('category', cat).eq('id', id);
-  // tags 칸이 아직 없으면(SQL 전) 그것만 빼고
-  if (error && patch.tags !== undefined && (error.code === '42703' || error.code === 'PGRST204')) {
-    delete patch.tags;
+  // tags·memo 칸이 아직 없으면(SQL 전) 그것만 빼고 — 메모를 적었으면 알린다
+  if (error && (patch.tags !== undefined || patch.memo !== undefined) && (error.code === '42703' || error.code === 'PGRST204')) {
+    if (patch.memo) throw new Error('한 줄 메모를 저장하려면 Supabase에서 supabase/weslang-memo.sql 을 실행해 주세요.');
+    delete patch.tags; delete patch.memo;
     ({ error } = await supabase.from('posts').update(patch).eq('category', cat).eq('id', id));
   }
   if (error) throw error;

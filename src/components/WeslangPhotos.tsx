@@ -13,6 +13,9 @@ export const mainPhotoOf = (content: string, picked?: string) => {
   return picked && images.includes(picked) ? picked : images[0];
 };
 
+/** 한 줄 메모 최대 글자 수 — 메모지가 사진 너비(680)를 넘지 않을 만큼 */
+export const WESLANG_MEMO_MAX = 40;
+
 /** 가게 주소 — 위치 칸(location)에 줄마다 하나(도로명 · 지번). 빈 줄은 뺀다 */
 export const addressLines = (location?: string) => (location ?? '').split('\n').map(x => x.trim()).filter(Boolean);
 

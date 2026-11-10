@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost, updatePost } from '@/lib/store';
-import WeslangPhotos, { AddressInputs, mainPhotoOf } from './WeslangPhotos';
+import WeslangPhotos, { AddressInputs, mainPhotoOf, WESLANG_MEMO_MAX } from './WeslangPhotos';
 import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
 import { extractImages } from '@/lib/postText';
@@ -40,7 +40,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
   // We슐랭 — 목록에서 [수정]을 누르면 같은 글쓰기 창을 그 글 내용으로 띄운다 (게시글 화면으로 가지 않는다)
   const [editId, setEditId] = useState<string | null>(null);
   const [editBefore, setEditBefore] = useState('');
-  const [form, setForm] = useState({ title: '', content: '', location: '', mainPhoto: '' });   // mainPhoto = We슐랭 대표 사진
+  const [form, setForm] = useState({ title: '', content: '', location: '', memo: '', mainPhoto: '' });   // mainPhoto = We슐랭 대표 사진
   const isWeslang = category === 'weslang';
   // 공지사항 — 글을 올리며 공지 메시지(알림톡)를 보낼지. 종류에 #{센터}가 있으면 센터 필수, #{명절}이 있으면 명절 필수
   const isNotice = category === 'notices';
@@ -69,7 +69,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
     }
     // 고른 것 — 지점만 게시글 제목 앞에 보이고, 종류·명절은 수정 화면에서 다시 보이게 숨겨 둔다
     const tags = selectionToTags(notice, kind);
-    const post = await addPost(category, { title: form.title, content: form.content, tags, ...(isWeslang ? { location: form.location, imageUrl: mainPhotoOf(form.content, form.mainPhoto) } : {}) });
+    const post = await addPost(category, { title: form.title, content: form.content, tags, ...(isWeslang ? { location: form.location, memo: form.memo, imageUrl: mainPhotoOf(form.content, form.mainPhoto) } : {}) });
     if (kind && who) {
       try {
         const r = await sendNotice(kind, post.id, wantCenter ? notice.center : null, wantHoliday ? notice.holiday : '', who.list);
@@ -78,24 +78,24 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
         await showAlert(`글은 올렸지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
       }
     }
-    setForm({ title: '', content: '', location: '', mainPhoto: '' });
+    setForm({ title: '', content: '', location: '', memo: '', mainPhoto: '' });
     setNotice(EMPTY_SELECTION);
     setEditing(false);
     refresh();
   };
 
   const startEdit = (p: Post) => {
-    setForm({ title: p.title, content: p.content, location: p.location ?? '', mainPhoto: p.imageUrl ?? '' });
+    setForm({ title: p.title, content: p.content, location: p.location ?? '', memo: p.memo ?? '', mainPhoto: p.imageUrl ?? '' });
     setEditBefore(p.content);
     setEditId(p.id);
     setEditing(true);
   };
-  const closeModal = () => { setEditing(false); setEditId(null); setForm({ title: '', content: '', location: '', mainPhoto: '' }); };
+  const closeModal = () => { setEditing(false); setEditId(null); setForm({ title: '', content: '', location: '', memo: '', mainPhoto: '' }); };
   const handleEditSave = async () => {
     if (!editId) return;
     if (!form.title.trim()) { await showAlert('가게 이름을 적어 주세요.'); return; }
     try {
-      await updatePost(category, editId, { title: form.title, content: form.content, location: form.location, imageUrl: mainPhotoOf(form.content, form.mainPhoto) ?? '' });
+      await updatePost(category, editId, { title: form.title, content: form.content, location: form.location, memo: form.memo, imageUrl: mainPhotoOf(form.content, form.mainPhoto) ?? '' });
       // 고치면서 뺀 사진 파일은 저장소에서 지운다(다른 글이 쓰면 남긴다)
       const kept = new Set(extractImages(form.content));
       removeUnusedImages(extractImages(editBefore).filter(src => !kept.has(src)));
@@ -159,6 +159,12 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
               {/* We슐랭 — 가게 주소(도로명 · 지번, 하나만 적어도 돼요) */}
               {isWeslang && (
                 <AddressInputs value={form.location} onChange={v => setForm(f => ({ ...f, location: v }))}
+                  className="mt-3 w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]" />
+              )}
+              {/* We슐랭 — 한 줄 메모(사진 아래 크래프트지에 손글씨로). 비우면 메모지 없음 */}
+              {isWeslang && (
+                <input type="text" maxLength={WESLANG_MEMO_MAX} placeholder={`한 줄 메모 (선택, ${WESLANG_MEMO_MAX}자까지 — 사진 아래 메모지에 손글씨로)`} aria-label="한 줄 메모"
+                  value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))}
                   className="mt-3 w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]" />
               )}
               {/* 공지사항 — 공지 메시지(알림톡) 고르기 */}
