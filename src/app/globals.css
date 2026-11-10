@@ -272,7 +272,7 @@ body {
   .scrap-lg .scrap-note-loc { font-size: 28px; }
 }
 
-/* We슐랭 사진 아래 크래프트지 메모 — 사진 왼쪽 끝에서 글씨 길이만큼(사진 너비를 넘으면 아래 줄로), 오른쪽 끝은 찢은 모양.
+/* We슐랭 사진 아래 크래프트지 메모 — 사진 왼쪽 끝에서 글씨 길이만큼(오른쪽 작은 사진 끝까지 — WeslangBoard 가 max-width 를 준다, 넘으면 아래 줄로), 오른쪽 끝은 찢은 모양.
    글씨는 왼쪽 메모 제목(31px, 휴대폰 30px)보다 살짝 작게 */
 .weslang-memo {
   position: relative;
@@ -283,7 +283,7 @@ body {
   margin: 14px 0 0 calc(var(--cx) - 340px);
   padding: 8px 40px 10px 22px;
   font-size: 28px;
-  line-height: 1.6;
+  line-height: 2;
   color: #3a2614;
   word-break: keep-all;
   overflow-wrap: anywhere;

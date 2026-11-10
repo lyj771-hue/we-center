@@ -40,6 +40,9 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
   const main = post.imageUrl || images[0];
   const rest = images.filter(src => src !== main);
   const slots = layoutPhotos(rest.length).map(s => ({ ...s, x: s.x + PHOTO_SHIFT }));
+  // 한 줄 메모 너비 — 오른쪽 작은 사진 끝까지(작은 사진이 없으면 대표 사진 너비). 휴대폰은 사진이 안쪽으로 모이니(--xk) 그만큼
+  const edge = slots.reduce<typeof slots[number] | undefined>((a, s) => (!a || s.x + s.w > a.x + a.w ? s : a), undefined);
+  const memoMax = edge && edge.x + edge.w > 340 ? `calc(340px + ${edge.x}px * var(--xk) + ${edge.w}px)` : undefined;
   const photosBottom = Math.max(0, ...slots.map(s => 30 + s.y + (s.w * s.ratio[1]) / s.ratio[0] + 60));
   // 한 줄 메모가 있으면 사진 아래 메모지 자리만큼 칸을 늘린다
   const height = Math.max(STAGE_HEIGHT + (post.memo ? MEMO_GAP + memoH : 0), photosBottom);
@@ -56,8 +59,8 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
               : <div className="w-full h-full flex items-center justify-center text-[40px] text-[#a1a1aa]">{post.title}</div>}
           </div>
         </button>
-        {/* 사진 아래 크래프트지 메모 — 사진 왼쪽 끝에서 글씨만큼 (사진 너비를 넘으면 아래 줄로) */}
-        {post.memo && <p ref={memoRef} className="weslang-memo">{post.memo}</p>}
+        {/* 사진 아래 크래프트지 메모 — 사진 왼쪽 끝에서 글씨만큼 (오른쪽 작은 사진 끝까지, 넘으면 아래 줄로) */}
+        {post.memo && <p ref={memoRef} className="weslang-memo" style={memoMax ? { maxWidth: memoMax } : undefined}>{post.memo}</p>}
 
         {/* 오른쪽 — 나머지 사진들 (누르면 크게) */}
         {rest.map((src, i) => {
