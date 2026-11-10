@@ -320,11 +320,24 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
   };
 
+  // [+ 시간 추가]로 더한 줄 — "센터|날짜(또는 w요일)|시간". 그 시간 칸에 아이를 넣고 저장하면 그 뒤로는 칸이 있어서 저절로 보인다
+  const [extraTimes, setExtraTimes] = useState<Set<string>>(new Set());
+  const scope = `${center}|${mode === 'day' ? day : `w${weekday}`}`;
   // 정해진 줄에 없는 시간의 칸(엑셀에서 옮긴 일요일 10:10 등)도 줄로 보인다
   const rows = useMemo(() => {
-    const keys = [...board.fixed.keys(), ...board.open.keys()];
+    const keys = [...board.fixed.keys(), ...board.open.keys(), ...[...extraTimes].filter(k => k.startsWith(`${scope}|`)).map(k => `-|${k.split('|')[2]}`)];
     return mode === 'day' ? rowsForDay(day, keys, center) : rowsForWeekday(weekday, keys, center);
-  }, [mode, day, weekday, board, center]);
+  }, [mode, day, weekday, board, center, extraTimes, scope]);
+  const addTime = async () => {
+    const v = await askPrompt(mode === 'day' ? '이 날 시간표에 넣을 시간 (예: 18:00)' : `${DOW[weekday]}요일 고정 시간표에 넣을 시간 (예: 18:00)`, '');
+    if (v === null) return;
+    const m = v.trim().match(/^(\d{1,2})\s*[:시.]\s*(\d{2})?/);
+    const h = m ? Number(m[1]) : NaN, mi = m?.[2] ? Number(m[2]) : 0;
+    if (!m || h > 23 || mi > 59) { showAlert('시간을 18:00 처럼 적어 주세요.'); return; }
+    const t = `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
+    if (rows.includes(t)) { showAlert(`${t} 줄은 이미 있어요.`); return; }
+    setExtraTimes(x => new Set(x).add(`${scope}|${t}`));
+  };
   const d = parseYmd(day);
 
   // 칸 변경은 바로 저장하지 않고 쌓아 둔다
@@ -883,6 +896,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                   {addable.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               )}
+              {!isTest && <button type="button" onClick={addTime} className="ml-2 text-[12px] border border-[#2563eb] text-[#1d4ed8] bg-white px-2.5 h-8 hover:bg-[#eff6ff]" title="정해진 시간 줄에 없는 시간을 더해요 — 그 시간 칸에 아이를 넣고 저장하면 계속 보여요">+ 시간 추가</button>}
             </>
           ) : (
             <div className="flex gap-1">
@@ -897,6 +911,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
                   {addable.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               )}
+              {!isTest && fixEdit && <button type="button" onClick={addTime} className="ml-2 text-[12px] border border-[#2563eb] text-[#1d4ed8] bg-white px-2.5 h-8 hover:bg-[#eff6ff]" title="정해진 시간 줄에 없는 시간을 더해요 — 그 시간 칸에 아이를 넣고 저장하면 계속 보여요">+ 시간 추가</button>}
             </div>
           )}
         </div>
