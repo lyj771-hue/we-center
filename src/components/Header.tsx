@@ -24,6 +24,9 @@ const NAV = [
   { href: '/schedule/uijeongbu', label: '수업스케쥴(의정부)' },
   { href: '/we-slang',       label: 'We슐랭' },   // 맛있는 가게 소개
 ];
+/** 로그인해야 보이는 메뉴 — 재활생각 · 공지사항 · 당근당근 · 수업스케쥴 · We슐랭 */
+const LOGIN_ONLY = ['/we-thoughts', '/notices', '/etc', '/schedule', '/schedule/uijeongbu', '/we-slang'];
+const PUBLIC_NAV = NAV.filter(n => !LOGIN_ONLY.includes(n.href));
 
 // 선생님(카카오 로그인 후 선생님 인증) — 시간표 보기
 // 메뉴 글씨 색 — 앞에서 뒤로 갈수록: 보라색 → 브랜드 파랑(#087BEA) 그라데이션 (네이버 지도 버튼도 같은 색: globals.css .brand-gradient)
@@ -97,7 +100,7 @@ export default function Header() {
   const nav = isAdmin
     ? [...TEACHER_NAV, ...NAV]   // 관리자도 선생님 시간표를 메인 메뉴 맨 앞에서
     : teacher ? [...TEACHER_NAV, ...NAV]   // 선생님은 시간표를 맨 앞에
-    : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : NAV;
+    : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : PUBLIC_NAV;   // 로그인 전엔 공개 메뉴만
   // 휴대폰 메뉴 — 로그인한 보호자는 마이페이지 다음에 We슐랭 (PC는 그대로)
   const mobileNav = !isAdmin && !teacher && userId
     ? [...nav.filter(n => n.href !== '/we-slang'), ...nav.filter(n => n.href === '/we-slang')]
@@ -108,7 +111,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[#ebebeb]">
+      <header className="sticky top-0 z-50 bg-white border-b border-[#ebebeb]">
         {isAdmin && (
           <div className="bg-[#0a0a0a] text-white text-[10px] tracking-[0.25em] py-1.5">
             {/* PC — 같은 메뉴의 지점들은 눌러서 펼치는 드롭다운 */}
