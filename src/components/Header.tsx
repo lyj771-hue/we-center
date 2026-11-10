@@ -15,10 +15,10 @@ const NAV = [
   { href: '/',               label: '에이치오엠이' },
   { href: '/we-center',      label: 'We공간' },   // 센터 공간(수색·의정부) 사진 — 페이지 제목은 We센터
   { href: '/we-subjects',    label: 'We수업과목' },
-  { href: '/we-thoughts',    label: 'We재활생각' },
   { href: '/payment',        label: '결제정보' },
   { href: '/location',       label: '오시는길' },
   { href: '/notices',        label: '공지사항' },
+  { href: '/we-thoughts',    label: 'We재활생각' },
   { href: '/etc',            label: 'We당근당근' },
   { href: '/schedule',       label: '수업스케쥴(수색)' },
   { href: '/schedule/uijeongbu', label: '수업스케쥴(의정부)' },
