@@ -1,4 +1,5 @@
 import PostBoard from '@/components/PostBoard';
+import ScheduleGate from '@/components/schedule/ScheduleGate';
 import NoticeBar from '@/components/NoticeBar';
 import type { Metadata } from 'next';
 import { WE_THOUGHTS } from '@/lib/content';
@@ -12,7 +13,7 @@ export default function WeThoughtsPage() {
     <PageShell page="we-thoughts" heading={WE_THOUGHTS.heading} subtext={WE_THOUGHTS.subtext} defaultWidth={1024} widthAdjustable={false}>
       <div className="note-board-bg px-8 pt-8 pb-20 md:pt-20 md:pb-[100px]">
         <PageTitle eyebrow={WE_THOUGHTS.eyebrow} variant="notice" className="mb-16 md:mb-20" />
-        <PostBoard category="thoughts" basePath="/we-thoughts" variant="notes" />
+        <ScheduleGate view><PostBoard category="thoughts" basePath="/we-thoughts" variant="notes" /></ScheduleGate>
       </div>
       <NoticeBar />
     </PageShell>

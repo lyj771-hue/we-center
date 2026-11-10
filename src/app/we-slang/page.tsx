@@ -1,4 +1,5 @@
 import PostBoard from '@/components/PostBoard';
+import ScheduleGate from '@/components/schedule/ScheduleGate';
 import NoticeBar from '@/components/NoticeBar';
 import type { Metadata } from 'next';
 import { WE_SLANG } from '@/lib/content';
@@ -20,7 +21,7 @@ export default function WeSlangPage() {
           <img src="/weslang/wechelin-bib2.jpg" alt="WECHELIN BIB GOURMAND — 센터 근처 맛있는 가게" className="block w-full max-w-[720px] mx-auto rounded-2xl shadow-[0_2px_6px_rgba(0,0,0,0.06),0_10px_24px_rgba(0,0,0,0.05)]" />
         </div>
         <div className="px-1 md:px-4">
-          <PostBoard category="weslang" basePath="/we-slang" variant="weslang" />
+          <ScheduleGate view><PostBoard category="weslang" basePath="/we-slang" variant="weslang" /></ScheduleGate>
         </div>
       </div>
       <NoticeBar />

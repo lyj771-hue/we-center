@@ -1,4 +1,5 @@
 import PostBoard from '@/components/PostBoard';
+import ScheduleGate from '@/components/schedule/ScheduleGate';
 import type { Metadata } from 'next';
 import { ETC } from '@/lib/content';
 import PageShell, { PageTitle } from '@/components/PageShell';
@@ -15,7 +16,7 @@ export default function EtcPage() {
         {/* 맨 위 — We당근당근 로고 배너 (We슐랭 배너처럼 가운데, 양옆 여백) */}
         <img src="/carrot/we-carrot-banner4.jpg" alt="We당근당근" className="block w-full max-w-[720px] mx-auto mb-8 rounded-2xl shadow-[0_2px_6px_rgba(0,0,0,0.06),0_10px_24px_rgba(0,0,0,0.05)]" />
         <PageTitle eyebrow={ETC.eyebrow} className="mb-5" headingColor={CARROT} />
-        <PostBoard category="etc" basePath="/etc" variant="carrot" />
+        <ScheduleGate view><PostBoard category="etc" basePath="/etc" variant="carrot" /></ScheduleGate>
       </div>
     </PageShell>
   );

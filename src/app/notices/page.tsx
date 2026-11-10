@@ -1,4 +1,5 @@
 import PostBoard from '@/components/PostBoard';
+import ScheduleGate from '@/components/schedule/ScheduleGate';
 import NoticeBar from '@/components/NoticeBar';
 import type { Metadata } from 'next';
 import { NOTICES } from '@/lib/content';
@@ -12,7 +13,7 @@ export default function NoticesPage() {
     <PageShell page="notices" heading={NOTICES.heading} subtext={NOTICES.subtext} defaultWidth={1024}>
       <div className="max-w-[var(--page-w)] mx-auto px-8 pt-8 pb-14 md:pt-14">
         <PageTitle eyebrow={NOTICES.eyebrow} className="mb-12" />
-        <PostBoard category="notices" basePath="/notices" />
+        <ScheduleGate view><PostBoard category="notices" basePath="/notices" /></ScheduleGate>
       </div>
       <NoticeBar />
     </PageShell>

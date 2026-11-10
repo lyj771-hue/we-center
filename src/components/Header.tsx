@@ -24,7 +24,7 @@ const NAV = [
   { href: '/schedule/uijeongbu', label: '수업스케쥴(의정부)' },
   { href: '/we-slang',       label: 'We슐랭' },   // 맛있는 가게 소개
 ];
-/** 로그인해야 보이는 메뉴 — 재활생각 · 공지사항 · 당근당근 · 수업스케쥴 · We슐랭 */
+/** 승인된 보호자(그리고 관리자·선생님)만 보이는 메뉴 — 재활생각 · 공지사항 · 당근당근 · 수업스케쥴 · We슐랭 */
 const LOGIN_ONLY = ['/we-thoughts', '/notices', '/etc', '/schedule', '/schedule/uijeongbu', '/we-slang'];
 const PUBLIC_NAV = NAV.filter(n => !LOGIN_ONLY.includes(n.href));
 
@@ -79,7 +79,9 @@ export default function Header() {
   }, [adminOpen]);
   useEffect(() => { setAdminOpen(null); }, [pathname]);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { userId, profile, login, logout: memberLogout, teacher } = useMember();
+  const { userId, profile, login, logout: memberLogout, teacher, canUse } = useMember();
+  // 승인된 보호자(어느 지점이든) — 로그인만 한 사람은 공개 메뉴만
+  const approvedMember = !!userId && (!!profile?.approvedAt || canUse('eunpyeong') || canUse('uijeongbu'));
 
   // Triple-click the WE logo → admin prompt
   const clicks = useRef(0);
@@ -100,7 +102,8 @@ export default function Header() {
   const nav = isAdmin
     ? [...TEACHER_NAV, ...NAV]   // 관리자도 선생님 시간표를 메인 메뉴 맨 앞에서
     : teacher ? [...TEACHER_NAV, ...NAV]   // 선생님은 시간표를 맨 앞에
-    : userId ? [...NAV, { href: '/mypage', label: '마이페이지' }] : PUBLIC_NAV;   // 로그인 전엔 공개 메뉴만
+    : approvedMember ? [...NAV, { href: '/mypage', label: '마이페이지' }]
+    : userId ? [...PUBLIC_NAV, { href: '/mypage', label: '마이페이지' }] : PUBLIC_NAV;   // 로그인 전·승인 전엔 공개 메뉴만
   // 휴대폰 메뉴 — 로그인한 보호자는 마이페이지 다음에 We슐랭 (PC는 그대로)
   const mobileNav = !isAdmin && !teacher && userId
     ? [...nav.filter(n => n.href !== '/we-slang'), ...nav.filter(n => n.href === '/we-slang')]
