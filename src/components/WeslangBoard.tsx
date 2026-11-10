@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { savePostOrder } from '@/lib/store';
 import { showAlert } from '@/lib/dialog';
 import PhotoViewer from './PhotoViewer';
@@ -14,8 +14,8 @@ import { addressLines } from './WeslangPhotos';
 // 가운데 사진 680 × 425 (가로 8 : 세로 5 — 예전 4:5의 세로 절반)
 const STAGE_HEIGHT = 30 + 425 + 100;
 const PHOTO_SHIFT = 70;
-/** 사진 아래 크래프트지 메모 자리 */
-const MEMO_HEIGHT = 50;
+/** 사진 아래 크래프트지 메모와 사진 사이 (globals.css .weslang-memo margin-top) */
+const MEMO_GAP = 14;
 
 // We슐랭 — 재활생각 스크랩북 모양을 빌려 쓴다. 가게 하나가 한 줄(가운데 하나씩).
 // 가운데 큰 사진 = 대표 사진(글쓰기에서 고른 것, 없으면 본문 첫 사진). 어느 사진을 눌러도 크게 — 옆으로 넘겨 이 글의 다른 사진도. 관리자는 메모의 [수정]으로 고친다, 오른쪽 작은 사진 = 나머지 사진(누르면 크게), 왼쪽 메모 = 가게 이름 · 위치(누르면 크게 — 크게 볼 때만 주소 복사).
@@ -23,6 +23,18 @@ const MEMO_HEIGHT = 50;
 function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin: boolean; onDelete: (id: string) => void; onEdit?: (p: Post) => void }) {
   const [viewing, setViewing] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
+  // 한 줄 메모 높이 — 길면 여러 줄로 내려가니 그린 뒤 재서 칸을 그만큼 늘린다
+  const memoRef = useRef<HTMLParagraphElement>(null);
+  const [memoH, setMemoH] = useState(0);
+  useLayoutEffect(() => {
+    const el = memoRef.current;
+    if (!el) { setMemoH(0); return; }
+    const measure = () => setMemoH(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [post.memo]);
   const images = extractImages(post.content);
   // 대표 사진(글쓰기에서 고른 것, 없으면 본문 첫 사진) = 가운데 큰 사진, 나머지 = 오른쪽 작은 사진
   const main = post.imageUrl || images[0];
@@ -30,7 +42,7 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
   const slots = layoutPhotos(rest.length).map(s => ({ ...s, x: s.x + PHOTO_SHIFT }));
   const photosBottom = Math.max(0, ...slots.map(s => 30 + s.y + (s.w * s.ratio[1]) / s.ratio[0] + 60));
   // 한 줄 메모가 있으면 사진 아래 메모지 자리만큼 칸을 늘린다
-  const height = Math.max(STAGE_HEIGHT + (post.memo ? MEMO_HEIGHT : 0), photosBottom);
+  const height = Math.max(STAGE_HEIGHT + (post.memo ? MEMO_GAP + memoH : 0), photosBottom);
 
   return (
     // 높이 — PC(1/2 축소)·휴대폰(1/3 축소)
@@ -44,8 +56,8 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
               : <div className="w-full h-full flex items-center justify-center text-[40px] text-[#a1a1aa]">{post.title}</div>}
           </div>
         </button>
-        {/* 사진 아래 크래프트지 메모 — 사진 왼쪽 끝에서 글씨만큼 (사진 너비까지) */}
-        {post.memo && <p className="weslang-memo">{post.memo}</p>}
+        {/* 사진 아래 크래프트지 메모 — 사진 왼쪽 끝에서 글씨만큼 (사진 너비를 넘으면 아래 줄로) */}
+        {post.memo && <p ref={memoRef} className="weslang-memo">{post.memo}</p>}
 
         {/* 오른쪽 — 나머지 사진들 (누르면 크게) */}
         {rest.map((src, i) => {
