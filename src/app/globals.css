@@ -11,13 +11,13 @@
   size-adjust: 200%;
 }
 
-/* ── 나눔손글씨 장미체 — 사이트 기본 폰트: 조각 파일로 잘라 둔 것(app/jangmi-font.css, layout 에서 불러온다).
-   예전 암스테르담체(app/amsterdam-font.css · public/fonts/amsterdam)·배은혜체(app/baeeunhye-font.css · public/fonts/baeeunhye)는 되돌릴 때를 위해 남겨 둔다 ── */
+/* ── 나눔손글씨 암스테르담 — 사이트 기본 폰트: 조각 파일로 잘라 둔 것(app/amsterdam-font.css, layout 에서 불러온다).
+   예전 배은혜체(app/baeeunhye-font.css · public/fonts/baeeunhye)·장미체(app/jangmi-font.css · public/fonts/jangmi)는 되돌릴 때를 위해 남겨 둔다 ── */
 
 /* ── Font theme — runtime CSS vars from next/font ── */
 @theme inline {
-  --font-sans:  "NanumJangMiCe", var(--font-noto-sans),  "Noto Sans KR",  -apple-system, sans-serif;
-  --font-serif: "NanumJangMiCe Heading", var(--font-noto-serif), "Noto Serif KR", Georgia,       serif;
+  --font-sans:  "NanumAmSeuTeReuDam", var(--font-noto-sans),  "Noto Sans KR",  -apple-system, sans-serif;
+  --font-serif: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia,       serif;
 }
 
 /* ── Design tokens ────────────────────────────────── */
@@ -44,13 +44,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
   /* 전체 볼드 — 손글씨 폰트엔 굵은 버전이 없어서 외곽선으로 두께를 낸다 */
   -webkit-text-stroke: 0.035em currentColor;
+  /* 자간 — 손글씨라 글자가 붙어 보여서 조금 띄운다 */
+  letter-spacing: 0.03em;
 }
 
-/* 본문 줄 간격·줄바꿈 — We재활생각 본문처럼: 넉넉한 줄 간격(2), 단어 중간에서 줄이 안 바뀌게(keep-all).
+/* 본문 줄 간격·줄바꿈 — 넉넉한 줄 간격(2.2), 단어 중간에서 줄이 안 바뀌게(keep-all).
    따로 leading-* 를 준 곳은 그 값을 쓴다 */
 @layer base {
-  body { word-break: keep-all; overflow-wrap: break-word; }
-  p, li, dd, blockquote { line-height: 2; }
+  body { word-break: keep-all; overflow-wrap: break-word; line-height: 1.8; }
+  p, li, dd, blockquote { line-height: 2.2; }
 }
 
 ::-webkit-scrollbar { width: 4px; }
@@ -74,7 +76,7 @@ body {
    so what the admin sees while writing matches what visitors see. */
 .rich-content {
   font-size: 14px;
-  line-height: 2;
+  line-height: 2.2;
   color: var(--ink-2);
   white-space: pre-wrap; /* keeps line breaks in legacy plain-text posts readable */
 }
@@ -174,11 +176,11 @@ body {
 
 /* Serif display heading — used on every page */
 .display-heading {
-  font-family: "NanumJangMiCe Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
+  font-family: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
   font-weight: 700;
   font-size: clamp(22px, 3.2vw, 32px);
-  line-height: 1.2;
-  letter-spacing: -0.025em;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
   color: var(--brand);
 }
 
