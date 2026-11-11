@@ -147,12 +147,13 @@ export default function LocationPageView() {
 
   return (
     <PageShell page="location" heading={LOCATION.heading} subtext={LOCATION.subtext} defaultWidth={1024}>
-    <div className="max-w-[var(--page-w)] mx-auto px-6 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
+    <div className="max-w-[var(--page-w)] mx-auto px-6 md:px-8 pt-5 pb-14 md:pt-8 fade-up">
       <PageTitle
         eyebrow={LOCATION.eyebrow}
         hideHeading
         subtextAsHeading
-        className="mb-6"
+        // 파란 글씨(소개 문구) — 위아래 여백이 크지 않게 줄 간격을 좁힌다
+        className="mb-3 [&_.display-heading]:leading-[1.4]"
         actions={isAdmin && !editing && (
           <button onClick={() => { setForm(page); setEditing(true); }}
             className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
