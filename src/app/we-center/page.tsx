@@ -108,8 +108,9 @@ export default function WeCenterPage() {
 
   return (
     <PageShell page="we-center" heading={WE_CENTER.heading} defaultWidth={1024}>
-    <div className="max-w-[var(--page-w)] mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
-      <PageTitle eyebrow={WE_CENTER.eyebrow} className="mb-7" />
+    <div className="max-w-[var(--page-w)] mx-auto px-8 pt-5 pb-14 md:pt-8 fade-up">
+      {/* 파란 글씨(제목) — 위아래 여백이 크지 않게 줄 간격을 좁힌다 */}
+      <PageTitle eyebrow={WE_CENTER.eyebrow} className="mb-4 [&_.display-heading]:leading-[1.4]" />
 
       {/* Center tabs */}
       <div className="flex items-end gap-0 border-b border-[#e5e5e5]">

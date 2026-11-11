@@ -98,11 +98,8 @@ export const ETC = {
 // ── 결제정보 (/payment) ───────────────────────
 export const PAYMENT = {
   eyebrow: '결제정보',
-  heading: '투명하게 안내드립니다',
-  subtext: [
-    '치료 비용과 결제 방법을 명확하게 공개합니다.',
-    '궁금하신 사항은 언제든 센터로 문의해 주세요.',
-  ],
+  heading: '결제 정보를 소개해요',
+  subtext: [] as string[],
   // 결제 수단 카드(바우처·굳센·꿈이든·선결제·신용카드/현금)는 DB payment_methods에서 관리자가 관리한다
 };
 

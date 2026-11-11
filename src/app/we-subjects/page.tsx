@@ -47,10 +47,11 @@ export default function WeSubjectsPage() {
 
   return (
     <PageShell page="we-subjects" heading={WE_SUBJECTS.heading} defaultWidth={1024}>
-    <div className="max-w-[var(--page-w)] mx-auto px-8 pt-8 pb-14 md:pt-14 fade-up">
+    <div className="max-w-[var(--page-w)] mx-auto px-8 pt-5 pb-14 md:pt-8 fade-up">
       <PageTitle
         eyebrow={WE_SUBJECTS.eyebrow}
-        className="mb-14"
+        // 파란 글씨(제목) — 위아래 여백을 줄인다(아래는 많이)
+        className="mb-4 [&_.display-heading]:leading-[1.4]"
         actions={isAdmin && (
           <button onClick={() => { setAdding(true); setForm({ name: '', description: '' }); }}
             className="text-[11px] border border-[#0a0a0a] px-5 py-1.5 tracking-widest hover:bg-[#0a0a0a] hover:text-white transition-colors shrink-0">
