@@ -119,7 +119,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
     <section className="fade-up">
       {/* Header row — 메모 보드·스크랩북에선 관리자일 때만 (작성 버튼) */}
       {(variant === 'list' || (isAdmin && variant !== 'carrot')) && (
-        <div className={`flex items-center mb-10 ${variant === 'list' ? 'justify-between' : 'justify-end'}`}>
+        <div className={`flex items-center ${variant === 'list' ? 'mb-4 justify-between' : 'mb-10 justify-end'}`}>
           {variant === 'list' && (
             <p className="text-[11px] tracking-[0.2em] text-[#aaa]">
               총 {posts.length}건
@@ -218,7 +218,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       ) : (
         <div className="divide-y divide-[#f0f0f0]">
           {posts.map((post, i) => (
-            <div key={post.id} className="group flex items-center gap-5 py-4 hover:bg-[#fafafa] -mx-8 px-8 transition-colors">
+            <div key={post.id} className="group flex items-center gap-5 py-2 leading-[1.6] hover:bg-[#fafafa] -mx-8 px-8 transition-colors">
               <span className="text-[11px] text-[#ccc] w-7 shrink-0 tabular-nums">
                 {String(posts.length - i).padStart(2, '0')}
               </span>

@@ -11,8 +11,8 @@ export const metadata: Metadata = { title: '공지사항' };
 export default function NoticesPage() {
   return (
     <PageShell page="notices" heading={NOTICES.heading} subtext={NOTICES.subtext} defaultWidth={1024}>
-      <div className="max-w-[var(--page-w)] mx-auto px-8 pt-8 pb-14 md:pt-14">
-        <PageTitle eyebrow={NOTICES.eyebrow} className="mb-12" />
+      <div className="max-w-[var(--page-w)] mx-auto px-8 pt-5 pb-10 md:pt-8">
+        <PageTitle eyebrow={NOTICES.eyebrow} className="mb-6" />
         <ScheduleGate view><PostBoard category="notices" basePath="/notices" /></ScheduleGate>
       </div>
       <NoticeBar />
