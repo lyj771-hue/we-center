@@ -271,21 +271,20 @@ body {
   .scrap-note-title { font-size: 22px; }   /* 좁은 메모에 맞게 제목을 작게 */
   /* We슐랭 — 메모를 더 크게·화면 왼쪽 끝 가까이, 글씨도 조금 크게 */
   .scrap-lg .scrap-note { left: calc(var(--cx) - 525px); width: 450px; padding: 28px 24px 26px; }
-  .scrap-lg .weslang-left { left: calc(var(--cx) - 525px); width: 450px; }
-  .scrap-lg .weslang-left .scrap-note { width: auto; }
   .scrap-lg .scrap-note-title { font-size: 30px; line-height: 1.8; }
   .scrap-lg .scrap-note-loc { font-size: 28px; }
 }
 
-/* We슐랭 왼쪽 메모 아래 크래프트지 한 줄 메모 — 메모 왼쪽 끝에서 글씨 길이만큼(메모 너비까지, 넘으면 아래 줄로), 오른쪽 끝은 찢은 모양.
+/* We슐랭 사진 아래 크래프트지 메모 — 사진 왼쪽 끝에서 글씨 길이만큼(오른쪽 작은 사진 끝까지 — WeslangBoard 가 max-width 를 준다, 넘으면 아래 줄로), 오른쪽 끝은 찢은 모양.
+   왼쪽 주소 메모지를 가리지 않게 WeslangBoard 가 margin-top 으로 메모지 아래까지 내린다.
    글씨는 왼쪽 메모 제목(31px, 휴대폰 30px)보다 살짝 작게 */
 .weslang-memo {
   position: relative;
   z-index: 3;
   width: fit-content;
-  max-width: 100%;
+  max-width: 680px;
   box-sizing: border-box;
-  margin: 18px 0 0;
+  margin: 14px 0 0 calc(var(--cx) - 340px);
   padding: 8px 40px 10px 22px;
   font-size: 28px;
   line-height: 2;

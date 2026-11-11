@@ -14,8 +14,10 @@ import { addressLines } from './WeslangPhotos';
 // 가운데 사진 680 × 425 (가로 8 : 세로 5 — 예전 4:5의 세로 절반)
 const STAGE_HEIGHT = 30 + 425 + 100;
 const PHOTO_SHIFT = 70;
-/** 왼쪽 메모(+ 한 줄 메모) 아래 여백 */
-const LEFT_GAP = 40;
+/** 사진 아래 크래프트지 메모와 사진 사이 (globals.css .weslang-memo margin-top) */
+const MEMO_GAP = 14;
+/** 한 줄 메모를 주소 메모지 아래로 내릴 때 둘 사이 */
+const NOTE_GAP = 24;
 
 // We슐랭 — 재활생각 스크랩북 모양을 빌려 쓴다. 가게 하나가 한 줄(가운데 하나씩).
 // 가운데 큰 사진 = 대표 사진(글쓰기에서 고른 것, 없으면 본문 첫 사진). 어느 사진을 눌러도 크게 — 옆으로 넘겨 이 글의 다른 사진도. 관리자는 메모의 [수정]으로 고친다, 오른쪽 작은 사진 = 나머지 사진(누르면 크게), 왼쪽 메모 = 가게 이름 · 위치(누르면 크게 — 크게 볼 때만 주소 복사).
@@ -23,16 +25,24 @@ const LEFT_GAP = 40;
 function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin: boolean; onDelete: (id: string) => void; onEdit?: (p: Post) => void }) {
   const [viewing, setViewing] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
-  // 왼쪽 메모 + 그 아래 한 줄 메모의 아래 끝 — 길면 여러 줄로 내려가니 그린 뒤 재서 칸을 그만큼 늘린다
-  const leftRef = useRef<HTMLDivElement>(null);
-  const [leftBottom, setLeftBottom] = useState(0);
+  // 한 줄 메모 — 왼쪽 주소 메모지를 가리지 않게 메모지 아래 끝보다 아래로 내리고, 길면 여러 줄로 내려가니 그린 뒤 재서 칸을 그만큼 늘린다
+  const cardRef = useRef<HTMLButtonElement>(null);
+  const noteRef = useRef<HTMLDivElement>(null);
+  const memoRef = useRef<HTMLParagraphElement>(null);
+  const [memoGap, setMemoGap] = useState(MEMO_GAP);
+  const [memoH, setMemoH] = useState(0);
   useLayoutEffect(() => {
-    const el = leftRef.current;
-    if (!el) return;
-    const measure = () => setLeftBottom(el.offsetTop + el.offsetHeight);
+    const el = memoRef.current, card = cardRef.current, note = noteRef.current;
+    if (!el || !card || !note) { setMemoH(0); return; }
+    const measure = () => {
+      setMemoH(el.offsetHeight);
+      const noteBottom = note.offsetTop + note.offsetHeight;
+      setMemoGap(Math.max(MEMO_GAP, noteBottom + NOTE_GAP - (card.offsetTop + card.offsetHeight)));
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
+    ro.observe(note);
     return () => ro.disconnect();
   }, [post.memo]);
   const images = extractImages(post.content);
@@ -40,22 +50,28 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
   const main = post.imageUrl || images[0];
   const rest = images.filter(src => src !== main);
   const slots = layoutPhotos(rest.length).map(s => ({ ...s, x: s.x + PHOTO_SHIFT }));
+  // 한 줄 메모 너비 — 오른쪽 작은 사진 끝까지(작은 사진이 없으면 대표 사진 너비). 휴대폰은 사진이 안쪽으로 모이니(--xk) 그만큼
+  const edge = slots.reduce<typeof slots[number] | undefined>((a, s) => (!a || s.x + s.w > a.x + a.w ? s : a), undefined);
+  const memoMax = edge && edge.x + edge.w > 340 ? `calc(340px + ${edge.x}px * var(--xk) + ${edge.w}px)` : undefined;
   const photosBottom = Math.max(0, ...slots.map(s => 30 + s.y + (s.w * s.ratio[1]) / s.ratio[0] + 60));
-  // 왼쪽 메모·한 줄 메모가 사진보다 길게 내려오면 그만큼 칸을 늘린다
-  const height = Math.max(STAGE_HEIGHT, photosBottom, leftBottom ? leftBottom + LEFT_GAP : 0);
+  // 한 줄 메모가 있으면 사진 아래 메모지 자리만큼 칸을 늘린다
+  const height = Math.max(STAGE_HEIGHT + (post.memo ? memoGap + memoH : 0), photosBottom);
 
   return (
     // 높이 — PC(1/2 축소)·휴대폰(1/3 축소)
     <article className="scrap-frame scrap-lg h-[var(--h3)] md:h-[var(--h2)]" style={{ '--h2': `${height / 2}px`, '--h3': `${height / 3}px` } as React.CSSProperties}>
       <div className="scrap-stage" style={{ height: `${height}px` }}>
         {/* 가운데 — 대표 사진. 누르면 크게(옆으로 넘겨 다른 사진도) */}
-        <button type="button" onClick={() => main && setViewing(main)} className="scrap-card block group w-full text-left cursor-zoom-in" aria-label={`${post.title} 사진 크게 보기`}>
+        <button ref={cardRef} type="button" onClick={() => main && setViewing(main)} className="scrap-card block group w-full text-left cursor-zoom-in" aria-label={`${post.title} 사진 크게 보기`}>
           <div className="aspect-[8/5] bg-[#e4e4e7] overflow-hidden">
             {main
               ? <img src={main} alt={post.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
               : <div className="w-full h-full flex items-center justify-center text-[40px] text-[#a1a1aa]">{post.title}</div>}
           </div>
         </button>
+        {/* 사진 아래 크래프트지 메모 — 사진 왼쪽 끝에서 글씨만큼 (오른쪽 작은 사진 끝까지, 넘으면 아래 줄로). 왼쪽 주소 메모지보다 아래로 */}
+        {post.memo && <p ref={memoRef} className="weslang-memo" style={{ marginTop: memoGap, ...(memoMax ? { maxWidth: memoMax } : {}) }}>{post.memo}</p>}
+
         {/* 오른쪽 — 나머지 사진들 (누르면 크게) */}
         {rest.map((src, i) => {
           const s = slots[i];
@@ -74,18 +90,15 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
         {/* 크게 보기 — 옆으로 넘겨 이 글의 다른 사진도 (대표 사진 먼저) */}
         {viewing && <PhotoViewer src={viewing} photos={[main, ...rest].filter(Boolean)} onClose={() => setViewing(null)} />}
 
-        {/* 왼쪽 — 메모(가게 이름 · 위치), 그 아래 크래프트지 한 줄 메모(글씨만큼, 넘으면 아래 줄로) */}
-        <div ref={leftRef} className="scrap-piece weslang-left" style={place(-690, 275, -2, 587)}>
-          <div className="relative scrap-note cursor-zoom-in"
-            role="button" tabIndex={0} aria-label={`${post.title} 메모 크게 보기`}
-            onClick={() => setNoteOpen(true)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setNoteOpen(true); } }}>
-            <span aria-hidden="true" className="absolute -top-[28px] left-[56px] text-[38px] select-none">📌</span>
-            <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[2.2]">{post.title}</h2>
-            <div className="mt-3 flex items-center gap-4">
-              {addressLines(post.location).length > 0 && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">{addressLines(post.location).map((a, i) => <span key={i} className="block">📍 {a}</span>)}</span>}
-            </div>
+        {/* 왼쪽 메모 — 가게 이름 · 위치 */}
+        <div ref={noteRef} className="scrap-piece scrap-note cursor-zoom-in" style={place(-690, 275, -2, 587)}
+          role="button" tabIndex={0} aria-label={`${post.title} 메모 크게 보기`}
+          onClick={() => setNoteOpen(true)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setNoteOpen(true); } }}>
+          <span aria-hidden="true" className="absolute -top-[28px] left-[56px] text-[38px] select-none">📌</span>
+          <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[2.2]">{post.title}</h2>
+          <div className="mt-3 flex items-center gap-4">
+            {addressLines(post.location).length > 0 && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">{addressLines(post.location).map((a, i) => <span key={i} className="block">📍 {a}</span>)}</span>}
           </div>
-          {post.memo && <p className="weslang-memo">{post.memo}</p>}
         </div>
       </div>
       {noteOpen && <Portal><NoteViewer title={post.title} location={post.location} onClose={() => setNoteOpen(false)} /></Portal>}
