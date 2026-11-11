@@ -218,7 +218,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       ) : (
         <div className="divide-y divide-[#f0f0f0]">
           {posts.map((post, i) => (
-            <div key={post.id} className="group flex items-center gap-5 py-2 leading-[1.6] hover:bg-[#fafafa] -mx-8 px-8 transition-colors">
+            <div key={post.id} className="group flex items-center gap-5 py-3 leading-[1.6] hover:bg-[#fafafa] -mx-8 px-8 transition-colors">
               <span className="text-[11px] text-[#ccc] w-7 shrink-0 tabular-nums">
                 {String(posts.length - i).padStart(2, '0')}
               </span>
