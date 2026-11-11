@@ -45,14 +45,14 @@ body {
   /* 전체 볼드 — 손글씨 폰트엔 굵은 버전이 없어서 외곽선으로 두께를 낸다 */
   -webkit-text-stroke: 0.035em currentColor;
   /* 자간 — 손글씨라 글자가 붙어 보여서 조금 띄운다 */
-  letter-spacing: 0.03em;
+  letter-spacing: 0.045em;
 }
 
-/* 본문 줄 간격·줄바꿈 — 넉넉한 줄 간격(2.2), 단어 중간에서 줄이 안 바뀌게(keep-all).
+/* 본문 줄 간격·줄바꿈 — 넉넉한 줄 간격(2.8), 단어 중간에서 줄이 안 바뀌게(keep-all).
    따로 leading-* 를 준 곳은 그 값을 쓴다 */
 @layer base {
-  body { word-break: keep-all; overflow-wrap: break-word; line-height: 1.8; }
-  p, li, dd, blockquote { line-height: 2.2; }
+  body { word-break: keep-all; overflow-wrap: break-word; line-height: 2.2; }
+  p, li, dd, blockquote { line-height: 2.8; }
 }
 
 ::-webkit-scrollbar { width: 4px; }
@@ -76,7 +76,7 @@ body {
    so what the admin sees while writing matches what visitors see. */
 .rich-content {
   font-size: 14px;
-  line-height: 2.2;
+  line-height: 2.8;
   color: var(--ink-2);
   white-space: pre-wrap; /* keeps line breaks in legacy plain-text posts readable */
 }
@@ -179,8 +179,8 @@ body {
   font-family: "NanumAmSeuTeReuDam Heading", var(--font-noto-serif), "Noto Serif KR", Georgia, serif;
   font-weight: 700;
   font-size: clamp(22px, 3.2vw, 32px);
-  line-height: 1.4;
-  letter-spacing: 0.02em;
+  line-height: 1.6;
+  letter-spacing: 0.03em;
   color: var(--brand);
 }
 
