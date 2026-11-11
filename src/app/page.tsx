@@ -25,7 +25,7 @@ export default function HomePage() {
           <div className="mb-8 fade-up-d2">
             <div className="relative inline-block max-w-[420px]">
               <img src="/tree-wide-b.png" alt="" aria-hidden className="pointer-events-none select-none absolute left-[calc(100%-6px)] bottom-[3px] h-[58px] sm:h-[120px] w-auto max-w-none opacity-70" />
-              <p className="relative text-[14px] sm:text-[17px] text-[#555] leading-[2]">
+              <p className="relative text-[14px] sm:text-[17px] text-[#555] leading-[var(--lh-prose)]">
                 {HOME.body.map((line, i) => (
                   <span key={i} className={i < 3 ? 'text-[12px] sm:text-[17px]' : undefined}>{bold(line)}{i < HOME.body.length - 1 && <br />}</span>
                 ))}

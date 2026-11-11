@@ -16,7 +16,7 @@ const ITEMS = [
 ];
 
 const h2 = 'font-bold text-[15px] text-[#222] mt-10 mb-3';
-const p = 'text-[13px] text-[#555] leading-[1.9]';
+const p = 'text-[13px] text-[#555] leading-[var(--lh-prose)]';
 const td = 'border border-[#e5e5e5] px-3 py-2 align-top';
 
 export default function PrivacyPage() {

@@ -231,7 +231,7 @@ export default function LocationPageView() {
             <section key={idx}>
               <h2 className="text-[12px] text-[#aaa] mb-4">{s.name}</h2>
               {/* 줄마다 따로 — 도로명·지번 줄 사이를 넉넉히 */}
-              <div className="text-[11px] leading-[2] text-[#444] whitespace-pre-wrap mb-6 space-y-2">
+              <div className="text-[11px] leading-[var(--lh-prose)] text-[#444] whitespace-pre-wrap mb-6 space-y-2">
                 {s.info ? s.info.split('\n').map((line, i) => (
                   <p key={i}>
                     {line || '\u00a0'}
