@@ -54,7 +54,7 @@ function Note({ index, title, children }: NoteProps) {
           ))}
         </svg>
       </div>
-      <h2 className="font-serif font-bold text-[28px] leading-[1.3] text-[var(--brand)] mt-1.5 mb-3.5">{title}</h2>
+      <h2 className="font-serif font-bold text-[25px] leading-[1.3] text-[var(--brand)] mt-1.5 mb-3.5">{title}</h2>
       <hr className="border-0 border-t-[1.5px] border-[var(--brand)] opacity-55 mb-4" />
       {children}
     </article>
@@ -87,7 +87,7 @@ export default function NoteBoard({ posts, pinned, basePath, isAdmin, onDelete }
     <div className="max-w-[860px] mx-auto flex flex-col items-center md:flex-row md:flex-wrap md:justify-center md:items-start">
       {pinned && (
         <Note index={0} title={pinned.title}>
-          <p className="text-[14px] leading-[var(--lh-prose)] text-[var(--brand)]">{pinned.desc}</p>
+          <p className="text-[13px] leading-[var(--lh-prose)] text-[var(--brand)]">{pinned.desc}</p>
         </Note>
       )}
 
@@ -95,7 +95,7 @@ export default function NoteBoard({ posts, pinned, basePath, isAdmin, onDelete }
         const text = toText(post.content);
         return (
           <Note key={post.id} index={i + offset} title={post.title}>
-            <p className="text-[14px] leading-[var(--lh-prose)] text-[var(--brand)] mb-[18px]">{excerpt(text)}</p>
+            <p className="text-[13px] leading-[var(--lh-prose)] text-[var(--brand)] mb-[18px]">{excerpt(text)}</p>
             <p className="text-[13px] font-semibold text-[var(--brand)] opacity-85 mb-3.5">
               {readMinutes(text)}분 · {yearMonth(post.createdAt)}
             </p>
