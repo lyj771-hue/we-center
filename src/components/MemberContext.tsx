@@ -3,6 +3,8 @@
 import { getMyBranches, type BranchKey, type MyBranch } from '@/lib/mypage';
 import { claimTeacher, getMyTeacher, type MyTeacher } from '@/lib/teacher';
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
+import { isAppPath } from '@/lib/appPath';
 import { supabase } from '@/lib/supabaseClient';
 import { createMyProfile, fetchKakaoPhone, getMyProfile, saveMyPhone, signInWithKakao } from '@/lib/store';
 import type { Profile } from '@/lib/types';
@@ -31,15 +33,23 @@ interface MemberCtx {
   canUse: (b: BranchKey) => boolean;
   /** 이 카카오 계정이 선생님이면 — 선생님은 시간표 보기만 (가입 창·마이페이지 없음) */
   teacher: MyTeacher | null;
+  /** 처음 로그인해서 가입(아이 이름) 전 — 홈페이지는 창을 띄우고, 보호자 앱은 가입 화면을 보여 준다 */
+  needsNickname: boolean;
+  /** 카카오계정 전화번호 (로그인 직후 읽은 것) */
+  kakaoPhone: string | null;
+  /** 가입을 마친 뒤 프로필을 바로 넣는다 (보호자 앱 가입 화면) */
+  setJoinedProfile: (p: Profile) => void;
 }
 
 const Ctx = createContext<MemberCtx>({
   userId: null, profile: null, loading: true, login: () => {}, loginOther: () => {}, logout: () => {},
   branches: [], refreshBranches: () => {}, refreshProfile: () => {}, canUse: () => false, teacher: null,
+  needsNickname: false, kakaoPhone: null, setJoinedProfile: () => {},
 });
 
 export function MemberProvider({ children }: { children: ReactNode }) {
   const { isAdmin } = useAdmin();
+  const inApp = isAppPath(usePathname());
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -131,9 +141,9 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const needsNickname = !!memberId && !loading && !profile && !teacher && !unsure;
 
   return (
-    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, loginOther, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse, teacher: memberId ? teacher : null }}>
+    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, loginOther, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse, teacher: memberId ? teacher : null, needsNickname, kakaoPhone, setJoinedProfile: setProfile }}>
       {children}
-      {needsNickname && <NicknameSetup userId={memberId} kakaoPhone={kakaoPhone} onDone={setProfile} onTeacher={setTeacher} onCancel={logout} />}
+      {needsNickname && !inApp && <NicknameSetup userId={memberId} kakaoPhone={kakaoPhone} onDone={setProfile} onTeacher={setTeacher} onCancel={logout} />}
     </Ctx.Provider>
   );
 }

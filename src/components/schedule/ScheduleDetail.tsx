@@ -29,7 +29,8 @@ import { rowsForDay } from '@/lib/timetable';
 // 예약 게시 글 — 게시 전에 알림톡 버튼으로 들어온 보호자에겐 "몇 시에 게시돼요"를 보여 주다가 그 시각에 저절로 연다.
 // 선생님: 관리자처럼 칸마다 누가 신청했는지 보고, 내 시간은 여러 개 골라 [내리기], 그날 + 로 빈칸·x 시간을 골라 [저장](= 더하기). (supabase/teacher-schedule-post.sql)
 
-export default function ScheduleDetail({ id }: { id: string }) {
+/** backHref — 목록으로 돌아갈 곳 (보호자 앱은 /app/book) */
+export default function ScheduleDetail({ id, backHref }: { id: string; backHref?: string }) {
   const router = useRouter();
   const { isAdmin } = useAdmin();
   const { userId, profile, teacher } = useMember();
@@ -256,7 +257,7 @@ export default function ScheduleDetail({ id }: { id: string }) {
 
   return (
     <div className="max-w-[720px] mx-auto px-4 pt-8 pb-14 md:pt-14 fade-up">
-      <Link href="/schedule" className="inline-block text-[12px] text-[#999] hover:text-[#333] mb-6">← 수업스케쥴 목록</Link>
+      <Link href={backHref ?? '/schedule'} className="inline-block text-[12px] text-[#999] hover:text-[#333] mb-6">← 수업스케쥴 목록</Link>
 
       <ScheduleGate>
         {/* 가족 — 신청할 아이 고르기 */}

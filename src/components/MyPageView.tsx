@@ -44,6 +44,8 @@ export interface MyPageViewProps {
   bottom?: React.ReactNode;
   /** 수업을 취소한 뒤 — 다시 불러오기 */
   onChanged?: () => void;
+  /** 보호자 앱 — 'week' = 주별 시간표만(홈 탭), 'pay' = 결제 현황·선결제·사용 카드만(결제 탭). 없으면 전부(마이페이지) */
+  only?: 'week' | 'pay';
 }
 
 // 결제별 사용 카드 — 선결제 카드 아래에 이 순서로 (쓰는 결제이거나 이번 달 기록이 있는 것만)
@@ -59,7 +61,7 @@ const inBranch = (method: string, center?: string) => methodInCenter(method, cen
 // 년/월/일 (주별 시간표 날짜 넘기기)
 const ymd = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = NO_LEDGERS, history: allHistory = [], today, center, failed, top, bottom }: MyPageViewProps) {
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = NO_LEDGERS, history: allHistory = [], today, center, failed, top, bottom, only }: MyPageViewProps) {
   // 휴직 중인 이원재 선생님 수업은 어떤 횟수·카드에도 세지 않는다
   const history = allHistory.filter(h => !isCountExcludedName(h.teacher, h.day));
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
@@ -144,6 +146,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
       )}
 
       {/* 주별 시간표 — 알림톡 [주간 수업 보기] 버튼은 /mypage?d=#{날짜} 로 와서 여기로 내려온다 */}
+      {only !== 'pay' && (
       <section id="week" className={`${card} scroll-mt-24`}>
         {/* 제목 줄 — 오른쪽 [이번 주](이번 주를 볼 땐 자리만 두고 숨김). 아래 날짜 넘기기는 가운데, 주를 바꿔도 위치가 안 움직이게 */}
         <div className="flex items-center justify-between mb-3">
@@ -192,6 +195,8 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
           })}
         </div>
       </section>
+      )}
+      {only !== 'week' && (<>
       {/* 결제 현황 — 바우처·굳센·꿈이든은 이번 달 사용 횟수(매월 1일 0부터), 선결제는 남은 횟수 */}
       <section className={card}>
         <div className="flex items-center justify-between mb-3">
@@ -282,6 +287,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
           </section>
         );
       })}
+      </>)}
       {bottom}
     </div>
   );

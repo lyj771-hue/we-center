@@ -1,3 +1,8 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
+import { isAppPath } from '@/lib/appPath';
+
 // 맨 아래 — 사업자 정보 + 저작권. (보호자 로그인은 상단 오른쪽 버튼)
 // 사업자 정보는 사업자등록증과 똑같이 적는다 — 카카오 비즈니스 심사가 홈페이지의 사업자 정보와 대조한다.
 const BUSINESS = [
@@ -9,6 +14,9 @@ const BUSINESS = [
 ];
 
 export default function Footer() {
+  // 보호자 앱(/app)에는 꼬리말이 없다
+  const pathname = usePathname();
+  if (isAppPath(pathname)) return null;
   return (
     <footer className="border-t border-[#ebebeb] py-8 px-4 text-center text-[11px] text-[#aaa]">
       <p className="leading-[1.9] break-keep">

@@ -9,6 +9,7 @@ import type { Profile } from '@/lib/types';
 import { askConfirm } from '@/lib/dialog';
 import { ALERTS_CHANGED, getUnreadAlertCount } from '@/lib/alerts';
 import ContactButton from './ContactButton';
+import { isAppPath } from '@/lib/appPath';
 
 
 const NAV = [
@@ -55,6 +56,7 @@ export default function Header() {
     ...(canSeeStats ? [{ label: '대시보드', items: [{ href: '/admin/stats', label: '스케줄 잡기' }] }] : []),
     { label: '알림 메시지', items: [{ href: '/admin/messages', label: '메시지 모양' }, { href: '/admin/alimtalk-templates', label: '심사 올리기' }, { href: '/admin/alimtalk-test', label: '테스트 보내기' }] },
     { label: '알림', items: [{ href: '/admin/alerts', label: '알림' }] },
+    { label: '앱 푸시', items: [{ href: '/admin/push', label: '앱 푸시' }] },
   ];
   // 관리자 알림 — 아직 안 본 수(빨간 숫자). 1분마다, 알림 화면에서 확인하면 바로 새로
   const [unread, setUnread] = useState(0);
@@ -111,6 +113,9 @@ export default function Header() {
 
   // /schedule/uijeongbu 는 수업스케쥴(의정부)에만 불이 들어오게
   const isActive = (href: string) => pathname === href || (pathname.startsWith(href + '/') && ![...NAV, ...TEACHER_NAV].some(n => n.href !== href && n.href.startsWith(href + '/') && pathname.startsWith(n.href)));
+
+  // 보호자 앱(/app)은 앱 전용 위·아래 메뉴를 쓴다 — 홈페이지 머리말은 숨긴다
+  if (isAppPath(pathname)) return null;
 
   return (
     <>
