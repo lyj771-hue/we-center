@@ -1,14 +1,7 @@
-import PostDetail from '@/components/PostDetail';
+import { redirect } from 'next/navigation';
 
-// 보호자 앱 — 공지사항 글 하나 (앱 푸시 "공지사항이 등록되었어요"를 누르면 여기로)
-
-interface Props { params: Promise<{ id: string }> }
-
-export default async function AppNoticeDetail({ params }: Props) {
+// 예전 앱 푸시 링크(/app/notices/글) → /app/site/notices/글
+export default async function AppNoticeRedirect({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return (
-    <div className="bg-white rounded-[18px] px-[18px] py-5 [-webkit-text-stroke:0]">
-      <PostDetail category="notices" id={id} backHref="/app/notices" backLabel="공지사항 목록" />
-    </div>
-  );
+  redirect(`/app/site/notices/${id}`);
 }

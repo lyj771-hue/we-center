@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Portal from './Portal';
 
 // 문의하기 — 누르면 지점별 전화번호 창(번호를 누르면 전화, [복사]로 번호 복사). 바깥을 누르면 닫힌다
-const PHONES = [
+export const PHONES = [
   { label: '수색(은평)점', phone: '010-4842-3164' },
   { label: '의정부점', phone: '010-4799-3164' },
 ];

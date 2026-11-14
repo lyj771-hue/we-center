@@ -25,10 +25,10 @@ const Ctx = createContext<AppCtx>({ branch: 'eunpyeong', child: null, version: 0
 export const useApp = () => useContext(Ctx);
 
 const TABS = [
-  { href: '/app', label: '홈', icon: <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" /> },
-  { href: '/app/book', label: '수업신청', icon: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><line x1="3" y1="9.5" x2="21" y2="9.5" /><line x1="8" y1="2.5" x2="8" y2="6.5" /><line x1="16" y1="2.5" x2="16" y2="6.5" /><line x1="12" y1="12.5" x2="12" y2="18" /><line x1="9.25" y1="15.25" x2="14.75" y2="15.25" /></> },
-  { href: '/app/pay', label: '결제', icon: <><rect x="2.5" y="5" width="19" height="14" rx="2" /><line x1="2.5" y1="10" x2="21.5" y2="10" /><line x1="6" y1="15" x2="10" y2="15" /></> },
-  { href: '/app/more', label: '더보기', icon: <><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></> },
+  { href: '/app', label: '홈페이지', match: (p: string) => p === '/app' || p.startsWith('/app/site'), icon: <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" /> },
+  { href: '/app/class', label: '수업', match: (p: string) => p.startsWith('/app/class') || p.startsWith('/app/book'), icon: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><line x1="3" y1="9.5" x2="21" y2="9.5" /><line x1="8" y1="2.5" x2="8" y2="6.5" /><line x1="16" y1="2.5" x2="16" y2="6.5" /></> },
+  { href: '/app/pay', label: '결제', match: (p: string) => p.startsWith('/app/pay'), icon: <><rect x="2.5" y="5" width="19" height="14" rx="2" /><line x1="2.5" y1="10" x2="21.5" y2="10" /><line x1="6" y1="15" x2="10" y2="15" /></> },
+  { href: '/app/more', label: '더보기', match: (p: string) => p.startsWith('/app/more'), icon: <><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></> },
 ];
 
 const Chevron = () => (
@@ -133,7 +133,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#ebebeb] pb-[env(safe-area-inset-bottom)]">
           <div className="max-w-[560px] mx-auto h-[64px] grid grid-cols-4">
             {TABS.map(t => {
-              const on = t.href === '/app' ? pathname === '/app' : pathname.startsWith(t.href);
+              const on = t.match(pathname);
               return (
                 <Link key={t.href} href={t.href} aria-current={on ? 'page' : undefined}
                   className={`flex flex-col items-center justify-center gap-1 text-[11px] ${on ? 'text-[var(--brand)]' : 'text-[#9a9aa2]'}`}>

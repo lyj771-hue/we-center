@@ -1,81 +1,40 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import MyPageView from '@/components/MyPageView';
-import { useApp } from '@/components/app/AppShell';
-import { useMyWeek } from '@/components/app/useMyData';
 import InstallHint from '@/components/app/InstallHint';
 import PushToggle from '@/components/app/PushToggle';
-import type { MyLesson } from '@/lib/mypage';
-import { getMyLessons, isRealLesson } from '@/lib/mypage';
-import type { ScheduleSummary } from '@/lib/schedule';
-import { isPublished, listSchedules, parseYmd, scheduleDays, scheduleRange, thisMonday, toYmd } from '@/lib/schedule';
+import { ETC, LOCATION, NOTICES, PAYMENT, WE_CENTER, WE_SUBJECTS, WE_THOUGHTS } from '@/lib/content';
 
-// 보호자 앱 — 홈 탭: 오늘 수업 + 이번 주 수업(마이페이지 주별 시간표와 같은 화면) + 열린 수업스케쥴 안내
+// 보호자 앱 — 홈페이지 탭: 홈페이지 메뉴를 앱 안에서 (수업스케쥴·마이페이지 관련은 [수업]·[결제] 탭에 있어서 뺀다)
+// 각 메뉴는 /app/site/... 에서 열려 아래 탭이 그대로 보인다.
 
-const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+const MENU = [
+  { href: '/app/site/notices', label: '공지사항', sub: NOTICES.heading },
+  { href: '/app/site/we-center', label: 'We공간', sub: WE_CENTER.heading },
+  { href: '/app/site/we-subjects', label: 'We수업과목', sub: WE_SUBJECTS.heading },
+  { href: '/app/site/payment', label: '결제정보', sub: PAYMENT.heading },
+  { href: '/app/site/location', label: '오시는길', sub: LOCATION.heading },
+  { href: '/app/site/we-thoughts', label: 'We재활생각', sub: WE_THOUGHTS.heading },
+  { href: '/app/site/etc', label: 'We당근당근', sub: ETC.heading },
+  { href: '/app/site/we-slang', label: 'We슐랭', sub: '센터 근처 맛있는 가게' },
+];
 
-export default function AppHome() {
-  const { branch, child, version } = useApp();
-  const today = toYmd(new Date());
-  const [week, setWeek] = useState(thisMonday());
-  const { lessons, failed } = useMyWeek(week);
-
-  // 오늘 수업 — 주를 넘겨 봐도 맨 위는 늘 오늘
-  const [todays, setTodays] = useState<MyLesson[]>([]);
-  useEffect(() => {
-    getMyLessons(today, today)
-      .then(ls => setTodays(ls.filter(l => l.center === branch && isRealLesson(l) && !l.absent).sort((a, b) => a.time.localeCompare(b.time))))
-      .catch(() => setTodays([]));
-  }, [today, branch, version]);
-
-  // 신청할 수 있는 수업스케쥴 — 이 지점, 숨기지 않았고 게시됐고 아직 안 지난 것
-  const [open, setOpen] = useState<ScheduleSummary[]>([]);
-  useEffect(() => {
-    listSchedules()
-      .then(list => setOpen(list.filter(s => s.center === branch && !s.hiddenAt && isPublished(s) && (scheduleDays(s).at(-1) ?? '') >= today)))
-      .catch(() => setOpen([]));
-  }, [branch, today]);
-
-  const d = parseYmd(today);
+export default function AppSiteHome() {
   return (
     <div className="space-y-4">
       <InstallHint />
       <PushToggle banner />
-
-      <section className="bg-[var(--brand)] text-white rounded-[18px] p-5 space-y-3.5">
-        <div className="flex justify-between items-baseline">
-          <h2 className="text-[17px]">오늘 수업</h2>
-          <span className="text-[13px] opacity-85">{d.getMonth() + 1}/{d.getDate()} ({DOW[d.getDay()]})</span>
-        </div>
-        {todays.length === 0 ? (
-          <p className="text-[14px] opacity-85">오늘은 수업이 없어요.</p>
-        ) : (
-          <div className="space-y-2">
-            {todays.map((l, i) => (
-              <div key={i} className="flex items-center gap-3 bg-white/15 rounded-xl px-3.5 py-3">
-                <span className="text-[20px] tabular-nums">{l.time}</span>
-                <span className="text-[15px]">{l.teacher} 선생님</span>
-                {l.oral && <span className="ml-auto text-[12px] opacity-85">구강</span>}
-              </div>
-            ))}
-          </div>
-        )}
+      <section className="bg-white rounded-[18px] px-[18px] divide-y divide-[#f4f4f4]">
+        {MENU.map(m => (
+          <Link key={m.href} href={m.href} className="flex items-center justify-between gap-3 py-4">
+            <span className="min-w-0">
+              <span className="block text-[16px] text-[#27272a]">{m.label}</span>
+              <span className="block text-[12px] text-[#999] truncate">{m.sub}</span>
+            </span>
+            <span className="text-[#c4c4cc]" aria-hidden="true">›</span>
+          </Link>
+        ))}
       </section>
-
-      {open.length > 0 && (
-        <Link href={open.length === 1 ? `/app/book/${open[0].id}` : '/app/book'} className="flex items-center justify-between bg-white rounded-[18px] p-[18px] text-[#27272a]">
-          <span className="space-y-1 min-w-0">
-            <span className="block text-[15px] truncate">{open.length === 1 ? open[0].title : `신청할 수 있는 수업이 ${open.length}개 있어요`}</span>
-            <span className="block text-[12px] text-[#888]">{open.length === 1 ? `${scheduleRange(open[0])} · 선착순 신청` : '선착순 신청'}</span>
-          </span>
-          <span className="shrink-0 text-[13px] text-[var(--brand)]">신청하기 ›</span>
-        </Link>
-      )}
-
-      <MyPageView only="week" child={child} approved week={week} setWeek={setWeek} weekLessons={lessons} payments={[]}
-        today={today} center={branch} failed={failed} />
     </div>
   );
 }

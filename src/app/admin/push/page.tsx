@@ -17,10 +17,10 @@ const fmt = (iso: string) => { const d = new Date(iso); return `${d.getFullYear(
 const device = (ua?: string) => !ua ? '기기' : /iphone|ipad/i.test(ua) ? '아이폰' : /android/i.test(ua) ? '안드로이드' : /mac|windows/i.test(ua) ? '컴퓨터' : '기기';
 
 const OPEN_TO = [
-  { url: '/app', label: '앱 홈' },
-  { url: '/app/book', label: '수업신청' },
+  { url: '/app', label: '앱 홈페이지 탭' },
+  { url: '/app/class', label: '수업 (오늘·이번 주·수업 신청)' },
   { url: '/app/pay', label: '결제' },
-  { url: '/app/notices', label: '공지사항 목록' },
+  { url: '/app/site/notices', label: '공지사항 목록' },
 ];
 
 export default function PushAdminPage() {
@@ -34,7 +34,7 @@ export default function PushAdminPage() {
   const [target, setTarget] = useState('all');
   const [title, setTitle] = useState('공지사항이 등록되었어요');
   const [body, setBody] = useState('');
-  const [url, setUrl] = useState('/app/notices');
+  const [url, setUrl] = useState('/app/site/notices');
   const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
@@ -67,7 +67,7 @@ export default function PushAdminPage() {
     if (!n) return;
     setTitle('공지사항이 등록되었어요');
     setBody(n.title);
-    setUrl(`/app/notices/${n.id}`);
+    setUrl(`/app/site/notices/${n.id}`);
   };
 
   const send = async () => {
