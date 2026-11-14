@@ -9,7 +9,7 @@ import type { Profile } from '@/lib/types';
 import { askConfirm } from '@/lib/dialog';
 import { ALERTS_CHANGED, getUnreadAlertCount } from '@/lib/alerts';
 import ContactButton from './ContactButton';
-import { isAppPath } from '@/lib/appPath';
+import { isAppPath, toAppHref } from '@/lib/appPath';
 
 
 const NAV = [
@@ -42,7 +42,8 @@ const TEACHER_NAV = [
   { href: '/teacher/timetable/uijeongbu', label: '시간표(의정부)' },
 ];
 
-export default function Header() {
+/** inApp — 보호자 앱 [홈페이지] 탭 안에서 (수업스케쥴·마이페이지 메뉴는 앱의 [수업]·[결제] 탭에 있어서 뺀다) */
+export default function Header({ inApp = false }: { inApp?: boolean }) {
   const pathname = usePathname();
   const { isAdmin, canSeeStats, requestAdmin, logout } = useAdmin();
   // 관리자 메뉴 — 같은 메뉴의 지점은 한 묶음(PC 드롭다운 · 휴대폰 메뉴 안 버튼 줄)
@@ -107,15 +108,17 @@ export default function Header() {
     : approvedMember ? [...NAV, { href: '/mypage', label: '마이페이지' }]
     : userId ? [...PUBLIC_NAV, { href: '/mypage', label: '마이페이지' }] : PUBLIC_NAV;   // 로그인 전·승인 전엔 공개 메뉴만
   // 휴대폰 메뉴 — 로그인한 보호자는 마이페이지 다음에 We슐랭 (PC는 그대로)
-  const mobileNav = !isAdmin && !teacher && userId
+  const mobileNav0 = !isAdmin && !teacher && userId
     ? [...nav.filter(n => n.href !== '/we-slang'), ...nav.filter(n => n.href === '/we-slang')]
     : nav;
+  const appHidden = (href: string) => href === '/mypage' || href.startsWith('/schedule') || href.startsWith('/teacher');
+  const mobileNav = inApp ? mobileNav0.filter(n => !appHidden(n.href)) : mobileNav0;
 
   // /schedule/uijeongbu 는 수업스케쥴(의정부)에만 불이 들어오게
-  const isActive = (href: string) => pathname === href || (pathname.startsWith(href + '/') && ![...NAV, ...TEACHER_NAV].some(n => n.href !== href && n.href.startsWith(href + '/') && pathname.startsWith(n.href)));
+  const isActive = (href: string) => (inApp ? pathname === toAppHref(href) || (href !== '/' && pathname.startsWith((toAppHref(href) ?? '#') + '/')) : false) || pathname === href || (pathname.startsWith(href + '/') && ![...NAV, ...TEACHER_NAV].some(n => n.href !== href && n.href.startsWith(href + '/') && pathname.startsWith(n.href)));
 
   // 보호자 앱(/app)은 앱 전용 위·아래 메뉴를 쓴다 — 홈페이지 머리말은 숨긴다
-  if (isAppPath(pathname)) return null;
+  if (isAppPath(pathname) && !inApp) return null;
 
   return (
     <>

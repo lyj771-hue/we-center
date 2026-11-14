@@ -13,10 +13,10 @@ const BUSINESS = [
   ['전화', '010-4842-3164'],
 ];
 
-export default function Footer() {
+export default function Footer({ inApp = false }: { inApp?: boolean }) {
   // 보호자 앱(/app)에는 꼬리말이 없다
   const pathname = usePathname();
-  if (isAppPath(pathname)) return null;
+  if (isAppPath(pathname) && !inApp) return null;
   return (
     <footer className="border-t border-[#ebebeb] py-8 px-4 text-center text-[11px] text-[#aaa]">
       <p className="leading-[1.9] break-keep">

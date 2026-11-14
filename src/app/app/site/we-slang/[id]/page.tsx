@@ -1,6 +1,2 @@
-import { redirect } from 'next/navigation';
-
-// We슐랭은 글 화면이 따로 없다 — 목록으로
-export default function Page() {
-  redirect('/app/site/we-slang');
-}
+// 보호자 앱 — 홈페이지 탭 안의 글 화면 (홈페이지와 똑같이)
+export { default } from '@/app/we-slang/[id]/page';

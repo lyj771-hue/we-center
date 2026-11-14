@@ -5,6 +5,8 @@ import MyPageView from '@/components/MyPageView';
 import { useApp } from '@/components/app/AppShell';
 import { useMyWeek } from '@/components/app/useMyData';
 import ScheduleList from '@/components/app/ScheduleList';
+import InstallHint from '@/components/app/InstallHint';
+import PushToggle from '@/components/app/PushToggle';
 import type { MyLesson } from '@/lib/mypage';
 import { getMyLessons, isRealLesson } from '@/lib/mypage';
 import { parseYmd, thisMonday, toYmd } from '@/lib/schedule';
@@ -31,6 +33,8 @@ export default function AppClass() {
   const d = parseYmd(today);
   return (
     <div className="space-y-4">
+      <InstallHint />
+      <PushToggle banner />
       <section className="bg-[var(--brand)] text-white rounded-[18px] p-5 space-y-3.5">
         <div className="flex justify-between items-baseline">
           <h2 className="text-[17px]">오늘 수업</h2>

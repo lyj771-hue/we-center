@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useMember } from '@/components/MemberContext';
 import type { BranchKey, MyChild, MyKid } from '@/lib/mypage';
@@ -9,6 +9,9 @@ import { BRANCHES, getMyChild, getMyChildCenters, getMyChildren, setActiveChild 
 import { showAlert } from '@/lib/dialog';
 import { AppJoin, AppLogin, AppPending, AppSplash } from './AppGate';
 import { clearAppBadge, registerAppSw } from '@/lib/push';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import { isAppSitePath, toAppHref } from '@/lib/appPath';
 
 // 보호자 앱 틀 — 로그인·가입·승인 확인(문지기) + 위(아이·지점 고르기) + 아래 탭 4개.
 // 데이터·권한은 홈페이지 마이페이지와 같다(같은 DB, 같은 함수).
@@ -25,7 +28,7 @@ const Ctx = createContext<AppCtx>({ branch: 'eunpyeong', child: null, version: 0
 export const useApp = () => useContext(Ctx);
 
 const TABS = [
-  { href: '/app', label: '홈페이지', match: (p: string) => p === '/app' || p.startsWith('/app/site'), icon: <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" /> },
+  { href: '/app', label: '홈페이지', match: (p: string) => isAppSitePath(p), icon: <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" /> },
   { href: '/app/class', label: '수업', match: (p: string) => p.startsWith('/app/class') || p.startsWith('/app/book'), icon: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><line x1="3" y1="9.5" x2="21" y2="9.5" /><line x1="8" y1="2.5" x2="8" y2="6.5" /><line x1="16" y1="2.5" x2="16" y2="6.5" /></> },
   { href: '/app/pay', label: '결제', match: (p: string) => p.startsWith('/app/pay'), icon: <><rect x="2.5" y="5" width="19" height="14" rx="2" /><line x1="2.5" y1="10" x2="21.5" y2="10" /><line x1="6" y1="15" x2="10" y2="15" /></> },
   { href: '/app/more', label: '더보기', match: (p: string) => p.startsWith('/app/more'), icon: <><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></> },
@@ -37,6 +40,7 @@ const Chevron = () => (
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { userId, profile, loading, teacher, needsNickname, canUse, logout } = useMember();
   // 서비스워커(앱 푸시) — 앱을 열 때 등록
   useEffect(() => { registerAppSw(); }, []);
@@ -47,6 +51,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     document.addEventListener('visibilitychange', onShow);
     return () => document.removeEventListener('visibilitychange', onShow);
   }, []);
+
+  // 앱 안에서 홈페이지 링크(/notices/글, /we-center 등)를 누르면 앱 안 주소(/app/site/...)로 바꿔 연다 — 아래 탭이 그대로 남게
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.('a');
+      if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+      const url = new URL(a.href, location.href);
+      if (url.origin !== location.origin) return;
+      const to = toAppHref(url.pathname);
+      if (!to) return;
+      e.preventDefault();
+      e.stopPropagation();
+      router.push(to + url.search + url.hash);
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [router]);
 
   // 아이가 이어진 지점 — 가입 승인이 없어도 그 지점 아이가 이어져 있으면 볼 수 있다 (마이페이지와 같은 규칙)
   const [linked, setLinked] = useState<BranchKey[] | null>(null);
@@ -77,6 +99,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     catch (e) { showAlert(`아이를 바꾸지 못했어요.\n${(e as Error).message}`); }
   };
 
+  // 아래 탭 4개
+  const tabBar = (
+    <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#ebebeb] pb-[env(safe-area-inset-bottom)]">
+      <div className="max-w-[560px] mx-auto h-[64px] grid grid-cols-4">
+        {TABS.map(t => {
+          const on = t.match(pathname);
+          return (
+            <Link key={t.href} href={t.href} aria-current={on ? 'page' : undefined}
+              className={`flex flex-col items-center justify-center gap-1 text-[11px] ${on ? 'text-[var(--brand)]' : 'text-[#9a9aa2]'}`}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{t.icon}</svg>
+              {t.label}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+
   // ── 문지기: 로그인 → 가입 → 승인 ──
   if (loading) return <AppSplash />;
   if (!userId) return <AppLogin />;
@@ -85,6 +125,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (!profile) return <AppSplash failed />;
   if (linked === null) return <AppSplash />;
   if (usable.length === 0) return <AppPending onLogout={logout} />;
+
+  // [홈페이지] 탭 — 지금 홈페이지 모습 그대로(오른쪽 위 ☰ 메뉴·꼬리말), 아래 탭만 앱 것
+  if (isAppSitePath(pathname)) return (
+    <Ctx.Provider value={{ branch, child, version }}>
+      <div className="min-h-[100dvh] flex flex-col bg-white pt-[env(safe-area-inset-top)] pb-[calc(64px+env(safe-area-inset-bottom))]">
+        <Header inApp />
+        <div className="flex-1">{children}</div>
+        <Footer inApp />
+      </div>
+      {tabBar}
+    </Ctx.Provider>
+  );
 
   const selectCls = 'h-9 pl-3.5 pr-8 rounded-full text-[15px] appearance-none bg-no-repeat bg-[right_10px_center]';
   return (
@@ -129,21 +181,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
 
-        {/* 아래 탭 */}
-        <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#ebebeb] pb-[env(safe-area-inset-bottom)]">
-          <div className="max-w-[560px] mx-auto h-[64px] grid grid-cols-4">
-            {TABS.map(t => {
-              const on = t.match(pathname);
-              return (
-                <Link key={t.href} href={t.href} aria-current={on ? 'page' : undefined}
-                  className={`flex flex-col items-center justify-center gap-1 text-[11px] ${on ? 'text-[var(--brand)]' : 'text-[#9a9aa2]'}`}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{t.icon}</svg>
-                  {t.label}
-                </Link>
-              );
-            })}
-          </div>
-        </nav>
+        {tabBar}
       </div>
     </Ctx.Provider>
   );
