@@ -77,7 +77,7 @@ export default function PushAdminPage() {
     try {
       const r = await sendPush({ target, targetLabel, title: title.trim(), body: body.trim(), url });
       await showAlert(r.devices === 0 ? '알림을 켠 기기가 없어서 보내지 않았어요.'
-        : `보냈어요.\n기기 ${r.devices}대 중 성공 ${r.sent}${r.failed ? ` · 실패 ${r.failed}` : ''}${r.removed ? ` · 정리 ${r.removed}(앱 삭제·알림 끔)` : ''}`);
+        : `보냈어요.\n기기 ${r.devices}대 중 성공 ${r.sent}${r.failed ? ` · 실패 ${r.failed}` : ''}${r.removed ? ` · 정리 ${r.removed}(앱 삭제·알림 끔)` : ''}${r.errors?.length ? `\n\n실패 이유: ${r.errors.join(' / ')}` : ''}`);
       load();
     } catch (e) { showAlert(`보내지 못했어요.\n${(e as Error).message}`); }
     finally { setSending(false); }

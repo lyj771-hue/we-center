@@ -94,5 +94,5 @@ export async function sendPush(input: { target: string; targetLabel: string; tit
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(j.error ?? `오류 ${res.status}`);
-  return j as { devices: number; sent: number; failed: number; removed: number };
+  return j as { devices: number; sent: number; failed: number; removed: number; errors?: string[] };
 }

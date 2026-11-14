@@ -13,7 +13,8 @@ export async function POST(request: Request) {
 
   const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY, priv = process.env.VAPID_PRIVATE_KEY;
   if (!pub || !priv) return Response.json({ error: '푸시 키가 없어요 (Vercel 환경 변수 VAPID)' }, { status: 400 });
-  webpush.setVapidDetails('mailto:admin@we-center.local', pub, priv);
+  // 보내는 쪽 연락처 — 애플은 실제 주소만 받는다(.local 같은 가짜 도메인이면 403 BadJwtToken)
+  webpush.setVapidDetails('https://we-center.vercel.app', pub, priv);
 
   const { target, targetLabel, title, body, url } = await request.json().catch(() => ({}));
   if (!title || typeof target !== 'string') return Response.json({ error: '제목과 받는 사람을 정해 주세요' }, { status: 400 });
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
 
   const payload = JSON.stringify({ title, body: body ?? '', url: url || '/app' });
   let sent = 0, failed = 0;
+  const errors: string[] = [];
   const gone: string[] = [];
   await Promise.all((subs ?? []).map(async s => {
     try {
@@ -47,12 +49,17 @@ export async function POST(request: Request) {
       sent++;
     } catch (e) {
       const code = (e as { statusCode?: number }).statusCode;
-      if (code === 404 || code === 410) gone.push(s.id); else failed++;
+      if (code === 404 || code === 410) { gone.push(s.id); return; }
+      failed++;
+      const err = e as { statusCode?: number; body?: string; message?: string };
+      const msg = `${err.statusCode ?? ''} ${(err.body || err.message || '').toString().slice(0, 200)}`.trim();
+      console.error('push failed', s.endpoint.slice(0, 40), msg);
+      if (!errors.includes(msg)) errors.push(msg);
     }
   }));
   if (gone.length) await db.from('push_subscriptions').delete().in('id', gone);
 
   const devices = subs?.length ?? 0;
   await db.from('push_log').insert({ title, body: body ?? '', url: url || '/app', target, target_label: targetLabel ?? target, devices, sent, failed, removed: gone.length });
-  return Response.json({ devices, sent, failed, removed: gone.length });
+  return Response.json({ devices, sent, failed, removed: gone.length, errors });
 }
