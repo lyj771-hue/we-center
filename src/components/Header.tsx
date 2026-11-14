@@ -12,7 +12,7 @@ import ContactButton from './ContactButton';
 import { isAppPath, toAppHref } from '@/lib/appPath';
 
 
-const NAV = [
+export const NAV = [
   { href: '/',               label: '에이치오엠이' },
   { href: '/we-center',      label: 'We공간' },   // 센터 공간(수색·의정부) 사진 — 페이지 제목은 We센터
   { href: '/we-subjects',    label: 'We수업과목' },

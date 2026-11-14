@@ -2,19 +2,20 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useMember } from '@/components/MemberContext';
-import InstallHint from '@/components/app/InstallHint';
-import PushToggle from '@/components/app/PushToggle';
-import { PHONES } from '@/components/ContactButton';
+import Link from 'next/link';
+import MenuGrid from '@/components/app/MenuGrid';
+import ContactButton from '@/components/ContactButton';
+import type { PushState } from '@/lib/push';
+import { getPushState } from '@/lib/push';
 import type { BranchKey } from '@/lib/mypage';
 import { BRANCHES, getMyChildCenters, leaveBranch, requestBranch, withdrawMember } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
 
-// 보호자 앱 — 더보기 탭: 앞 탭에서 볼 수 없는 것만 — 센터 문의 · 지점 가입 신청/취소 · 앱 알림 · 개인정보처리방침 · 로그아웃 · 회원 탈퇴.
+// 보호자 앱 — 더보기 탭: 홈페이지 메뉴 아이콘(가로 5개) · 지점 가입 신청/취소 · 앱 알림(눌러서 스위치) · 문의하기 · 개인정보처리방침 · 로그아웃 · 회원 탈퇴.
 // 지점 신청/취소 규칙은 홈페이지 마이페이지(app/mypage/page.tsx)와 같다.
 
 const row = 'flex items-center justify-between min-h-[54px] py-2 gap-3 text-[15px] text-[#27272a]';
 const group = 'bg-white rounded-[18px] px-[18px] divide-y divide-[#f4f4f4]';
-const heading = 'px-1 pt-2 text-[12px] text-[#999]';
 
 export default function AppMore() {
   const { userId, profile, branches, refreshBranches, refreshProfile, logout } = useMember();
@@ -56,53 +57,54 @@ export default function AppMore() {
     try { await withdrawMember(); await showAlert('탈퇴했어요. 그동안 고마웠어요.'); logout(); }
     catch (e) { showAlert(`탈퇴하지 못했어요.\n${(e as Error).message}`); }
   };
+  // 앱 알림 켜짐/꺼짐 (목록 오른쪽에 작게)
+  const [push, setPush] = useState<PushState | null>(null);
+  useEffect(() => { getPushState().then(setPush).catch(() => setPush('unsupported')); }, []);
+
   const out = async () => { if (await askConfirm('로그아웃할까요?')) logout(); };
 
   return (
     <div className="space-y-3">
-      <h2 className={heading}>센터 문의</h2>
-      <section className={group}>
-        {PHONES.map(p => (
-          <a key={p.phone} href={`tel:${p.phone.replace(/-/g, '')}`} className={row}>
-            {p.label}
-            <span className="inline-flex items-center gap-1.5 text-[14px] text-[var(--brand)] tabular-nums">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg>
-              {p.phone}
-            </span>
-          </a>
-        ))}
-      </section>
+      {/* 홈페이지 메뉴 전부 — 작은 네모 아이콘, 가로 5개 */}
+      <MenuGrid />
 
-      <h2 className={heading}>지점</h2>
-      <section className={group}>
-        {branches.map(b => {
-          const st = stateOf(b);
-          return (
-            <div key={b.key} className={row}>
-              <span>{b.label}
-                <span className={`block text-[12px] ${st === 'approved' ? 'text-[var(--brand)]' : st === 'pending' ? 'text-[#B45309]' : 'text-[#999]'}`}>
-                  {st === 'approved' ? '가입됨' : st === 'pending' ? '승인 대기 중' : '가입 안 함'}
-                </span>
-              </span>
-              {st === 'none' ? (
-                <button type="button" onClick={() => join(b.key)} className="h-9 px-4 rounded-full bg-[var(--brand)] text-white text-[13px]">가입 신청</button>
-              ) : (
-                <button type="button" onClick={() => leave(b)} className="h-9 px-4 rounded-full border border-[#ddd] text-[13px] text-[#666]">
-                  {st === 'approved' ? '이용 취소' : '신청 취소'}
+      {/* 지점 — 홈페이지 마이페이지와 같은 버튼 (안 한 지점은 눌러서 가입 신청, 아래 작은 글씨로 취소) */}
+      <section className="bg-white rounded-[18px] p-[18px] space-y-3">
+        <h2 className="text-[16px] text-[#27272a]">지점</h2>
+        <div className="flex gap-2">
+          {branches.map(b => {
+            const st = stateOf(b);
+            return (
+              <div key={b.key} className="flex-1 text-center">
+                <button type="button" disabled={st !== 'none'} onClick={() => join(b.key)}
+                  className={`w-full py-2.5 text-[14px] rounded-full border disabled:cursor-default ${
+                    st === 'approved' ? 'border-[var(--brand)] text-[var(--brand)] bg-[#eef5fe]'
+                    : st === 'pending' ? 'border-[#eab308] text-[#a16207] bg-[#fefce8]'
+                    : 'border-[#ddd] text-[#888]'}`}>
+                  {b.label}
+                  <span className="block text-[11px] mt-0.5 opacity-80">{st === 'approved' ? '가입됨' : st === 'pending' ? '승인 대기 중' : '눌러서 가입 신청'}</span>
                 </button>
-              )}
-            </div>
-          );
-        })}
+                {st !== 'none' && (
+                  <button type="button" onClick={() => leave(b)} className="mt-1.5 text-[11px] text-[#aaa] underline underline-offset-2">
+                    {st === 'approved' ? `${b.label} 이용 취소` : '승인 신청 취소'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </section>
 
-      <h2 className={heading}>알림</h2>
       <section className={group}>
-        <PushToggle />
+        <Link href="/app/more/push" className={row}>앱 알림 <span className="text-[13px] text-[#999]">{push === 'on' ? '켜짐' : push === null ? '' : '꺼짐'} <span className="text-[#c4c4cc]" aria-hidden="true">›</span></span></Link>
       </section>
-      <InstallHint always />
 
-      <section className={`${group} mt-6`}>
+      {/* 문의하기 — 홈페이지와 같은 버튼, 누르면 지점별 전화번호 창 */}
+      <div className="pt-3 text-center">
+        <ContactButton className="inline-flex rounded-full border border-[var(--brand)] px-5 py-2 text-[14px] text-[var(--brand)]" />
+      </div>
+
+      <section className={group}>
         <a href="/app/site/privacy" className={row}>개인정보처리방침 <span className="text-[#c4c4cc]" aria-hidden="true">›</span></a>
         <button type="button" onClick={out} className={`${row} w-full text-left text-[#e11d48]`}>로그아웃</button>
       </section>
