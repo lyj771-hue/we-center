@@ -8,7 +8,7 @@ import type { BranchKey, MyChild, MyKid } from '@/lib/mypage';
 import { BRANCHES, getMyChild, getMyChildCenters, getMyChildren, setActiveChild } from '@/lib/mypage';
 import { showAlert } from '@/lib/dialog';
 import { AppJoin, AppLogin, AppPending, AppSplash } from './AppGate';
-import { registerAppSw } from '@/lib/push';
+import { clearAppBadge, registerAppSw } from '@/lib/push';
 
 // 보호자 앱 틀 — 로그인·가입·승인 확인(문지기) + 위(아이·지점 고르기) + 아래 탭 4개.
 // 데이터·권한은 홈페이지 마이페이지와 같다(같은 DB, 같은 함수).
@@ -40,6 +40,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { userId, profile, loading, teacher, needsNickname, canUse, logout } = useMember();
   // 서비스워커(앱 푸시) — 앱을 열 때 등록
   useEffect(() => { registerAppSw(); }, []);
+  // 앱을 열거나 다시 화면에 띄우면 아이콘 뱃지(빨간 숫자)를 지운다
+  useEffect(() => {
+    const onShow = () => { if (document.visibilityState === 'visible') clearAppBadge(); };
+    onShow();
+    document.addEventListener('visibilitychange', onShow);
+    return () => document.removeEventListener('visibilitychange', onShow);
+  }, []);
 
   // 아이가 이어진 지점 — 가입 승인이 없어도 그 지점 아이가 이어져 있으면 볼 수 있다 (마이페이지와 같은 규칙)
   const [linked, setLinked] = useState<BranchKey[] | null>(null);

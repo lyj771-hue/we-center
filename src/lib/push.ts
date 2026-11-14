@@ -20,6 +20,12 @@ export async function registerAppSw(): Promise<ServiceWorkerRegistration | null>
   try { return await navigator.serviceWorker.register(SW_URL, { scope: SW_SCOPE }); } catch { return null; }
 }
 
+/** 앱을 열거나 다시 볼 때 — 아이콘 뱃지와 알림 센터의 우리 알림을 지운다 */
+export async function clearAppBadge() {
+  try { await (navigator as Navigator & { clearAppBadge?: () => Promise<void> }).clearAppBadge?.(); } catch { /* 지원 안 하면 그만 */ }
+  try { (await navigator.serviceWorker?.getRegistration(SW_SCOPE))?.active?.postMessage('clear-badge'); } catch { /* 무시 */ }
+}
+
 async function getReg() {
   return (await navigator.serviceWorker.getRegistration(SW_SCOPE)) ?? (await registerAppSw());
 }
