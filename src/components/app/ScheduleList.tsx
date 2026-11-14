@@ -6,7 +6,7 @@ import type { ScheduleSummary } from '@/lib/schedule';
 import { isPublished, listSchedules, scheduleDays, scheduleRange, thisMonday } from '@/lib/schedule';
 import { useApp } from './AppShell';
 
-// 보호자 앱 [수업] 탭의 수업 신청 목록 — 이 지점 수업스케쥴. 누르면 /app/book/[id] 에서 시간을 눌러 선착순 신청
+// 보호자 앱 [스케줄] 탭의 수업 신청 목록 — 이 지점 수업스케쥴. 누르면 /app/book/[id] 에서 시간을 눌러 선착순 신청
 // 지난 스케쥴(마지막 날이 이번 주 월요일보다 전)은 [지난 스케쥴 보기]로 접어 둔다
 
 export default function ScheduleList() {

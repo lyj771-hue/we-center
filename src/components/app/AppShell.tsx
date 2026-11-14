@@ -29,7 +29,7 @@ export const useApp = () => useContext(Ctx);
 
 const TABS = [
   { href: '/app', label: '홈페이지', match: (p: string) => isAppSitePath(p), icon: <path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" /> },
-  { href: '/app/class', label: '수업', match: (p: string) => p.startsWith('/app/class') || p.startsWith('/app/book'), icon: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><line x1="3" y1="9.5" x2="21" y2="9.5" /><line x1="8" y1="2.5" x2="8" y2="6.5" /><line x1="16" y1="2.5" x2="16" y2="6.5" /></> },
+  { href: '/app/class', label: '스케줄', match: (p: string) => p.startsWith('/app/class') || p.startsWith('/app/book'), icon: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><line x1="3" y1="9.5" x2="21" y2="9.5" /><line x1="8" y1="2.5" x2="8" y2="6.5" /><line x1="16" y1="2.5" x2="16" y2="6.5" /></> },
   { href: '/app/pay', label: '결제', match: (p: string) => p.startsWith('/app/pay'), icon: <><rect x="2.5" y="5" width="19" height="14" rx="2" /><line x1="2.5" y1="10" x2="21.5" y2="10" /><line x1="6" y1="15" x2="10" y2="15" /></> },
   { href: '/app/more', label: '더보기', match: (p: string) => p.startsWith('/app/more'), icon: <><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></> },
 ];
@@ -81,6 +81,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const primary: BranchKey = profile?.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong';
   const [sel, setSel] = useState<BranchKey | null>(null);
+  // 더보기 [스케줄1]·[스케줄2] — 주소의 ?center= 로 그 지점을 보여 준다
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get('center');
+    if (c === 'eunpyeong' || c === 'uijeongbu') setSel(c);
+  }, [pathname]);
   const branch: BranchKey = sel && viewable(sel) ? sel : viewable(primary) ? primary : usable[0]?.key ?? primary;
 
   const [child, setChild] = useState<MyChild | null>(null);
