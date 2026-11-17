@@ -6,7 +6,7 @@ import AppShell from '@/components/app/AppShell';
 
 export const metadata: Metadata = {
   title: { absolute: 'We 센터', template: '%s | We 센터' },
-  manifest: '/app/manifest.webmanifest',
+  manifest: '/app/manifest.webmanifest?v=2',
   appleWebApp: { capable: true, title: 'We 센터', statusBarStyle: 'default' },
 };
 
