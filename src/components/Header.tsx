@@ -82,6 +82,8 @@ export default function Header({ inApp = false }: { inApp?: boolean }) {
   }, [adminOpen]);
   useEffect(() => { setAdminOpen(null); }, [pathname]);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // 페이지가 바뀌면 휴대폰 메뉴를 닫는다 — 웹앱(AppShell)은 링크 클릭을 먼저 가로채 앱 주소로 열어서 링크의 onClick(닫기)이 안 불린다
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
   const { userId, profile, login, logout: memberLogout, teacher, canUse } = useMember();
   // 승인된 보호자(어느 지점이든) — 로그인만 한 사람은 공개 메뉴만
   const approvedMember = !!userId && (!!profile?.approvedAt || canUse('eunpyeong') || canUse('uijeongbu'));

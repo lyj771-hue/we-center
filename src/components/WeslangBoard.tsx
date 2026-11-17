@@ -49,6 +49,8 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
   // 메모·메모지 너비 — 오른쪽 작은 사진 끝까지(작은 사진이 없으면 대표 사진 너비). 휴대폰은 사진이 안쪽으로 모이니(--xk) 그만큼
   const edge = slots.reduce<typeof slots[number] | undefined>((a, s) => (!a || s.x + s.w > a.x + a.w ? s : a), undefined);
   const memoMax = edge && edge.x + edge.w > 340 ? `calc(340px + ${edge.x}px * var(--xk) + ${edge.w}px)` : undefined;
+  // 휴대폰 — 사진·메모 묶음(대표 사진 왼쪽 끝 ~ 오른쪽 작은 사진 끝)이 화면 가운데에 오게, 가운데선을 그 절반만큼 왼쪽으로 (globals.css --sh)
+  const shift = edge ? Math.max(0, (edge.x * 0.7 + edge.w - 340) / 2) : 0;
   const photosBottom = Math.max(0, ...slots.map(s => 30 + s.y + (s.w * s.ratio[1]) / s.ratio[0] + 60));
   // 칸 높이 — 위 메모 + 사진 + 아래 회색 메모지 (오른쪽 작은 사진이 더 내려가면 그만큼)
   const height = Math.max(STAGE_HEIGHT, STAGE_PAD + top + 425 + NOTE_GAP + noteH + 60, photosBottom);
@@ -56,7 +58,7 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
   return (
     // 높이 — PC(1/2 축소)·휴대폰(1/3 축소)
     <article className="scrap-frame scrap-lg h-[var(--h3)] md:h-[var(--h2)]" style={{ '--h2': `${height / 2}px`, '--h3': `${height / 3}px` } as React.CSSProperties}>
-      <div className="scrap-stage" style={{ height: `${height}px` }}>
+      <div className="scrap-stage" style={{ height: `${height}px`, '--sh': `${shift}px` } as React.CSSProperties}>
         {/* 위 크래프트지 메모 — 사진 왼쪽 끝에서 글씨만큼 (오른쪽 작은 사진 끝까지, 넘으면 아래 줄로) */}
         {post.memo && <p ref={memoRef} className="weslang-memo" style={{ marginTop: 0, marginBottom: MEMO_GAP, ...(memoMax ? { maxWidth: memoMax } : {}) }}>{post.memo}</p>}
         {/* 가운데 — 대표 사진. 누르면 크게(옆으로 넘겨 다른 사진도) */}

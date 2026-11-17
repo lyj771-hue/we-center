@@ -213,7 +213,9 @@ body {
 /* We슐랭 가운데 대표 사진 — 재활생각 카드(540)보다 크게 */
 .scrap-lg .scrap-card { width: 680px; margin-left: calc(var(--cx) - 340px); }
 @media (max-width: 480px) {
-  .scrap-lg .scrap-card { margin: 0 auto; }
+  /* We슐랭 휴대폰 — 사진·메모 묶음 전체가 화면 가운데에 오게 가운데선을 왼쪽으로(--sh, WeslangBoard 가 정한다) */
+  .scrap-lg .scrap-stage { --cx: calc(50% - var(--sh, 0px)); }
+  .scrap-lg .scrap-card { margin-left: calc(var(--cx) - 340px); }
 }
 .scrap-card {
   position: relative;
