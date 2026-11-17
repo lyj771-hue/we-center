@@ -36,11 +36,11 @@ const TABS = [
   { href: '/app/more', label: '더보기', match: (p: string) => p.startsWith('/app/more'), icon: <><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></> },
 ];
 
-// 선생님 — 홈페이지 · 시간표(수색·의정부) · 볼 수 있는 아이(예: 설영수 선생님 → 김유담) · 더보기
-const teacherTabs = (kid: ViewKid | undefined) => [
+// 선생님 — 홈페이지 · 시간표(수색·의정부) · 마이페이지(월별 수업 횟수) · 더보기
+const teacherTabs = () => [
   TABS[0],
   { href: '/app/teacher', label: '시간표', match: (p: string) => p.startsWith('/app/teacher'), icon: TABS[1].icon },
-  ...(kid ? [{ href: '/app/child', label: kid.name, match: (p: string) => p.startsWith('/app/child'), icon: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></> }] : []),
+  { href: '/app/me', label: '마이페이지', match: (p: string) => p.startsWith('/app/me'), icon: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></> },
   TABS[3],
 ];
 
@@ -129,7 +129,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     getMyChild(viewKid.center).then(setTChild).catch(() => setTChild(null));
   }, [viewKid, version]);
 
-  const tabs = teacher ? teacherTabs(viewKid) : TABS;
+  const tabs = teacher ? teacherTabs() : TABS;
   const ctx: AppCtx = teacher ? { branch: viewKid?.center ?? 'eunpyeong', child: tChild, version } : { branch, child, version };
 
   // 아래 탭

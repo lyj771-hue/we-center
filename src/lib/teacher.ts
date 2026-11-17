@@ -129,3 +129,12 @@ export async function teacherAddSlots(scheduleId: string, times: { day: string; 
   if (r.result === 'ok') { notifyScheduleChanged(); sent = await sendTeacherOutbox(r.ids ?? []).catch(() => null); }
   return { ...r, sent };
 }
+
+/** 선생님 마이페이지 — 내 월별 수업 진행 횟수(확정된 수업, 최신 달 먼저). 사설 = 현금·카드·선결제, 지원금 = 바우처·굳센·장맞춤·꿈이든·우진학교·지원금 (supabase/teacher-month-counts.sql) */
+export interface TeacherMonthCount { month: string; private: number; support: number }
+
+export async function getMyMonthCounts(months = 12): Promise<TeacherMonthCount[]> {
+  const { data, error } = await supabase.rpc('my_teacher_month_counts', { p_months: months });
+  if (error) throw error;
+  return (data ?? []).map((r: { month: string; private_count: number; support_count: number }) => ({ month: r.month, private: r.private_count, support: r.support_count }));
+}
