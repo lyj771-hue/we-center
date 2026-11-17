@@ -155,7 +155,16 @@ const sortPosts = (posts: Post[]) => [...posts].sort((a, b) =>
 
 /** We슐랭 가게 글들 — 왼쪽 가게 목록(누르면 그 가게로, 관리자는 ▲▼로 순서 바꾸기) + 가운데에 하나씩 */
 export default function WeslangBoard({ posts, isAdmin, onDelete, onEdit }: { posts: Post[]; basePath: string; isAdmin: boolean; onDelete: (id: string) => void; onEdit?: (p: Post) => void }) {
-  const [page, setPage] = useState(0);
+  // 보이는 가게 수 — 처음 3곳, 아래로 내려 맨 끝(sentinel)이 보이면 3곳씩 더 (쪽 넘기기 없이 계속)
+  const [count, setCount] = useState(PER_PAGE);
+  const sentinel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el) return;
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) setCount(c => Math.min(posts.length, c + PER_PAGE)); }, { rootMargin: '0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [posts.length, count]);
   // 순서 — 처음엔 디비 순서, 관리자가 바꾸면 바로 저장하고 화면도 바로 바꾼다
   const [ids, setIds] = useState<string[]>([]);
   const [listPage, setListPage] = useState(0);   // 휴대폰 — 맨 아래 가게 목록의 쪽(3곳씩)
@@ -163,14 +172,12 @@ export default function WeslangBoard({ posts, isAdmin, onDelete, onEdit }: { pos
   useEffect(() => { setIds(sortPosts(posts).map(p => p.id)); }, [posts]);
   if (posts.length === 0) return <div className="py-24 text-center text-sm text-[#bbb] tracking-widest">등록된 가게가 없습니다</div>;
   const ordered = ids.map(id => posts.find(p => p.id === id)).filter((p): p is Post => !!p);
-  const pages = Math.ceil(ordered.length / PER_PAGE);
-  const cur = Math.min(page, pages - 1);
-  const shown = ordered.slice(cur * PER_PAGE, cur * PER_PAGE + PER_PAGE);
-  const go = (p: number) => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  // 목록에서 가게를 누르면 — 그 쪽으로 넘기고 그 가게로 스크롤
+  const shown = ordered.slice(0, count);
+  const more = ordered.length - shown.length;
+  // 목록에서 가게를 누르면 — 거기까지 보이게 하고 그 가게로 스크롤
   const jump = (id: string) => {
     const i = ordered.findIndex(p => p.id === id);
-    setPage(Math.floor(i / PER_PAGE));
+    setCount(c => Math.max(c, i + 1));
     setTimeout(() => document.getElementById(`weslang-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   };
   const move = async (i: number, d: -1 | 1) => {
@@ -229,19 +236,15 @@ export default function WeslangBoard({ posts, isAdmin, onDelete, onEdit }: { pos
           )}
         </div></div>)}
       </div>
-      {/* 쪽 넘기기 — 한 쪽에 3개 */}
-      {pages > 1 && (
-        <nav aria-label="쪽 넘기기" className="mt-10 flex items-center justify-center gap-1">
-          <button type="button" onClick={() => go(cur - 1)} disabled={cur === 0} aria-label="앞 쪽"
-            className="w-7 h-7 rounded-full border border-[#e5e5e5] bg-white text-[12px] text-[#555] disabled:opacity-30">‹</button>
-          {Array.from({ length: pages }, (_, i) => (
-            <button key={i} type="button" onClick={() => go(i)} aria-current={i === cur ? 'page' : undefined}
-              className={`w-7 h-7 rounded-full text-[12px] tabular-nums ${i === cur ? 'bg-[var(--brand)] text-white font-semibold' : 'text-[#555] hover:bg-[#f4f4f5]'}`}>{i + 1}</button>
-          ))}
-          <button type="button" onClick={() => go(cur + 1)} disabled={cur === pages - 1} aria-label="다음 쪽"
-            className="w-7 h-7 rounded-full border border-[#e5e5e5] bg-white text-[12px] text-[#555] disabled:opacity-30">›</button>
-        </nav>
-      )}
+      {/* 아래로 계속 — 더 있으면 '아래에 n곳 더' 와 [더 보기], 다 보면 끝 표시. sentinel 이 보이면 저절로 3곳씩 더 */}
+      <div ref={sentinel} className="mt-10 flex flex-col items-center gap-2 text-[13px] text-[#888]">
+        {more > 0 ? (<>
+          <span aria-hidden="true" className="text-[22px] leading-none text-[var(--brand)] animate-bounce">⌄</span>
+          <span>아래에 가게가 <b className="font-medium text-[var(--brand)]">{more}곳</b> 더 있어요 <span className="text-[#bbb] tabular-nums">({shown.length} / {ordered.length})</span></span>
+          <button type="button" onClick={() => setCount(c => Math.min(ordered.length, c + PER_PAGE))}
+            className="rounded-full border border-[#e5e5e5] bg-white px-4 py-1.5 text-[12px] text-[#555] hover:border-[var(--brand)] hover:text-[var(--brand)]">더 보기</button>
+        </>) : ordered.length > PER_PAGE && <span className="text-[#bbb]">가게 {ordered.length}곳을 다 봤어요</span>}
+      </div>
       {/* 휴대폰 관리자 — 가게 목록은 맨 아래, 3곳씩 넘겨 보기 */}
       {isAdmin && (
         <div className="md:hidden mt-10 rounded-xl bg-[#f6f6f7] p-3">

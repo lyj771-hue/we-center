@@ -10,7 +10,8 @@ export const metadata: Metadata = { title: 'We슐랭' };
 export default function WeSlangPage() {
   return (
     <>
-      <div className="pt-4 pb-10">
+      {/* overflow-x-clip — 스크랩북 칸(축소해 그린 넓은 판)이 옆으로 넘쳐 손으로 내릴 때 페이지가 좌우로 흔들리던 것 막기 */}
+      <div className="pt-4 pb-10 overflow-x-clip">
         <h1 className="sr-only">{WE_SLANG.heading}</h1>
         {/* 맨 위 — We슐랭 로고 띠(배너 높이의 1/3) + We슐랭(WECHELIN) 배너. 맨 위 여백 = 그림 사이 여백 */}
         <div className="px-4 mb-10 md:mb-14">
