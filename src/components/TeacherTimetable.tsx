@@ -226,7 +226,6 @@ export default function TeacherTimetable({ center }: { center: Center }) {
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-[#999] mt-3 leading-[2]">보기만 할 수 있어요. 바꿀 일이 있으면 센터에 말씀해 주세요. · [한눈에 보기] = 표 전체를 화면에 맞춰 줄여요(두 손가락으로 벌려 확대할 수 있어요) · 줄 = 다른 선생님에게 옮김 · ? = 미정 · &quot;신청&quot; = 보호자가 수업스케쥴에서 신청 · 결제: 회색 = 기본, <span className="text-[#1d4ed8]">파랑</span> = 고름, <span className="text-[#b91c1c]">✓빨강</span> = 결제 완료 · 선생님 이름을 누르면 펼치기·접기</p>
     </div>
   );
 }
