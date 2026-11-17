@@ -155,16 +155,22 @@ const sortPosts = (posts: Post[]) => [...posts].sort((a, b) =>
 
 /** We슐랭 가게 글들 — 왼쪽 가게 목록(누르면 그 가게로, 관리자는 ▲▼로 순서 바꾸기) + 가운데에 하나씩 */
 export default function WeslangBoard({ posts, isAdmin, onDelete, onEdit }: { posts: Post[]; basePath: string; isAdmin: boolean; onDelete: (id: string) => void; onEdit?: (p: Post) => void }) {
-  // 보이는 가게 수 — 처음 3곳, 아래로 내려 맨 끝(sentinel)이 보이면 3곳씩 더 (쪽 넘기기 없이 계속)
+  // 보이는 가게 수 — 처음 3곳. 손으로 아래로 내려서 맨 끝(sentinel)이 화면에 들어오면 3곳씩 더 (쪽 넘기기 없이 계속).
+  // 처음 열었을 때 맨 끝이 이미 보여도 저절로 더 불러오지 않는다 — 내릴 때만
   const [count, setCount] = useState(PER_PAGE);
   const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = sentinel.current;
-    if (!el) return;
-    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) setCount(c => Math.min(posts.length, c + PER_PAGE)); }, { rootMargin: '0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [posts.length, count]);
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY, down = y > lastY;
+      lastY = y;
+      const el = sentinel.current;
+      if (!down || !el) return;
+      if (el.getBoundingClientRect().top < window.innerHeight - 40) setCount(c => Math.min(posts.length, c + PER_PAGE));
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [posts.length]);
   // 순서 — 처음엔 디비 순서, 관리자가 바꾸면 바로 저장하고 화면도 바로 바꾼다
   const [ids, setIds] = useState<string[]>([]);
   const [listPage, setListPage] = useState(0);   // 휴대폰 — 맨 아래 가게 목록의 쪽(3곳씩)
