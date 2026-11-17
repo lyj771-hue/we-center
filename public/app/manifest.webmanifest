@@ -1,6 +1,6 @@
 {
-  "name": "We 센터",
-  "short_name": "We 센터",
+  "name": "We",
+  "short_name": "We",
   "description": "We 소아재활센터 보호자 앱 — 우리 아이 수업 시간표, 수업 신청, 선결제 카드",
   "id": "/app",
   "start_url": "/app",
