@@ -7,6 +7,7 @@ import { getAllPosts, getMembers } from '@/lib/store';
 import type { PushLog, PushSub } from '@/lib/push';
 import { listPushLog, listPushSubs, sendPush } from '@/lib/push';
 import { askConfirm, showAlert } from '@/lib/dialog';
+import { supabase } from '@/lib/supabaseClient';
 
 // 앱 푸시 (관리자) — 보호자 앱에서 [알림 받기]를 켠 보호자에게 알림 보내기.
 //   받는 사람: 전체 / 수색 / 의정부 / 한 보호자.  누르면 열 화면: 앱 홈·수업신청·결제·공지사항(글 하나)
@@ -27,6 +28,8 @@ export default function PushAdminPage() {
   const { isAdmin } = useAdmin();
   const [subs, setSubs] = useState<PushSub[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  // 선생님 카카오 계정 → 이름 (선생님도 앱 알림을 켤 수 있다)
+  const [teacherNames, setTeacherNames] = useState<Map<string, string>>(new Map());
   const [log, setLog] = useState<PushLog[]>([]);
   const [notices, setNotices] = useState<Post[]>([]);
   const [failed, setFailed] = useState('');
@@ -41,6 +44,9 @@ export default function PushAdminPage() {
     try {
       const [s, m, l] = await Promise.all([listPushSubs(), getMembers(), listPushLog()]);
       setSubs(s); setMembers(m); setLog(l); setFailed('');
+      const { data: tl } = await supabase.from('teacher_logins').select('user_id, teachers(name)').not('user_id', 'is', null);
+      setTeacherNames(new Map((tl ?? []).map((r: { user_id: string; teachers: { name: string } | { name: string }[] | null }) =>
+        [r.user_id, Array.isArray(r.teachers) ? r.teachers[0]?.name ?? '' : r.teachers?.name ?? ''])));
     } catch (e) { setFailed((e as Error).message); }
     getAllPosts('notices').then(p => setNotices(p.slice(0, 10))).catch(() => {});
   }, []);
@@ -52,14 +58,16 @@ export default function PushAdminPage() {
     for (const s of subs) by.set(s.userId, [...(by.get(s.userId) ?? []), s]);
     return [...by.entries()].map(([userId, list]) => {
       const m = members.find(x => x.userId === userId);
-      return { userId, name: m?.nickname ?? '(알 수 없음)', center: m?.center === 'uijeongbu' ? '의정부' : '수색', list };
+      const t = teacherNames.get(userId);
+      if (t !== undefined && !m) return { userId, name: t, who: '선생님', center: '선생님', list };
+      return { userId, name: m?.nickname ?? '(알 수 없음)', who: '보호자', center: m?.center === 'uijeongbu' ? '의정부' : '수색', list };
     }).sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-  }, [subs, members]);
+  }, [subs, members, teacherNames]);
 
   if (!isAdmin) return <p className="text-center text-[14px] text-[#aaa] py-32">관리자만 볼 수 있는 화면이에요.</p>;
 
-  const targetLabel = target === 'all' ? '전체' : target === 'eunpyeong' ? '수색' : target === 'uijeongbu' ? '의정부'
-    : `${people.find(p => `user:${p.userId}` === target)?.name ?? ''} 보호자`;
+  const targetLabel = target === 'all' ? '전체' : target === 'eunpyeong' ? '수색' : target === 'uijeongbu' ? '의정부' : target === 'teachers' ? '선생님 전체'
+    : (() => { const p = people.find(x => `user:${x.userId}` === target); return p ? `${p.name} ${p.who}` : ''; })();
 
   // 공지 글 고르기 — 내용·누를 곳을 그 글로 채운다
   const pickNotice = (id: string) => {
@@ -102,10 +110,11 @@ export default function PushAdminPage() {
           <div>
             <span className={label}>받는 사람</span>
             <select value={target} onChange={e => setTarget(e.target.value)} className={field}>
-              <option value="all">전체 (알림 켠 모든 보호자)</option>
+              <option value="all">전체 (알림 켠 모든 분)</option>
               <option value="eunpyeong">수색점 보호자</option>
               <option value="uijeongbu">의정부점 보호자</option>
-              {people.map(p => <option key={p.userId} value={`user:${p.userId}`}>{p.name} 보호자 ({p.center})</option>)}
+              <option value="teachers">선생님 전체</option>
+              {people.map(p => <option key={p.userId} value={`user:${p.userId}`}>{p.name} {p.who}{p.who === '보호자' ? ` (${p.center})` : ''}</option>)}
             </select>
           </div>
           {notices.length > 0 && (

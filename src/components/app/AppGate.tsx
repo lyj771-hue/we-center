@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMember } from '@/components/MemberContext';
 import { createMyProfile, getMyProfile, saveMyPhone } from '@/lib/store';
+import { claimTeacher, getMyTeacher } from '@/lib/teacher';
 import { askConfirm } from '@/lib/dialog';
 
 // 보호자 앱 문지기 화면 — 로그인 / 처음 가입 / 승인 대기. (캔버스 '보호자 앱' 1~3번 화면)
@@ -54,15 +55,37 @@ export function AppLogin() {
 
 /** 2. 처음 가입 — 다니는 센터 + 아이 이름 (보호자 전용이라 선생님 칸은 없다) */
 export function AppJoin() {
-  const { userId, kakaoPhone, setJoinedProfile, logout } = useMember();
+  const { userId, kakaoPhone, setJoinedProfile, setJoinedTeacher, logout } = useMember();
   const last4 = (kakaoPhone ?? '').replace(/\D/g, '').slice(-4);
+  // 구분 — 보호자 / 선생님(이름 + 휴대전화 뒷번호 4자리 → 회원관리에 적어 둔 것과 같으면 인증, 홈페이지와 같은 규칙)
+  const [role, setRole] = useState<'guardian' | 'teacher'>('guardian');
+  const [tPhone, setTPhone] = useState(last4);
   const [center, setCenter] = useState<'eunpyeong' | 'uijeongbu' | ''>('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const submitTeacher = async () => {
+    if (!name.trim() || !/^\d{4}$/.test(tPhone)) { setError('이름과 휴대전화 뒷번호 4자리를 적어 주세요.'); return; }
+    setSaving(true);
+    try {
+      const r = await claimTeacher(name, tPhone);
+      if (r === 'ok') {
+        if (kakaoPhone) await saveMyPhone(kakaoPhone).catch(() => {});
+        const t = await getMyTeacher();
+        if (t) setJoinedTeacher(t);
+        return;
+      }
+      setError(r === 'taken' ? '이미 다른 카카오 계정으로 인증된 선생님이에요. 센터에 말씀해 주세요.'
+        : r === 'bad_phone' ? '휴대전화 뒷번호 4자리를 숫자로 적어 주세요.'
+        : '센터에 등록된 선생님 정보와 달라요. 이름과 휴대전화 뒷번호를 확인해 주세요.');
+    } catch { setError('인증하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
+    finally { setSaving(false); }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (role === 'teacher') { await submitTeacher(); return; }
     const child = name.trim();
     if (!userId) return;
     if (!center) { setError('다니는 센터를 골라 주세요.'); return; }
@@ -96,9 +119,30 @@ export function AppJoin() {
       </div>
       <div className="pt-6 space-y-2.5">
         <h1 className="display-heading text-[26px]! leading-[1.4]! text-[var(--brand)]">처음 오셨네요</h1>
-        <p className="text-[14px] leading-[1.9] text-[#666]">다니는 센터를 고르고 아이 이름을 적어 주세요.</p>
+        <p className="text-[14px] leading-[1.9] text-[#666]">{role === 'teacher' ? '센터에 등록된 이름과 휴대전화 뒷번호 4자리를 적어 주세요.' : '다니는 센터를 고르고 아이 이름을 적어 주세요.'}</p>
       </div>
-      <div className="mt-10 flex-1 space-y-8">
+      <div className="mt-6 flex gap-2">
+        {([['guardian', '보호자'], ['teacher', '선생님']] as const).map(([k, l]) => (
+          <button key={k} type="button" aria-pressed={role === k} onClick={() => { setRole(k); setError(''); }}
+            className={`flex-1 py-2 text-[14px] border-b-2 ${role === k ? 'border-[var(--brand)] text-[var(--brand)]' : 'border-transparent text-[#999]'}`}>{l}</button>
+        ))}
+      </div>
+      {role === 'teacher' ? (
+        <div className="mt-8 flex-1 space-y-8">
+          <label className="block space-y-1.5">
+            <span className="block text-[12px] text-[#888]">선생님 이름 <span className="text-[#e11d48]">*</span></span>
+            <input type="text" value={name} maxLength={20} placeholder="예: 이정길" onChange={e => { setName(e.target.value); setError(''); }}
+              className="w-full border-b border-[#ccc] py-2.5 text-[17px] outline-none focus:border-[var(--brand)] placeholder:text-[#bbb] bg-transparent" />
+          </label>
+          <label className="block space-y-1.5">
+            <span className="block text-[12px] text-[#888]">휴대전화 뒷번호 4자리 <span className="text-[#e11d48]">*</span></span>
+            <input type="text" inputMode="numeric" value={tPhone} maxLength={4} placeholder="예: 1234" onChange={e => { setTPhone(e.target.value.replace(/\D/g, '').slice(0, 4)); setError(''); }}
+              className="w-full border-b border-[#ccc] py-2.5 text-[17px] tracking-[0.3em] outline-none focus:border-[var(--brand)] placeholder:text-[#bbb] bg-transparent" />
+          </label>
+          {error && <p className="text-[13px] text-[#e11d48]">{error}</p>}
+        </div>
+      ) : (
+      <div className="mt-8 flex-1 space-y-8">
         <div className="space-y-2.5">
           <span className="block text-[12px] text-[#888]">다니는 센터 <span className="text-[#e11d48]">*</span></span>
           <div className="flex gap-2.5">
@@ -120,7 +164,10 @@ export function AppJoin() {
         </div>
         {error && <p className="text-[13px] text-[#e11d48]">{error}</p>}
       </div>
-      <button type="submit" disabled={saving || !center || !name.trim()} className={primaryBtn}>{saving ? '저장 중…' : '가입 신청'}</button>
+      )}
+      <button type="submit" disabled={saving || !name.trim() || (role === 'guardian' ? !center : tPhone.length !== 4)} className={primaryBtn}>
+        {saving ? '저장 중…' : role === 'teacher' ? '선생님 인증' : '가입 신청'}
+      </button>
     </form>
   );
 }

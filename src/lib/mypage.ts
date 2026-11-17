@@ -1,3 +1,4 @@
+import { myRpc } from './viewAs';
 import { supabase } from './supabaseClient';
 
 // 마이페이지(보호자) — DB 함수 my_child / my_lessons (supabase/mypage.sql) 로 내 아이 것만 읽는다.
@@ -32,7 +33,7 @@ export interface MyLesson {
 }
 
 export async function getMyChild(center?: BranchKey): Promise<MyChild | null> {
-  const { data, error } = await supabase.rpc('my_child', center ? { p_center: center } : {});
+  const { data, error } = await myRpc('my_child', center ? { p_center: center } : {});
   if (error) throw error;
   const r = (data ?? [])[0];
   if (!r) return null;
@@ -49,7 +50,7 @@ export async function getMyChild(center?: BranchKey): Promise<MyChild | null> {
 
 /** childId — 그 아이 수업(수업 신청 화면). 없으면 마이페이지에서 고른 아이 */
 export async function getMyLessons(from: string, to: string, childId?: string): Promise<MyLesson[]> {
-  const { data, error } = await supabase.rpc('my_lessons', childId ? { p_from: from, p_to: to, p_child: childId } : { p_from: from, p_to: to });
+  const { data, error } = await myRpc('my_lessons', childId ? { p_from: from, p_to: to, p_child: childId } : { p_from: from, p_to: to });
   if (error) throw error;
   return (data ?? []).map((r: Record<string, unknown>) => ({
     day: r.day as string,
@@ -76,7 +77,7 @@ export const isRealLesson = (l: MyLesson) => (l.status === 'child' || l.status =
 export interface MyPayment { method: 'voucher' | 'gusen' | 'jangmatchum' | 'kkumideun' | 'woojin' | 'woojin_ext' | 'woojin_self' | 'subsidy' | 'prepaid' | 'prepaid_b' | 'prepaid_c'; used: number; total: number }
 
 export async function getMyPayments(center?: BranchKey): Promise<MyPayment[]> {
-  const { data, error } = await supabase.rpc('my_payments', center ? { p_center: center } : {});
+  const { data, error } = await myRpc('my_payments', center ? { p_center: center } : {});
   if (error) throw error;
   return (data ?? []) as MyPayment[];
 }
@@ -85,7 +86,7 @@ export async function getMyPayments(center?: BranchKey): Promise<MyPayment[]> {
 export interface MyPaymentUse { day: string; method: MyPayment['method']; time: string; teacher: string; note?: string; center: BranchKey }
 
 export async function getMyPaymentHistory(): Promise<MyPaymentUse[]> {
-  const { data, error } = await supabase.rpc('my_payment_history');
+  const { data, error } = await myRpc('my_payment_history');
   if (error) throw error;
   return (data ?? []).map((r: { day: string; method: MyPayment['method']; lesson_time: string; teacher_name: string | null; note: string | null; center?: string | null }) => ({
     day: r.day, method: r.method, time: r.lesson_time, teacher: r.teacher_name ?? '', note: r.note ?? undefined,

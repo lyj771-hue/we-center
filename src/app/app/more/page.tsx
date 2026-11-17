@@ -18,7 +18,7 @@ const row = 'flex items-center justify-between min-h-[54px] py-2 gap-3 text-[15p
 const group = 'bg-white rounded-[18px] px-[18px] divide-y divide-[#f4f4f4]';
 
 export default function AppMore() {
-  const { userId, profile, branches, refreshBranches, refreshProfile, logout } = useMember();
+  const { userId, profile, branches, refreshBranches, refreshProfile, logout, teacher } = useMember();
 
   // 아이가 이어진 지점 — 가입 승인이 없어도 이어져 있으면 가입된 것으로 본다(마이페이지와 같음)
   const [linked, setLinked] = useState<BranchKey[]>([]);
@@ -66,10 +66,10 @@ export default function AppMore() {
   return (
     <div className="space-y-3">
       {/* 홈페이지 메뉴 전부 — 작은 네모 아이콘, 가로 5개 */}
-      <MenuGrid />
+      <MenuGrid teacher={!!teacher} />
 
-      {/* 지점 — 홈페이지 마이페이지와 같은 버튼 (안 한 지점은 눌러서 가입 신청, 아래 작은 글씨로 취소) */}
-      <section className="bg-white rounded-[18px] p-[18px] space-y-3">
+      {/* 지점 — 홈페이지 마이페이지와 같은 버튼 (안 한 지점은 눌러서 가입 신청, 아래 작은 글씨로 취소). 선생님은 없음 */}
+      {!teacher && <section className="bg-white rounded-[18px] p-[18px] space-y-3">
         <h2 className="text-[16px] text-[#27272a]">지점</h2>
         <div className="flex gap-2">
           {branches.map(b => {
@@ -93,7 +93,7 @@ export default function AppMore() {
             );
           })}
         </div>
-      </section>
+      </section>}
 
       <section className={group}>
         <Link href="/app/more/push" className={row}>앱 알림 <span className="text-[13px] text-[#999]">{push === 'on' ? '켜짐' : push === null ? '' : '꺼짐'} <span className="text-[#c4c4cc]" aria-hidden="true">›</span></span></Link>
@@ -109,9 +109,9 @@ export default function AppMore() {
         <button type="button" onClick={out} className={`${row} w-full text-left text-[#e11d48]`}>로그아웃</button>
       </section>
 
-      <div className="pt-2 text-center">
+      {!teacher && <div className="pt-2 text-center">
         <button type="button" onClick={withdraw} className="text-[12px] text-[#bbb] underline underline-offset-2">회원 탈퇴</button>
-      </div>
+      </div>}
     </div>
   );
 }

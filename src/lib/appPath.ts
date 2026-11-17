@@ -11,6 +11,8 @@ export function toAppHref(path: string): string | null {
   if (path === '/') return '/app';
   if (SITE.some(p => path === p || path.startsWith(p + '/'))) return `/app/site${path}`;
   if (path === '/mypage') return '/app/pay';
+  if (path === '/teacher/timetable') return '/app/teacher';
+  if (path === '/teacher/timetable/uijeongbu') return '/app/teacher/uijeongbu';
   if (path === '/schedule' || path === '/schedule/uijeongbu') return '/app/class';
   if (path.startsWith('/schedule/')) return `/app/book/${path.slice('/schedule/'.length)}`;
   return null;

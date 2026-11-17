@@ -2,7 +2,7 @@ import webpush from 'web-push';
 import { supabaseFor } from '@/lib/supabaseServer';
 
 // 앱 푸시 보내기 (관리자만) — { target, targetLabel, title, body, url }
-// target: all = 알림 켠 모든 보호자 / eunpyeong·uijeongbu = 그 지점에 승인된 보호자 / user:<id> = 한 보호자
+// target: all = 알림 켠 모든 분 / eunpyeong·uijeongbu = 그 지점에 승인된 보호자 / teachers = 선생님 전체 / user:<id> = 한 사람
 // 앱을 지웠거나 알림을 끈 기기(404·410)는 등록을 지운다. 결과는 push_log 에 남긴다.
 // 키: NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY (Vercel 환경 변수)
 
@@ -23,6 +23,11 @@ export async function POST(request: Request) {
   let q = db.from('push_subscriptions').select('id, user_id, endpoint, p256dh, auth');
   if (target.startsWith('user:')) {
     q = q.eq('user_id', target.slice(5));
+  } else if (target === 'teachers') {
+    const { data: tl } = await db.from('teacher_logins').select('user_id').not('user_id', 'is', null);
+    const ids = (tl ?? []).map(r => r.user_id as string);
+    if (!ids.length) return Response.json({ devices: 0, sent: 0, failed: 0, removed: 0 });
+    q = q.in('user_id', ids);
   } else if (target === 'eunpyeong' || target === 'uijeongbu') {
     const [{ data: profiles }, { data: extra }] = await Promise.all([
       db.from('profiles').select('user_id, center, approved_at'),

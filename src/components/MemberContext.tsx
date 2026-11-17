@@ -39,12 +39,14 @@ interface MemberCtx {
   kakaoPhone: string | null;
   /** 가입을 마친 뒤 프로필을 바로 넣는다 (보호자 앱 가입 화면) */
   setJoinedProfile: (p: Profile) => void;
+  /** 선생님 인증을 마친 뒤 바로 넣는다 (보호자 앱 가입 화면) */
+  setJoinedTeacher: (t: MyTeacher) => void;
 }
 
 const Ctx = createContext<MemberCtx>({
   userId: null, profile: null, loading: true, login: () => {}, loginOther: () => {}, logout: () => {},
   branches: [], refreshBranches: () => {}, refreshProfile: () => {}, canUse: () => false, teacher: null,
-  needsNickname: false, kakaoPhone: null, setJoinedProfile: () => {},
+  needsNickname: false, kakaoPhone: null, setJoinedProfile: () => {}, setJoinedTeacher: () => {},
 });
 
 export function MemberProvider({ children }: { children: ReactNode }) {
@@ -141,7 +143,7 @@ export function MemberProvider({ children }: { children: ReactNode }) {
   const needsNickname = !!memberId && !loading && !profile && !teacher && !unsure;
 
   return (
-    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, loginOther, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse, teacher: memberId ? teacher : null, needsNickname, kakaoPhone, setJoinedProfile: setProfile }}>
+    <Ctx.Provider value={{ userId: memberId, profile: memberId ? profile : null, loading, login, loginOther, logout, branches: memberId ? branches : [], refreshBranches, refreshProfile, canUse, teacher: memberId ? teacher : null, needsNickname, kakaoPhone, setJoinedProfile: setProfile, setJoinedTeacher: setTeacher }}>
       {children}
       {needsNickname && !inApp && <NicknameSetup userId={memberId} kakaoPhone={kakaoPhone} onDone={setProfile} onTeacher={setTeacher} onCancel={logout} />}
     </Ctx.Provider>

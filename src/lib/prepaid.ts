@@ -1,3 +1,4 @@
+import { myRpc } from './viewAs';
 import { supabase } from './supabaseClient';
 import type { PrepaidKey } from './timetable';
 import { countExcluder } from './timetable';
@@ -80,7 +81,7 @@ export async function deleteCharge(id: string): Promise<void> {
 export type MyLedgers = Record<PrepaidKey, LedgerRow[]>;
 export const NO_LEDGERS: MyLedgers = { prepaid: [], prepaid_b: [], prepaid_c: [] };
 export async function getMyLedger(center?: string): Promise<MyLedgers> {
-  const { data, error } = await supabase.rpc('my_prepaid_ledger', center ? { p_center: center } : {});
+  const { data, error } = await myRpc('my_prepaid_ledger', center ? { p_center: center } : {});
   if (error) throw error;
   type Row = { day: string; kind: 'charge' | 'use' | 'adjust'; count: number; memo: string | null; at?: string | null; method?: PrepaidKey | null };
   const of = (key: PrepaidKey) => buildLedger(((data ?? []) as Row[]).filter(r => (r.method ?? 'prepaid') === key).map(r =>

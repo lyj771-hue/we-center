@@ -33,11 +33,13 @@ const MENU = [
   { icon: '/we-slang', label: 'We슐랭', to: '/app/site/we-slang' },
 ];
 
-export default function MenuGrid() {
+/** teacher — 선생님: 스케줄1·2 → 선생님 시간표(수색·의정부), 결제 → 홈페이지 결제정보 */
+export default function MenuGrid({ teacher = false }: { teacher?: boolean }) {
+  const T: Record<string, string> = { '스케줄1': '/app/teacher', '스케줄2': '/app/teacher/uijeongbu', '결제': '/app/site/payment' };
   return (
     <section className="bg-white rounded-[18px] px-3 py-4 grid grid-cols-5 gap-y-4">
       {MENU.map(m => (
-        <Link key={m.label} href={m.to} className="flex flex-col items-center gap-1.5 min-w-0">
+        <Link key={m.label} href={(teacher && T[m.label]) || m.to} className="flex flex-col items-center gap-1.5 min-w-0">
           <span className="w-12 h-12 rounded-[14px] bg-[#F1F6FD] text-[var(--brand)] flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" {...S} aria-hidden="true">{ICONS[m.icon]}</svg>
           </span>

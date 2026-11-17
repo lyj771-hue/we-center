@@ -12,6 +12,8 @@ import { clearAppBadge, registerAppSw } from '@/lib/push';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { isAppSitePath, toAppHref } from '@/lib/appPath';
+import type { ViewKid } from '@/lib/viewAs';
+import { getViewerChildren, setViewChild } from '@/lib/viewAs';
 
 // 보호자 앱 틀 — 로그인·가입·승인 확인(문지기) + 위(아이·지점 고르기) + 아래 탭 4개.
 // 데이터·권한은 홈페이지 마이페이지와 같다(같은 DB, 같은 함수).
@@ -32,6 +34,14 @@ const TABS = [
   { href: '/app/class', label: '스케줄', match: (p: string) => p.startsWith('/app/class') || p.startsWith('/app/book'), icon: <><rect x="3" y="4.5" width="18" height="16.5" rx="2" /><line x1="3" y1="9.5" x2="21" y2="9.5" /><line x1="8" y1="2.5" x2="8" y2="6.5" /><line x1="16" y1="2.5" x2="16" y2="6.5" /></> },
   { href: '/app/pay', label: '결제', match: (p: string) => p.startsWith('/app/pay'), icon: <><rect x="2.5" y="5" width="19" height="14" rx="2" /><line x1="2.5" y1="10" x2="21.5" y2="10" /><line x1="6" y1="15" x2="10" y2="15" /></> },
   { href: '/app/more', label: '더보기', match: (p: string) => p.startsWith('/app/more'), icon: <><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></> },
+];
+
+// 선생님 — 홈페이지 · 시간표(수색·의정부) · 볼 수 있는 아이(예: 설영수 선생님 → 김유담) · 더보기
+const teacherTabs = (kid: ViewKid | undefined) => [
+  TABS[0],
+  { href: '/app/teacher', label: '시간표', match: (p: string) => p.startsWith('/app/teacher'), icon: TABS[1].icon },
+  ...(kid ? [{ href: '/app/child', label: kid.name, match: (p: string) => p.startsWith('/app/child'), icon: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></> }] : []),
+  TABS[3],
 ];
 
 const Chevron = () => (
@@ -104,11 +114,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     catch (e) { showAlert(`아이를 바꾸지 못했어요.\n${(e as Error).message}`); }
   };
 
-  // 아래 탭 4개
+  // 선생님 — 볼 수 있는 아이(child_viewers)와 그 아이 정보(보호자 화면 그대로, 읽기만)
+  const [viewKids, setViewKids] = useState<ViewKid[] | null>(null);
+  useEffect(() => {
+    if (!teacher) { setViewKids(null); return; }
+    getViewerChildren().then(setViewKids).catch(() => setViewKids([]));
+  }, [teacher]);
+  const viewKid = teacher ? viewKids?.[0] : undefined;
+  // 마이페이지 함수를 그 아이 보호자 기준으로 부르게 (선생님이 아니면 평소대로)
+  setViewChild(viewKid?.id ?? null);
+  const [tChild, setTChild] = useState<MyChild | null>(null);
+  useEffect(() => {
+    if (!viewKid) { setTChild(null); return; }
+    getMyChild(viewKid.center).then(setTChild).catch(() => setTChild(null));
+  }, [viewKid, version]);
+
+  const tabs = teacher ? teacherTabs(viewKid) : TABS;
+  const ctx: AppCtx = teacher ? { branch: viewKid?.center ?? 'eunpyeong', child: tChild, version } : { branch, child, version };
+
+  // 아래 탭
   const tabBar = (
     <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#ebebeb] pb-[env(safe-area-inset-bottom)]">
-      <div className="max-w-[560px] mx-auto h-[64px] grid grid-cols-4">
-        {TABS.map(t => {
+      <div className="max-w-[560px] mx-auto h-[64px] grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+        {tabs.map(t => {
           const on = t.match(pathname);
           return (
             <Link key={t.href} href={t.href} aria-current={on ? 'page' : undefined}
@@ -125,15 +153,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // ── 문지기: 로그인 → 가입 → 승인 ──
   if (loading) return <AppSplash />;
   if (!userId) return <AppLogin />;
-  if (teacher) return <AppPending teacherName={teacher.name} onLogout={logout} />;
-  if (needsNickname) return <AppJoin />;
-  if (!profile) return <AppSplash failed />;
-  if (linked === null) return <AppSplash />;
-  if (usable.length === 0) return <AppPending onLogout={logout} />;
+  if (teacher) {
+    if (viewKids === null) return <AppSplash />;
+  } else {
+    if (needsNickname) return <AppJoin />;
+    if (!profile) return <AppSplash failed />;
+    if (linked === null) return <AppSplash />;
+    if (usable.length === 0) return <AppPending onLogout={logout} />;
+  }
 
   // [홈페이지] 탭 — 지금 홈페이지 모습 그대로(오른쪽 위 ☰ 메뉴·꼬리말), 아래 탭만 앱 것
   if (isAppSitePath(pathname)) return (
-    <Ctx.Provider value={{ branch, child, version }}>
+    <Ctx.Provider value={ctx}>
       <div className="min-h-[100dvh] flex flex-col bg-white pt-[env(safe-area-inset-top)] pb-[calc(64px+env(safe-area-inset-bottom))]">
         <Header inApp />
         <div className="flex-1">{children}</div>
@@ -145,13 +176,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const selectCls = 'h-9 pl-3.5 pr-8 rounded-full text-[15px] appearance-none bg-no-repeat bg-[right_10px_center]';
   return (
-    <Ctx.Provider value={{ branch, child, version }}>
+    <Ctx.Provider value={ctx}>
       <div className="min-h-[100dvh] bg-[#F7F8FA] text-[#0a0a0a]">
         {/* 위 — 아이 이름(둘 이상이면 고르기) · 로고 · 지점(둘 이상이면 고르기) */}
         <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-[#ebebeb] pt-[env(safe-area-inset-top)]">
           <div className="max-w-[560px] mx-auto h-[60px] px-4 grid grid-cols-[1fr_auto_1fr] items-center">
             <div className="justify-self-start relative">
-              {kidsHere.length > 1 ? (
+              {teacher ? (
+                <span className="text-[16px]">{pathname.startsWith('/app/child') && viewKid ? viewKid.name : `${teacher.name} 선생님`}</span>
+              ) : kidsHere.length > 1 ? (
                 <label className="relative flex items-center">
                   <span className="sr-only">아이 고르기</span>
                   <select value={kidsHere.find(k => k.name === child?.childName)?.id ?? ''} onChange={e => pickKid(e.target.value)}
@@ -161,12 +194,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <span className="pointer-events-none absolute right-3 text-[#999]"><Chevron /></span>
                 </label>
               ) : (
-                <span className="text-[16px]">{child?.childName ?? profile.nickname}</span>
+                <span className="text-[16px]">{child?.childName ?? profile?.nickname}</span>
               )}
             </div>
             <Link href="/app" aria-label="홈"><img src="/logo-we-heart.png" alt="We 센터" className="w-10 h-10 object-contain" /></Link>
             <div className="justify-self-end">
-              {usable.length > 1 ? (
+              {teacher ? (
+                pathname.startsWith('/app/child') && viewKid
+                  ? <span className="h-9 px-3.5 inline-flex items-center rounded-full text-[14px] bg-[#EAF3FE] text-[var(--brand)]">{viewKid.center === 'uijeongbu' ? '의정부' : '수색'}</span>
+                  : null
+              ) : usable.length > 1 ? (
                 <label className="relative flex items-center">
                   <span className="sr-only">지점 고르기</span>
                   <select value={branch} onChange={e => setSel(e.target.value as BranchKey)}
@@ -182,7 +219,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="max-w-[560px] mx-auto px-4 pt-5 pb-[calc(96px+env(safe-area-inset-bottom))]">
+        {/* 선생님 시간표는 표가 넓어서 폭 제한 없이 */}
+        <main className={`${pathname.startsWith('/app/teacher') ? 'px-2' : 'max-w-[560px] mx-auto px-4'} pt-5 pb-[calc(96px+env(safe-area-inset-bottom))]`}>
           {children}
         </main>
 
