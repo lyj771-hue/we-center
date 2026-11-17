@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useMember } from '@/components/MemberContext';
 import Link from 'next/link';
 import MenuGrid from '@/components/app/MenuGrid';
+import InstallHint from '@/components/app/InstallHint';
 import ContactButton from '@/components/ContactButton';
 import type { PushState } from '@/lib/push';
 import { getPushState } from '@/lib/push';
@@ -67,6 +68,9 @@ export default function AppMore() {
     <div className="space-y-3">
       {/* 홈페이지 메뉴 전부 — 작은 네모 아이콘, 가로 5개 */}
       <MenuGrid teacher={!!teacher} />
+
+      {/* 앱 설치(홈 화면에 추가) 안내 — 앱으로 열었으면 안 보인다 */}
+      <InstallHint always />
 
       {/* 지점 — 홈페이지 마이페이지와 같은 버튼 (안 한 지점은 눌러서 가입 신청, 아래 작은 글씨로 취소). 선생님은 없음 */}
       {!teacher && <section className="bg-white rounded-[18px] p-[18px] space-y-3">
