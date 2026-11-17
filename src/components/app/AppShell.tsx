@@ -153,9 +153,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // ── 문지기: 로그인 → 가입 → 승인 ──
   if (loading) return <AppSplash />;
   if (!userId) return <AppLogin />;
-  if (teacher) {
-    if (viewKids === null) return <AppSplash />;
-  } else {
+  if (!teacher) {
     if (needsNickname) return <AppJoin />;
     if (!profile) return <AppSplash failed />;
     if (linked === null) return <AppSplash />;

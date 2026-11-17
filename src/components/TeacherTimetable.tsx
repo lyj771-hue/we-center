@@ -16,6 +16,10 @@ import { onScheduleChanged } from '@/lib/sync';
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 
+// 빨리 뜨게 — 한 번 본 날(센터·날짜)은 들고 있다가 다시 열면 바로 보여 주고 뒤에서 새로 받는다
+type Snap = { teachers: Teacher[]; lessons: TeacherLesson[]; holidays: Record<string, string>; postedOpen: Map<string, string>; rounds?: Map<string, { method: string; n: number }> };
+const snaps = new Map<string, Snap>();
+
 export default function TeacherTimetable({ center }: { center: Center }) {
   const { isAdmin } = useAdmin();
   const { userId, teacher, loading, login } = useMember();
@@ -65,10 +69,20 @@ export default function TeacherTimetable({ center }: { center: Center }) {
   }, [fit, lessons, teachers, day, folded]);
 
   const load = useCallback(async () => {
+    const key = `${center}|${day}`;
+    const snap = snaps.get(key);
+    if (snap) { setTeachers(snap.teachers); setLessons(snap.lessons); setHolidays(snap.holidays); setPostedOpen(snap.postedOpen); if (snap.rounds) setRounds(snap.rounds); }
     try {
-      const [t, l, h, p] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), getHolidayNames(day.slice(0, 4)).catch(() => ({})), getPostedOpenSlots(day, center).catch(() => new Map<string, string>())]);
+      // 회차(한 달치 계산이라 가장 느리다)는 공휴일만 받으면 바로 같이 시작 — 표는 회차를 기다리지 않고 먼저 그린다
+      const hP = getHolidayNames(day.slice(0, 4)).catch(() => ({} as Record<string, string>));
+      const rP = hP.then(h => getTeacherRounds(day, day, Object.keys(h).filter(d => d.startsWith(day.slice(0, 7)))));
+      const [t, l, h, p] = await Promise.all([getTeachers({ includeHidden: true }), getTeacherLessons(day, day), hP, getPostedOpenSlots(day, center).catch(() => new Map<string, string>())]);
       setTeachers(t); setLessons(l); setHolidays(h); setPostedOpen(p); setFailed('');
-      setRounds(await getTeacherRounds(day, day, Object.keys(h).filter(d => d.startsWith(day.slice(0, 7)))));
+      const next: Snap = { teachers: t, lessons: l, holidays: h, postedOpen: p, rounds: snap?.rounds };
+      snaps.set(key, next);
+      const r = await rP;
+      setRounds(r);
+      next.rounds = r;
     } catch (e) {
       setFailed((e as Error).message);
     }
