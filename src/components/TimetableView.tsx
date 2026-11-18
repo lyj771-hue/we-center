@@ -570,12 +570,14 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const confirmSettle = async (childId: string, time: string, from: PayMethod, to: PayMethod): Promise<{ ok: boolean; sameDay: { teacherId: string; time: string }[] }> => {
     const payLabel = (m: PayMethod) => PAY_METHODS.find(p => p.key === m)?.label ?? m;
     const hm = (t: string) => t.padStart(5, '0');
-    // 이 날 앞 시간 — 디비에 같은 소급·미결로 저장된 칸(화면에서 다른 걸 고르지 않았거나, 앞서 같이 바꾼 칸)
+    // 이 날 앞 시간 — 디비에 같은 소급·미결로 저장된 칸. 화면에서 그대로 두었거나, 앞서 같이 바꾼 칸, 또는 그 칸에서 따로 정리 결제(선결제A 등)를 골라 둔 칸도
+    // 이번 것으로 덮는다(앞 시간 선결제A → 뒤 시간 선결제B 면 앞도 B). 신용카드처럼 정리와 상관없는 결제를 골라 둔 칸은 그대로
     const linked = new Set(settleLinks.current.get(keyOf(childId, time)) ?? []);
     const sameDay = lessons.filter(x => {
       if (x.childId !== childId || hm(x.time) >= hm(time)) return false;
       const kk = keyOf(x.childId, x.time);
-      return payments.get(kk)?.method === from && (!draft.has(kk) || draft.get(kk)!.entry?.method === from || linked.has(kk));
+      const picked = draft.get(kk)?.entry?.method;
+      return payments.get(kk)?.method === from && (!draft.has(kk) || picked === from || linked.has(kk) || settlesLater(from, picked));
     }).map(x => ({ teacherId: x.teacherId, time: x.time }));
     const earlier = await getLaterToSettle(childId, from, day).catch(() => [] as string[]);
     if (!earlier.length && !sameDay.length) return { ok: true, sameDay };
