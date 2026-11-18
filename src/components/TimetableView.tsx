@@ -17,7 +17,7 @@ import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
   balanceOf, isWoojin, isBalancePay, isCountExcludedName, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, rowLabel, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
-  getLaterPayments, settleLaterPayments, settlesLater, getGusenExtraDue, getUnconfirmedDays, UNCONFIRMED_FROM, isLaterPay, roundMethod, RETRO_BASE, GUSEN_EXTRA_ROUND,
+  getLaterPayments, settleLaterPayments, settlesLater, getLaterToSettle, getGusenExtraDue, getUnconfirmedDays, UNCONFIRMED_FROM, isLaterPay, roundMethod, RETRO_BASE, GUSEN_EXTRA_ROUND,
   isPrepaid, prepaidTotalOf, EMPTY_ROW,
 } from '@/lib/timetable';
 
@@ -565,6 +565,21 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
   };
 
+  // 소급·미결을 실제 결제로 바꾼 칸 — 같이 처리될 앞 날짜를 보여 주고 확인받는다 (없으면 그냥 true, 취소하면 false)
+  const confirmSettle = async (items: { childId: string; time: string; from?: PayMethod; to?: PayMethod }[]) => {
+    const payLabel = (m: PayMethod) => PAY_METHODS.find(p => p.key === m)?.label ?? m;
+    const lines: string[] = [];
+    for (const it of items) {
+      if (!it.from || !it.to || !settlesLater(it.from, it.to)) continue;
+      const days = await getLaterToSettle(it.childId, it.from, day, it.time).catch(() => [] as string[]);
+      if (!days.length) continue;
+      const name = children.find(c => c.id === it.childId)?.name ?? '';
+      lines.push(`${name} — 앞의 ${payLabel(it.from)} ${days.length}건이 모두 ${payLabel(it.to)}(으)로 결제 처리돼요.\n${days.map(d => d.replace(/-/g, '/')).join(', ')}`);
+    }
+    if (!lines.length) return true;
+    return askConfirm(`${lines.join('\n\n')}\n\n이 날 수업까지 함께 처리할까요?`);
+  };
+
   const saveSchedule = async () => {
     // 수업을 없앤 칸이 있으면 — 알림톡이 간다고 먼저 알려 준다 (회원 계정과 이어진 아이만 받는다)
     const linked = (x: { childId: string }) => !!children.find(k => k.id === x.childId)?.guardianUserId;
@@ -583,6 +598,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       fixedLinked.length ? `고정 수업 ${fixedLinked.map(x => `${nameOf(x)} ${x.result}`).join(', ')} — '고정 스케줄' 알림톡이 가요.` : '',
       unlinked.length ? `회원 계정과 이어지지 않아 알림이 안 가요: ${unlinked.join(', ')}` : '',
     ].filter(Boolean).join('\n') + '\n저장할까요?'))) return;
+    {
+      const shownTs = new Set(shown.map(t => t.id));
+      const items = [...draft].filter(([, v]) => shownTs.has(v.teacherId) && v.entry)
+        .map(([k, v]) => ({ childId: v.childId, time: v.time, from: payments.get(k)?.method, to: v.entry!.method }));
+      if (!(await confirmSettle(items))) return;
+    }
     setSavingSched(true);
     const failedOps: string[] = [];
     const failedAssign: string[] = [];
@@ -761,6 +782,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       await showAlert(`소급·미결 ${laterToday}건이 남아 있어요.\n실제로 결제한 뒤 결제방식을 바우처·굳센 등으로 바꾸고 [결제 완료]를 눌러 주세요.`);
       return;
     }
+    if (!(await confirmSettle(toConfirm.map(x => ({ childId: x.childId, time: x.time, from: payments.get(keyOf(x.childId, x.time))?.method, to: (paidOf(x.childId, x.time) ?? (x.base ? { method: x.base } : undefined))?.method }))))) return;
     setSavingPay(true);
     const failedKeys: string[] = [];
     let payError = '';

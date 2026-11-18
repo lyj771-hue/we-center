@@ -478,6 +478,13 @@ export const roundMethod = (m: PayMethod): PayMethod => RETRO_BASE[m] ?? m;
 /** 소급·미결을 실제 결제로 바꿀 때 — 그 아이의 같은 소급·미결 중 이 날까지(앞 날짜) 남은 것을 모두 같은 결제로 확정한다.
  *  바우처소급 → 바우처, 굳센소급 → 굳센, 꿈이든소급 → 꿈이든, 장맞춤소급 → 장맞춤 / 미결 → 선결제A·B·C. 그 밖이면 아무것도 안 하고 0 */
 export const settlesLater = (from?: PayMethod, to?: PayMethod) => !!from && !!to && (RETRO_BASE[from] === to || (from === 'unpaid' && isPrepaid(to)));
+/** 같이 결제 처리될 앞 날짜 소급·미결 — 처리하기 전에 날짜를 보여 주려고 (이 칸(day·time)은 뺀다) */
+export async function getLaterToSettle(childId: string, from: PayMethod, upToDay: string, exceptTime: string): Promise<string[]> {
+  const { data, error } = await supabase.from('lesson_payments').select('day, time')
+    .eq('child_id', childId).eq('method', from).lte('day', upToDay).order('day').order('time');
+  if (error) throw error;
+  return (data ?? []).filter(r => !(r.day === upToDay && r.time === exceptTime)).map(r => r.day as string);
+}
 export async function settleLaterPayments(childId: string, from: PayMethod, to: PayMethod, upToDay: string): Promise<{ day: string; time: string }[]> {
   if (!settlesLater(from, to)) return [];
   const { data, error } = await supabase.from('lesson_payments').update({ method: to, confirmed: true })
