@@ -17,7 +17,7 @@ import { notifyScheduleChanged, onScheduleChanged } from '@/lib/sync';
 import {
   balanceOf, isWoojin, isBalancePay, isCountExcludedName, WOOJIN_FEE, CENTERS, LESSON_KINDS, PAY_METHODS, payMethodsFor, rowLabel, kindLabel, cellOf, getDayAssigns, getDayPayments, getMonthRoundLessons, defaultPayMethod, getPaymentCounts, ROUND_LIMIT, setDayAssign, setLessonPayment, worksAt, getChildren, getDayBoard, getFixedBoard, resetDayCell,
   rowsForDay, rowsForWeekday, restoreBookedSlot, saveDayCell, saveFixedFrom, clearChildTestData, getFixedByChild,
-  getLaterPayments, getGusenExtraDue, getUnconfirmedDays, UNCONFIRMED_FROM, isLaterPay, roundMethod, RETRO_BASE, GUSEN_EXTRA_ROUND,
+  getLaterPayments, settleLaterPayments, settlesLater, getGusenExtraDue, getUnconfirmedDays, UNCONFIRMED_FROM, isLaterPay, roundMethod, RETRO_BASE, GUSEN_EXTRA_ROUND,
   isPrepaid, prepaidTotalOf, EMPTY_ROW,
 } from '@/lib/timetable';
 
@@ -596,9 +596,19 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     const shownIds = new Set(shown.map(t => t.id));
     const failedPay: string[] = [];
     let payError = '';
+    const settledSched: string[] = [];
     for (const [k, v] of draft) {
       if (!shownIds.has(v.teacherId)) continue;
-      try { await setLessonPayment(v.childId, day, v.time, v.teacherId, center, v.entry && { ...v.entry, confirmed: false }); }
+      try {
+        await setLessonPayment(v.childId, day, v.time, v.teacherId, center, v.entry && { ...v.entry, confirmed: false });
+        // 소급·미결을 실제 결제로 바꿨으면 — 그 아이의 앞 날짜 같은 소급·미결도 모두 그 결제로 확정 ([결제 완료]와 같게)
+        const before = payments.get(k)?.method;
+        if (v.entry && settlesLater(before, v.entry.method)) {
+          const more = (await settleLaterPayments(v.childId, before!, v.entry.method, day)).length;
+          const payLabel = (m: PayMethod) => PAY_METHODS.find(p => p.key === m)?.label ?? m;
+          if (more) settledSched.push(`${children.find(c => c.id === v.childId)?.name ?? ''} ${payLabel(before!)} → ${payLabel(v.entry.method)} ${more}건`);
+        }
+      }
       catch (e) { failedPay.push(k); payError ||= payErrorText(e); }
     }
     setDraft(dr => new Map([...dr].filter(([k]) => failedPay.includes(k))));
@@ -609,6 +619,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     await load();
     notifyScheduleChanged(center);   // 선생님 시간표·수업스케쥴 화면에 바로 알림
     if (failedOps.length + failedAssign.length) showAlert(`${failedOps.length + failedAssign.length}건을 저장하지 못했어요. 다시 [스케줄 변경 완료]를 눌러 주세요.${payError ? `\n${payError}` : ''}`);
+    if (settledSched.length) await showAlert(`앞 날짜의 소급·미결도 같이 결제 처리했어요.\n${settledSched.join('\n')}\n(이 날 수업은 [결제 완료]를 눌러야 확정돼요)`);
     // 저장된 취소만 알림
     const okCancels = cancels.filter(x => ![...failedOps].some(k => k.includes(x.teacherId) && k.includes(x.time)));
     if (okCancels.length) await notifyCancelled(okCancels);
@@ -754,6 +765,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     const failedKeys: string[] = [];
     let payError = '';
     const prepaidUses = new Map<string, { childId: string; method: PrepaidKey; count: number }>();   // 이번에 선결제로 확정한 아이·종류 → 횟수 (알림톡)
+    const settled: string[] = [];   // 앞의 소급·미결을 같이 결제 처리한 것 — "김하정 미결 → 선결제A 5건"
     for (const x of toConfirm) {
       const k = keyOf(x.childId, x.time);
       const e = paidOf(x.childId, x.time) ?? (x.base ? { method: x.base } : undefined);
@@ -764,7 +776,16 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       try {
         // 소급·미결은 고른 것만 저장하고 확정하지 않는다
         await setLessonPayment(x.childId, day, x.time, x.teacherId, center, { ...e, confirmed: !isLaterPay(e.method) });
-        if (isPrepaid(e.method) && !e.note && !wasPrepaid) { const pk = `${x.childId}|${e.method}`; prepaidUses.set(pk, { childId: x.childId, method: e.method, count: (prepaidUses.get(pk)?.count ?? 0) + 1 }); }
+        // 소급·미결을 실제 결제로 바꿨으면 — 그 아이의 앞 날짜 같은 소급·미결도 모두 그 결제로 확정 (미결 → 선결제는 그만큼 선결제에서 빠진다)
+        let more = 0;
+        if (before && settlesLater(before.method, e.method)) {
+          try {
+            more = (await settleLaterPayments(x.childId, before.method, e.method, day)).length;
+            const payLabel = (m: PayMethod) => PAY_METHODS.find(p => p.key === m)?.label ?? m;
+            if (more) settled.push(`${children.find(c => c.id === x.childId)?.name ?? ''} ${payLabel(before.method)} → ${payLabel(e.method)} ${more}건`);
+          } catch (err) { payError ||= payErrorText(err); }
+        }
+        if (isPrepaid(e.method) && !e.note && !wasPrepaid) { const pk = `${x.childId}|${e.method}`; prepaidUses.set(pk, { childId: x.childId, method: e.method, count: (prepaidUses.get(pk)?.count ?? 0) + 1 + more }); }
       }
       catch (err) { failedKeys.push(k); payError ||= payErrorText(err); }
     }
@@ -772,6 +793,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     setSavingPay(false);
     await load();
     if (failedKeys.length) showAlert(`${failedKeys.length}건을 저장하지 못했어요. 다시 [결제 완료]를 눌러 주세요.${payError ? `\n${payError}` : ''}`);
+    if (settled.length) await showAlert(`앞 날짜의 소급·미결도 같이 결제 처리했어요.\n${settled.join('\n')}`);
     // 선결제 사용 — 아이마다 그날 한 번 '선결제 사용' 알림톡
     if (prepaidUses.size) {
       try {
