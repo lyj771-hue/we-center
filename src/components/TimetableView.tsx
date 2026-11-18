@@ -570,7 +570,13 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   const confirmSettle = async (childId: string, time: string, from: PayMethod, to: PayMethod): Promise<{ ok: boolean; sameDay: { teacherId: string; time: string }[] }> => {
     const payLabel = (m: PayMethod) => PAY_METHODS.find(p => p.key === m)?.label ?? m;
     const hm = (t: string) => t.padStart(5, '0');
-    const sameDay = lessons.filter(x => x.childId === childId && hm(x.time) < hm(time) && effMethod(x) === from).map(x => ({ teacherId: x.teacherId, time: x.time }));
+    // 이 날 앞 시간 — 디비에 같은 소급·미결로 저장된 칸(화면에서 다른 걸 고르지 않았거나, 앞서 같이 바꾼 칸)
+    const linked = new Set(settleLinks.current.get(keyOf(childId, time)) ?? []);
+    const sameDay = lessons.filter(x => {
+      if (x.childId !== childId || hm(x.time) >= hm(time)) return false;
+      const kk = keyOf(x.childId, x.time);
+      return payments.get(kk)?.method === from && (!draft.has(kk) || draft.get(kk)!.entry?.method === from || linked.has(kk));
+    }).map(x => ({ teacherId: x.teacherId, time: x.time }));
     const earlier = await getLaterToSettle(childId, from, day).catch(() => [] as string[]);
     if (!earlier.length && !sameDay.length) return { ok: true, sameDay };
     const n = new Map<string, number>();
@@ -685,6 +691,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
 
   // 수업 후 결제 체크 — 먼저 표에만 표시하고, [결제 완료]에서 한꺼번에 저장한다
   const keyOf = (childId: string, time: string) => `${childId}|${time}`;
+  // 소급·미결을 실제 결제로 고를 때 같이 바꾼 이 날 앞 시간 — "고른 칸" → 같이 바꾼 칸들 (다른 걸 다시 고르면 되돌린다)
+  const settleLinks = useRef(new Map<string, string[]>());
   const sameEntry = (a?: PayEntry | null, b?: PayEntry | null) => (a?.method ?? null) === (b?.method ?? null) && (a?.note ?? '') === (b?.note ?? '')
     && (a?.method !== 'visit' || (a?.amount ?? null) === (b?.amount ?? null)) && !!a?.extra === !!b?.extra;
   const paidOf = (childId: string, time: string): PayEntry | undefined => {
@@ -693,16 +701,23 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   };
   const pay = async (childId: string, teacherId: string, time: string, entry: PayEntry | null) => {
     const k = keyOf(childId, time);
-    // 소급·미결 → 실제 결제로 고르면 앞 날짜·이 날 앞 시간도 같이 처리된다고 먼저 확인 (취소하면 그대로). 이 날 앞 시간은 화면에서 같이 바꾼다
-    const from = paidOf(childId, time)?.method;
+    // 소급·미결 → 실제 결제로 고르면 앞 날짜·이 날 앞 시간도 같이 처리된다고 먼저 확인 (취소하면 그대로). 이 날 앞 시간은 화면에서 같이 바꾼다.
+    // 기준은 디비에 저장된 결제 — 신용카드 등을 눌렀다가 선결제를 눌러도 다시 묻는다
+    const saved = payments.get(k)?.method;
+    const shownNow = paidOf(childId, time)?.method;
+    const from = isLaterPay(saved) ? saved : isLaterPay(shownNow) ? shownNow : undefined;
     let also: { teacherId: string; time: string }[] = [];
     if (entry && from && settlesLater(from, entry.method)) {
       const r = await confirmSettle(childId, time, from, entry.method);
       if (!r.ok) return;
       also = r.sameDay;
     }
+    // 앞서 같이 바꿨던 이 날 앞 시간 — 이번에 다시 같이 바꾸지 않으면 원래대로
+    const before = settleLinks.current.get(k) ?? [];
+    if (also.length) settleLinks.current.set(k, also.map(x => keyOf(childId, x.time))); else settleLinks.current.delete(k);
     setDraft(dr => {
       const n = new Map(dr);
+      for (const kk of before) if (!also.some(x => keyOf(childId, x.time) === kk)) n.delete(kk);
       for (const x of [{ teacherId, time }, ...also]) {
         const kk = keyOf(childId, x.time);
         const e = x.time === time ? entry : { method: entry!.method };
