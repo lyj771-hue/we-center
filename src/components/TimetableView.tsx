@@ -565,19 +565,20 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
   };
 
-  // 소급·미결을 실제 결제로 바꾼 칸 — 결제방식을 고를 때 같이 처리될 앞 날짜를 보여 주고 확인받는다 (없으면 그냥 true, 취소하면 false = 안 바꿈)
-  const confirmSettle = async (items: { childId: string; time: string; from?: PayMethod; to?: PayMethod }[]) => {
+  // 소급·미결을 실제 결제로 고를 때 — 그 아이의 같은 소급·미결을 이 날 가장 늦은 시간까지 모두(앞 날짜 + 이 날 다른 시간) 같이 바꾼다고 확인받는다.
+  // 날짜마다 건수: "2026/11/03(2), 2026/11/18(3)". 없으면 그냥 true, 취소하면 false = 안 바꿈. sameDay = 이 날 같이 바꿀 다른 시간
+  const confirmSettle = async (childId: string, time: string, from: PayMethod, to: PayMethod): Promise<{ ok: boolean; sameDay: { teacherId: string; time: string }[] }> => {
     const payLabel = (m: PayMethod) => PAY_METHODS.find(p => p.key === m)?.label ?? m;
-    const lines: string[] = [];
-    for (const it of items) {
-      if (!it.from || !it.to || !settlesLater(it.from, it.to)) continue;
-      const days = await getLaterToSettle(it.childId, it.from, day, it.time).catch(() => [] as string[]);
-      if (!days.length) continue;
-      const name = children.find(c => c.id === it.childId)?.name ?? '';
-      lines.push(`${name} — 앞의 ${payLabel(it.from)} ${days.length}건이 모두 ${payLabel(it.to)}(으)로 결제 처리돼요.\n${days.map(d => d.replace(/-/g, '/')).join(', ')}`);
-    }
-    if (!lines.length) return true;
-    return askConfirm(`${lines.join('\n\n')}\n\n이 날 수업까지 함께 처리할까요?\n(실제 처리는 [스케줄 변경 완료]나 [결제 완료]를 누를 때 돼요)`);
+    const sameDay = lessons.filter(x => x.childId === childId && x.time !== time && effMethod(x) === from).map(x => ({ teacherId: x.teacherId, time: x.time }));
+    const earlier = await getLaterToSettle(childId, from, day).catch(() => [] as string[]);
+    if (!earlier.length && !sameDay.length) return { ok: true, sameDay };
+    const n = new Map<string, number>();
+    for (const d of earlier) n.set(d, (n.get(d) ?? 0) + 1);
+    n.set(day, sameDay.length + 1);
+    const total = earlier.length + sameDay.length + 1;
+    const name = children.find(c => c.id === childId)?.name ?? '';
+    const ok = await askConfirm(`${name} — ${payLabel(from)} ${total}건이 모두 ${payLabel(to)}(으)로 결제 처리돼요.\n${[...n].map(([d, c]) => `${d.replace(/-/g, '/')}(${c})`).join(', ')}\n\n함께 처리할까요?\n(실제 처리는 [스케줄 변경 완료]나 [결제 완료]를 누를 때 돼요)`);
+    return { ok, sameDay };
   };
 
   const saveSchedule = async () => {
@@ -691,12 +692,22 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   };
   const pay = async (childId: string, teacherId: string, time: string, entry: PayEntry | null) => {
     const k = keyOf(childId, time);
-    // 소급·미결 → 실제 결제로 고르면 앞 날짜도 같이 처리된다고 먼저 확인 (취소하면 그대로)
-    if (entry && settlesLater(payments.get(k)?.method, entry.method) && !(await confirmSettle([{ childId, time, from: payments.get(k)?.method, to: entry.method }]))) return;
+    // 소급·미결 → 실제 결제로 고르면 앞 날짜·이 날 다른 시간도 같이 처리된다고 먼저 확인 (취소하면 그대로). 이 날 다른 시간은 화면에서 같이 바꾼다
+    const from = paidOf(childId, time)?.method;
+    let also: { teacherId: string; time: string }[] = [];
+    if (entry && from && settlesLater(from, entry.method)) {
+      const r = await confirmSettle(childId, time, from, entry.method);
+      if (!r.ok) return;
+      also = r.sameDay;
+    }
     setDraft(dr => {
       const n = new Map(dr);
-      if (sameEntry(payments.get(k), entry)) n.delete(k);   // 디비와 같아지면 바꿀 것 없음
-      else n.set(k, { entry, childId, teacherId, time });
+      for (const x of [{ teacherId, time }, ...also]) {
+        const kk = keyOf(childId, x.time);
+        const e = x.time === time ? entry : { method: entry!.method };
+        if (sameEntry(payments.get(kk), e)) n.delete(kk);   // 디비와 같아지면 바꿀 것 없음
+        else n.set(kk, { entry: e, childId, teacherId: x.teacherId, time: x.time });
+      }
       return n;
     });
   };
