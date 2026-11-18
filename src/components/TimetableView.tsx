@@ -565,11 +565,12 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
   };
 
-  // 소급·미결을 실제 결제로 고를 때 — 그 아이의 같은 소급·미결을 이 날 가장 늦은 시간까지 모두(앞 날짜 + 이 날 다른 시간) 같이 바꾼다고 확인받는다.
-  // 날짜마다 건수: "2026/11/03(2), 2026/11/18(3)". 없으면 그냥 true, 취소하면 false = 안 바꿈. sameDay = 이 날 같이 바꿀 다른 시간
+  // 소급·미결을 실제 결제로 고를 때 — 그 아이의 같은 소급·미결을 고른 칸(기준 시간)까지 모두(앞 날짜 + 이 날 앞 시간) 같이 바꾼다고 확인받는다.
+  // 이 날 뒤 시간·뒤 날짜는 그대로. 날짜마다 건수: "2026/11/03(2), 2026/11/18(3)". 없으면 그냥 true, 취소하면 false = 안 바꿈. sameDay = 이 날 같이 바꿀 앞 시간
   const confirmSettle = async (childId: string, time: string, from: PayMethod, to: PayMethod): Promise<{ ok: boolean; sameDay: { teacherId: string; time: string }[] }> => {
     const payLabel = (m: PayMethod) => PAY_METHODS.find(p => p.key === m)?.label ?? m;
-    const sameDay = lessons.filter(x => x.childId === childId && x.time !== time && effMethod(x) === from).map(x => ({ teacherId: x.teacherId, time: x.time }));
+    const hm = (t: string) => t.padStart(5, '0');
+    const sameDay = lessons.filter(x => x.childId === childId && hm(x.time) < hm(time) && effMethod(x) === from).map(x => ({ teacherId: x.teacherId, time: x.time }));
     const earlier = await getLaterToSettle(childId, from, day).catch(() => [] as string[]);
     if (!earlier.length && !sameDay.length) return { ok: true, sameDay };
     const n = new Map<string, number>();
@@ -692,7 +693,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   };
   const pay = async (childId: string, teacherId: string, time: string, entry: PayEntry | null) => {
     const k = keyOf(childId, time);
-    // 소급·미결 → 실제 결제로 고르면 앞 날짜·이 날 다른 시간도 같이 처리된다고 먼저 확인 (취소하면 그대로). 이 날 다른 시간은 화면에서 같이 바꾼다
+    // 소급·미결 → 실제 결제로 고르면 앞 날짜·이 날 앞 시간도 같이 처리된다고 먼저 확인 (취소하면 그대로). 이 날 앞 시간은 화면에서 같이 바꾼다
     const from = paidOf(childId, time)?.method;
     let also: { teacherId: string; time: string }[] = [];
     if (entry && from && settlesLater(from, entry.method)) {
