@@ -565,7 +565,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     }
   };
 
-  // 소급·미결을 실제 결제로 바꾼 칸 — 같이 처리될 앞 날짜를 보여 주고 확인받는다 (없으면 그냥 true, 취소하면 false)
+  // 소급·미결을 실제 결제로 바꾼 칸 — 결제방식을 고를 때 같이 처리될 앞 날짜를 보여 주고 확인받는다 (없으면 그냥 true, 취소하면 false = 안 바꿈)
   const confirmSettle = async (items: { childId: string; time: string; from?: PayMethod; to?: PayMethod }[]) => {
     const payLabel = (m: PayMethod) => PAY_METHODS.find(p => p.key === m)?.label ?? m;
     const lines: string[] = [];
@@ -577,7 +577,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       lines.push(`${name} — 앞의 ${payLabel(it.from)} ${days.length}건이 모두 ${payLabel(it.to)}(으)로 결제 처리돼요.\n${days.map(d => d.replace(/-/g, '/')).join(', ')}`);
     }
     if (!lines.length) return true;
-    return askConfirm(`${lines.join('\n\n')}\n\n이 날 수업까지 함께 처리할까요?`);
+    return askConfirm(`${lines.join('\n\n')}\n\n이 날 수업까지 함께 처리할까요?\n(실제 처리는 [스케줄 변경 완료]나 [결제 완료]를 누를 때 돼요)`);
   };
 
   const saveSchedule = async () => {
@@ -598,12 +598,6 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       fixedLinked.length ? `고정 수업 ${fixedLinked.map(x => `${nameOf(x)} ${x.result}`).join(', ')} — '고정 스케줄' 알림톡이 가요.` : '',
       unlinked.length ? `회원 계정과 이어지지 않아 알림이 안 가요: ${unlinked.join(', ')}` : '',
     ].filter(Boolean).join('\n') + '\n저장할까요?'))) return;
-    {
-      const shownTs = new Set(shown.map(t => t.id));
-      const items = [...draft].filter(([, v]) => shownTs.has(v.teacherId) && v.entry)
-        .map(([k, v]) => ({ childId: v.childId, time: v.time, from: payments.get(k)?.method, to: v.entry!.method }));
-      if (!(await confirmSettle(items))) return;
-    }
     setSavingSched(true);
     const failedOps: string[] = [];
     const failedAssign: string[] = [];
@@ -695,8 +689,10 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     const k = keyOf(childId, time);
     return draft.has(k) ? draft.get(k)!.entry ?? undefined : payments.get(k);
   };
-  const pay = (childId: string, teacherId: string, time: string, entry: PayEntry | null) => {
+  const pay = async (childId: string, teacherId: string, time: string, entry: PayEntry | null) => {
     const k = keyOf(childId, time);
+    // 소급·미결 → 실제 결제로 고르면 앞 날짜도 같이 처리된다고 먼저 확인 (취소하면 그대로)
+    if (entry && settlesLater(payments.get(k)?.method, entry.method) && !(await confirmSettle([{ childId, time, from: payments.get(k)?.method, to: entry.method }]))) return;
     setDraft(dr => {
       const n = new Map(dr);
       if (sameEntry(payments.get(k), entry)) n.delete(k);   // 디비와 같아지면 바꿀 것 없음
@@ -782,7 +778,6 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
       await showAlert(`소급·미결 ${laterToday}건이 남아 있어요.\n실제로 결제한 뒤 결제방식을 바우처·굳센 등으로 바꾸고 [결제 완료]를 눌러 주세요.`);
       return;
     }
-    if (!(await confirmSettle(toConfirm.map(x => ({ childId: x.childId, time: x.time, from: payments.get(keyOf(x.childId, x.time))?.method, to: (paidOf(x.childId, x.time) ?? (x.base ? { method: x.base } : undefined))?.method }))))) return;
     setSavingPay(true);
     const failedKeys: string[] = [];
     let payError = '';
