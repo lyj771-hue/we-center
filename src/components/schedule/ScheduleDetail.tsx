@@ -238,7 +238,7 @@ export default function ScheduleDetail({ id, backHref }: { id: string; backHref?
       if (r.result === 'ok') {
         setAdds({});
         const s = r.sent;
-        setPopup(`${r.count}개 시간을 새로 열었어요.${(r.count ?? 0) < list.length ? '\n(그 사이 막혔거나 1시간 안으로 들어온 시간은 빠졌어요)' : ''}${s ? `\n알림톡 — 보냄 ${s.sent}건${s.waiting ? ` · 템플릿 심사 전이라 남겨만 둠 ${s.waiting}건` : ''}` : ''}`);
+        setPopup(`${r.count}개 시간을 새로 열었어요.${(r.count ?? 0) < list.length ? '\n(그 사이 막혔거나 1시간 안으로 들어온 시간은 빠졌어요)' : ''}${s ? `\n알림 — 앱 푸시 ${s.pushed ?? 0}건 · 알림톡 ${s.sent}건${s.waiting ? ` · 템플릿 심사 전이라 남겨만 둠 ${s.waiting}건` : ''}` : ''}`);
       } else setPopup(r.result === 'none' ? '열 수 있는 시간이 없어요. 그 사이 수업이 들어왔거나 1시간 안으로 들어왔어요.' : r.result === 'no_post' ? '이 게시글은 내려가서 더할 수 없어요.' : '선생님 인증된 계정만 열 수 있어요.');
     } catch (e) {
       setPopup(`저장하지 못했어요. SQL(supabase/teacher-schedule-post.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`);

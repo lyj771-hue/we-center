@@ -56,7 +56,7 @@ export default function PrepaidModal({ child, method: first = 'prepaid', onClose
   const tell = async (kind: '사용' | '충전' | '변경', d: string, delta: number) => {
     try {
       const r = await notifyPrepaid(child, kind, d, left, delta, method);
-      if (r.sent + r.failed + r.skipped + r.waiting) await showAlert(`${kindLabel} ${kind} 알림톡 — ${sendSummary(r)}`);
+      if ((r.pushed ?? 0) + r.sent + r.failed + r.skipped + r.waiting) await showAlert(`${kindLabel} ${kind} 알림 — ${sendSummary(r)}`);
     } catch (e) { await showAlert(`저장했지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
   };
   const deduct = () => {

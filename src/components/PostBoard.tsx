@@ -1,4 +1,5 @@
 'use client';
+import { sendSummary } from '@/lib/alimtalkNotify';
 
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
@@ -65,7 +66,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       try { who = await noticeRecipients(wantCenter ? notice.center : null); }
       catch (e) { await showAlert(`받을 보호자를 불러오지 못했어요.\n${(e as Error).message}`); return; }
       const where = wantCenter && notice.center ? `${CENTER_LABEL[notice.center]} ` : '';
-      if (!(await askConfirm(`글을 올리고 "${kind.label}" 알림톡을 보낼까요?\n\n받는 사람: ${where}승인된 보호자 ${who.list.length}명${who.noPhone ? `\n(전화번호 없는 ${who.noPhone}명은 빠져요)` : ''}`, '올리고 보내기'))) return;
+      if (!(await askConfirm(`글을 올리고 "${kind.label}" 알림을 보낼까요?\n\n받는 사람: ${where}승인된 보호자 ${who.list.length}명\n앱 푸시 먼저, 안 가면 알림톡${who.noPhone ? `\n(전화번호 없는 ${who.noPhone}명은 앱 푸시만 가요)` : ''}`, '올리고 보내기'))) return;
     }
     // 고른 것 — 지점만 게시글 제목 앞에 보이고, 종류·명절은 수정 화면에서 다시 보이게 숨겨 둔다
     const tags = selectionToTags(notice, kind);
@@ -73,7 +74,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
     if (kind && who) {
       try {
         const r = await sendNotice(kind, post.id, wantCenter ? notice.center : null, wantHoliday ? notice.holiday : '', who.list);
-        await showAlert(`글을 올렸어요.\n알림톡 — 보냄 ${r.sent}건${r.failed ? ` · 실패 ${r.failed}건` : ''}${r.skipped ? ` · 번호 없음 ${r.skipped}건` : ''}${r.waiting ? ` · 템플릿 심사 전이라 남겨만 둠 ${r.waiting}건` : ''}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+        await showAlert(`글을 올렸어요.\n알림 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
       } catch (e) {
         await showAlert(`글은 올렸지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
       }

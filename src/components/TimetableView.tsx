@@ -559,7 +559,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
           vars: { 이름: kid?.name ?? '', 날짜: day.replace(/-/g, '/'), 요일: DOWS[parseYmd(day).getDay()], 시간: x.time.replace(/^0/, ''), 선생님: teachers.find(t => t.id === x.teacherId)?.name ?? '', 신청결과: x.result ?? '취소' },
         };
       }));
-      showAlert(`수업 취소·확정 알림톡 — 보냄 ${res.sent}건${res.failed ? ` · 실패 ${res.failed}건` : ''}${res.skipped ? ` · 번호 없어 못 보냄 ${res.skipped}건` : ''}${res.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${res.waiting}건` : ''}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+      showAlert(`수업 취소·확정 알림 — ${sendSummary(res)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
     } catch (e) {
       showAlert(`저장했지만 수업 취소 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
     }
@@ -617,7 +617,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     if (okFixed.length) {
       try {
         const r = await notifyFixedChanges(okFixed.map(x => ({ ...x, teacherName: teachers.find(t => t.id === x.teacherId)?.name ?? '' })));
-        await showAlert(`고정 스케줄 알림톡 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+        await showAlert(`고정 스케줄 알림 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
       } catch (e) { await showAlert(`저장했지만 고정 스케줄 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
     }
   };
@@ -632,7 +632,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     setSendingDay(true);
     try {
       const r = await notifyLessonDay(day, center, lessons.map(x => ({ childId: x.childId, time: x.time, teacherName: teachers.find(t => t.id === x.teacherId)?.name ?? '' })));
-      await showAlert(`수업 일정 알림톡 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+      await showAlert(`수업 일정 알림 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
     } catch (e) { await showAlert(`보내지 못했어요.\n${(e as Error).message}`); }
     finally { setSendingDay(false); }
   };
@@ -776,7 +776,7 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
     if (prepaidUses.size) {
       try {
         const r = await notifyPrepaidUses(day, [...prepaidUses.values()]);
-        if (r.sent + r.failed + r.skipped + r.waiting) await showAlert(`선결제 사용 알림톡 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+        if ((r.pushed ?? 0) + r.sent + r.failed + r.skipped + r.waiting) await showAlert(`선결제 사용 알림 — ${sendSummary(r)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
       } catch (e) { await showAlert(`결제는 확정했지만 선결제 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
     }
   };

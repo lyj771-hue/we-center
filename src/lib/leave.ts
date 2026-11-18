@@ -31,9 +31,13 @@ export interface OutboxMessage {
   vars: Record<string, string>; status: OutboxStatus; error?: string; createdAt: string; sentAt?: string;
   /** 단체 알림(공지·스케줄 수정 등 여러 명에게 한 번에) — 같은 값끼리 알림 내역에서 한 줄로 묶는다 (supabase/outbox-batch.sql) */
   batchId?: string;
+  /** 실제로 간 길 — push(앱 푸시) / alimtalk(앱 푸시가 안 가서 알림톡) (supabase/push-first.sql) */
+  channel?: 'push' | 'alimtalk';
+  /** 앱 푸시가 안 간 이유 */
+  pushError?: string;
 }
 
-type NewOutbox = Omit<OutboxMessage, 'id' | 'status' | 'createdAt'>;
+type NewOutbox = Omit<OutboxMessage, 'id' | 'status' | 'createdAt' | 'channel' | 'pushError'>;
 const toRow = (m: NewOutbox, withBatch: boolean) => ({
   template_id: m.templateId, ref_id: m.refId ?? null, child_id: m.childId ?? null, user_id: m.userId ?? null,
   child_name: m.childName, phone: m.phone ?? null, vars: m.vars, ...(withBatch && m.batchId ? { batch_id: m.batchId } : {}),
@@ -54,13 +58,13 @@ export async function addOutbox(list: NewOutbox[]): Promise<void> {
 }
 
 /** 보낼 알림을 남기고 바로 보낸다(솔라피) — 템플릿 ID가 없는 알림은 남기기만. 결과 건수 */
-export async function addAndSendOutbox(list: NewOutbox[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
+export async function addAndSendOutbox(list: NewOutbox[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number; pushed?: number }> {
   if (!list.length) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };
   return sendOutbox(await insertOutbox(list));
 }
 
 /** 이미 남긴 보낼 알림을 보낸다(솔라피) — 결과 건수 */
-export async function sendOutbox(ids: string[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
+export async function sendOutbox(ids: string[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number; pushed?: number }> {
   if (!ids.length) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };
   const { data: s } = await supabase.auth.getSession();
   const res = await fetch('/api/alimtalk/send', {
@@ -94,6 +98,7 @@ export async function getOutbox(limit = 200): Promise<OutboxMessage[]> {
     vars: (r.vars as Record<string, string>) ?? {}, status: r.status as OutboxStatus, error: (r.error as string | null) ?? undefined,
     createdAt: r.created_at as string, sentAt: (r.sent_at as string | null) ?? undefined,
     batchId: (r.batch_id as string | null) ?? undefined,
+    channel: (r.channel as 'push' | 'alimtalk' | null) ?? undefined, pushError: (r.push_error as string | null) ?? undefined,
   }));
 }
 

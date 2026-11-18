@@ -30,6 +30,11 @@ const fmt = (iso?: string) => {
 };
 const CENTER_LABEL = { eunpyeong: '수색', uijeongbu: '의정부' } as const;
 const STATUS: Record<OutboxStatus, string> = { pending: '보낼 것', sent: '보냄', failed: '실패', skipped: '안 보냄' };
+/** 앱 푸시로 갔는지, 앱 푸시가 안 가서 알림톡으로 갔는지 (supabase/push-first.sql) */
+const Via = ({ m }: { m: OutboxMessage }) => m.channel === 'push'
+  ? <span className="ml-1 text-[11px] px-1.5 rounded bg-[#eef5fe] text-[var(--brand)]">앱 푸시</span>
+  : m.channel === 'alimtalk' ? <span className="ml-1 text-[11px] px-1.5 rounded bg-[#fef3c7] text-[#92400e]">알림톡</span> : null;
+const PushWhy = ({ m }: { m: OutboxMessage }) => m.channel === 'alimtalk' && m.pushError ? <span className="block text-[#b45309]">앱 푸시 안 감: {m.pushError}</span> : null;
 const STATUS_STYLE: Record<OutboxStatus, string> = {
   pending: 'bg-[#fffbeb] text-[#b45309]', sent: 'bg-[#ecfdf5] text-[#047857]', failed: 'bg-[#fef2f2] text-[#b91c1c]', skipped: 'bg-[#f4f4f5] text-[#71717a]',
 };
@@ -216,8 +221,8 @@ function SentLog() {
                               <tr key={x.id} className="border-t border-[#eee]">
                                 <td className="px-2 py-1 whitespace-nowrap">{x.childName}</td>
                                 <td className="px-2 py-1 whitespace-nowrap tabular-nums text-[#888]">{x.phone ?? <span className="text-[#e11d48]">번호 없음</span>}</td>
-                                <td className="px-2 py-1 whitespace-nowrap"><span className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[x.status]}`}>{STATUS[x.status]}</span></td>
-                                <td className="px-2 py-1 text-[#888]">{x.sentAt ? fmt(x.sentAt) : ''}{x.error ? <span className="block text-[#b91c1c]">{x.error}</span> : null}</td>
+                                <td className="px-2 py-1 whitespace-nowrap"><span className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[x.status]}`}>{STATUS[x.status]}</span><Via m={x} /></td>
+                                <td className="px-2 py-1 text-[#888]">{x.sentAt ? fmt(x.sentAt) : ''}<PushWhy m={x} />{x.error ? <span className="block text-[#b91c1c]">{x.error}</span> : null}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -231,10 +236,10 @@ function SentLog() {
                     <td className="px-3 py-2 text-[#666]">{[m.vars['날짜'], m.vars['시간'], m.vars['구분'], m.vars['사유'], m.vars['신청결과'], m.vars['센터'], m.vars['명절'], group ? m.vars['제목'] : undefined].filter(Boolean).join(' · ')}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {group
-                        ? <span className="flex flex-wrap gap-1">{(Object.keys(STATUS) as OutboxStatus[]).filter(st => cnt(st)).map(st => <span key={st} className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[st]}`}>{STATUS[st]} {cnt(st)}</span>)}</span>
-                        : <span className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[m.status]}`}>{STATUS[m.status]}</span>}
+                        ? <span className="flex flex-wrap gap-1">{(Object.keys(STATUS) as OutboxStatus[]).filter(st => cnt(st)).map(st => <span key={st} className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[st]}`}>{STATUS[st]} {cnt(st)}</span>)}{members.some(x => x.channel) && <span className="text-[11px] text-[#888]">(앱 푸시 {members.filter(x => x.channel === 'push').length} · 알림톡 {members.filter(x => x.channel === 'alimtalk').length})</span>}</span>
+                        : <><span className={`text-[11px] px-1.5 rounded ${STATUS_STYLE[m.status]}`}>{STATUS[m.status]}</span><Via m={m} /></>}
                     </td>
-                    <td className="px-3 py-2 text-[#888]">{group ? (members.find(x => x.sentAt)?.sentAt ? fmt(members.find(x => x.sentAt)!.sentAt) : '') : <>{m.sentAt ? fmt(m.sentAt) : ''}{m.error ? <span className="block text-[#b91c1c]">{m.error}</span> : null}</>}</td>
+                    <td className="px-3 py-2 text-[#888]">{group ? (members.find(x => x.sentAt)?.sentAt ? fmt(members.find(x => x.sentAt)!.sentAt) : '') : <>{m.sentAt ? fmt(m.sentAt) : ''}<PushWhy m={m} />{m.error ? <span className="block text-[#b91c1c]">{m.error}</span> : null}</>}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right tabular-nums">{group ? <span className="font-medium text-[#333]">{members.length}명</span> : <span className="text-[#bbb]">1명</span>}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-right">
                       {(group || t) && <button onClick={() => setOpen(o => (o === key ? null : key))} className="text-[11px] text-[#888] underline underline-offset-2 mr-2">{isOpen ? '접기' : group ? '명단 보기' : '미리보기'}</button>}

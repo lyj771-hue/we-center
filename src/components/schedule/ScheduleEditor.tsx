@@ -7,6 +7,7 @@ import type { CellView } from '@/lib/timetable';
 import { ROW_LABEL, cellOf, childLabel, getChildren, getDayBoard, rowsForDay, worksAt } from '@/lib/timetable';
 import { getMemberCenters, getMembers } from '@/lib/store';
 import { addAndSendOutbox, addOutbox, newBatchId } from '@/lib/leave';
+import { sendSummary } from '@/lib/alimtalkNotify';
 import {
   addDays, addTeacher, cancelSlot, deleteTeacher, deleteTemplate, dowLabel, FREE_CANCEL_MIN, getKoreanHolidays, getTemplates, isPublished,
   parseDateList, parseYmd, publishLabel, saveSchedule, saveTemplate, scheduleRange, setScheduleHidden, shortDay, slashDay, thisMonday, toYmd, updateTeacher, weekDays,
@@ -319,19 +320,19 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     } catch { alert('형식을 지우지 못했어요.'); }
   };
 
-  // 게시글을 새로 올리거나(스케줄 공지) 고쳐 저장하면(스케줄 수정) — 물어보고, 이 센터에 승인된 보호자(번호 있는)마다 알림톡을 바로 보낸다
+  // 게시글을 새로 올리거나(스케줄 공지) 고쳐 저장하면(스케줄 수정) — 물어보고, 이 센터에 승인된 보호자마다 바로 보낸다 (앱 푸시 먼저, 안 가면 알림톡 — 번호 없는 분은 앱 푸시만)
   const notifyUpdated = async (scheduleId: string, scheduleTitle: string, ask = true, kind: 'schedule_updated' | 'schedule_notice' = 'schedule_updated') => {
     try {
       const [members, extra, kids] = await Promise.all([getMembers(), getMemberCenters(), getChildren()]);
       const approved = members.filter(m => m.nickname && (((m.center ?? 'eunpyeong') === center && m.approvedAt) || extra.get(`${m.userId}|${center}`)));
-      const withPhone = approved.filter(m => m.phone);
-      if (!withPhone.length) return;
+      const noPhone = approved.filter(m => !m.phone).length;
+      if (!approved.length) return;
       const what = kind === 'schedule_notice' ? '새 빈 수업 안내(스케줄 공지)' : '업데이트(스케줄 수정)';
-      if (ask && !confirm(`보호자에게 "${scheduleTitle}" ${what} 알림톡을 보낼까요?\n(${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자 ${withPhone.length}명${approved.length > withPhone.length ? ` · 번호 없는 ${approved.length - withPhone.length}명은 빼요` : ''})`)) return;
+      if (ask && !confirm(`보호자에게 "${scheduleTitle}" ${what} 알림을 보낼까요?\n(${center === 'uijeongbu' ? '의정부' : '수색'} 승인된 보호자 ${approved.length}명 — 앱 푸시 먼저, 안 가면 알림톡${noPhone ? `\n번호 없는 ${noPhone}명은 앱 푸시만 가요` : ''})`)) return;
       const now = new Date();
       const day = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
       const batchId = newBatchId();
-      const res = await addAndSendOutbox(withPhone.map(m => {
+      const res = await addAndSendOutbox(approved.map(m => {
         const kid = kids.find(k => k.guardianUserId === m.userId && (k.center ?? 'eunpyeong') === center);
         const name = kid ? childLabel(kid) : m.nickname;
         return {
@@ -339,7 +340,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
           vars: { 이름: kid?.name ?? m.nickname, 제목: scheduleTitle, 날짜: day, 센터: center === 'uijeongbu' ? '의정부점' : '은평점', 글번호: scheduleId },
         };
       }));
-      alert(`${kind === 'schedule_notice' ? '스케줄 공지' : '스케줄 수정'} 알림톡 — 보냄 ${res.sent}건${res.failed ? ` · 실패 ${res.failed}건` : ''}${res.skipped ? ` · 번호 없어 못 보냄 ${res.skipped}건` : ''}${res.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${res.waiting}건` : ''}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+      alert(`${kind === 'schedule_notice' ? '스케줄 공지' : '스케줄 수정'} 알림 — ${sendSummary(res)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
     } catch (e) {
       alert(`스케줄은 저장했지만 알림을 남기지 못했어요.\n${(e as Error).message}`);
     }
@@ -361,7 +362,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
           vars: { 이름: name, 날짜: d.replace(/-/g, '/'), 요일: DOW[parseYmd(d).getDay()], 시간: time.replace(/^0/, ''), 선생님: teachers.find(t => t.id === tid)?.name ?? '', 신청결과: '취소' },
         };
       }));
-      alert(`수업 취소 알림톡 — 보냄 ${res.sent}건${res.failed ? ` · 실패 ${res.failed}건` : ''}${res.skipped ? ` · 번호 없어 못 보냄 ${res.skipped}건` : ''}${res.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${res.waiting}건` : ''}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+      alert(`수업 취소 알림 — ${sendSummary(res)}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
     } catch (e) {
       alert(`스케줄은 저장했지만 수업 취소 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
     }

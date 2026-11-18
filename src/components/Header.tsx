@@ -10,6 +10,7 @@ import { askConfirm } from '@/lib/dialog';
 import { ALERTS_CHANGED, getUnreadAlertCount } from '@/lib/alerts';
 import ContactButton from './ContactButton';
 import { isAppPath, toAppHref } from '@/lib/appPath';
+import NotifyBell from '@/components/app/NotifyBell';
 
 
 export const NAV = [
@@ -177,7 +178,8 @@ export default function Header({ inApp = false }: { inApp?: boolean }) {
           {/* 보호자 로그인 + 문의하기 — PC는 둘 다 오른쪽.
               휴대폰은 로그인 버튼을 왼쪽, 문의하기는 펼친 메뉴 맨 아래에 두고, 로그인 뒤 인사는 로고 아래 한 줄로(로고와 겹치지 않게) */}
           <div className="absolute left-4 md:left-auto md:right-14 top-1/2 -translate-y-1/2 flex items-center gap-2">
-            {!isAdmin && (userId ? (
+            {inApp && <NotifyBell />}
+            {!inApp && !isAdmin && (userId ? (
               <span className="hidden md:flex"><Greeting profile={profile} teacherName={teacher?.name} onLogout={memberLogout} /></span>
             ) : (
               <button onClick={login}

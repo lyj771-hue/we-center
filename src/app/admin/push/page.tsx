@@ -8,10 +8,12 @@ import type { PushLog, PushSub } from '@/lib/push';
 import { listPushLog, listPushSubs, sendPush } from '@/lib/push';
 import { askConfirm, showAlert } from '@/lib/dialog';
 import { supabase } from '@/lib/supabaseClient';
+import PushFallbackList from '@/components/PushFallbackList';
 
 // 앱 푸시 (관리자) — 보호자 앱에서 [알림 받기]를 켠 보호자에게 알림 보내기.
 //   받는 사람: 전체 / 수색 / 의정부 / 한 보호자.  누르면 열 화면: 앱 홈·수업신청·결제·공지사항(글 하나)
 //   보낸 기록과 알림 켠 보호자 목록. 표는 supabase/push.sql, 보내기는 /api/push/send
+//   알림톡이 가던 모든 알림은 앱 푸시로 먼저 가고(supabase/push-first.sql), 안 간 것만 알림톡 — 그 목록과 이유도 여기서 본다
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const fmt = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
@@ -175,9 +177,12 @@ export default function PushAdminPage() {
         </section>
       </div>
 
+      {/* 앱 푸시가 안 가서 알림톡으로 간 알림 — 누구·무슨 내용·왜 */}
+      <PushFallbackList members={members} />
+
       {/* 보낸 기록 */}
       <section className={card}>
-        <h2 className="text-[16px] mb-3">보낸 기록</h2>
+        <h2 className="text-[16px] mb-3">직접 보낸 앱 푸시 기록</h2>
         {log.length === 0 ? <p className="text-[13px] text-[#bbb]">아직 보낸 앱 푸시가 없어요.</p> : (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px] min-w-[560px]">

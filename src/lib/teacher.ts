@@ -98,7 +98,7 @@ export async function getSlotOwners(scheduleId: string): Promise<Map<string, str
 }
 
 /** 선생님이 만든 보낼 알림 보내기 */
-async function sendTeacherOutbox(ids: string[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number }> {
+async function sendTeacherOutbox(ids: string[]): Promise<{ sent: number; failed: number; skipped: number; waiting: number; pushed?: number }> {
   if (!ids.length) return { sent: 0, failed: 0, skipped: 0, waiting: 0 };
   const { data: s } = await supabase.auth.getSession();
   const res = await fetch('/api/alimtalk/teacher-send', {

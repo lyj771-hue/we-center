@@ -62,7 +62,7 @@ export default function TeacherLeaveDialog({ teacher, day, center, rows, lessons
       return { key, ...e, times: e.times.sort(), userId: e.child?.guardianUserId, phone: mem?.phone };
     });
   }, [hit, children, members]);
-  const sendable = kids.filter(k => k.phone && !skip.has(k.key));   // 번호가 있고 체크한 아이만 보낼 알림에 남긴다
+  const sendable = kids.filter(k => (k.phone || k.userId) && !skip.has(k.key));   // 앱 계정이나 번호가 있고 체크한 아이만 (번호 없으면 앱 푸시만)
 
   const toggleTime = (t: string) => setPicked(s => { const n = new Set(s); if (n.has(t)) n.delete(t); else n.add(t); return n; });
   const hm = (t: string) => t.replace(/^0/, '');
@@ -105,7 +105,7 @@ export default function TeacherLeaveDialog({ teacher, day, center, rows, lessons
     }
     setSaving(false);
     onDone();
-    showAlert(`${teacher.name} 선생님 ${dayText} ${allDay ? '종일' : `${[...picked].sort().map(hm).join(', ')}`} 휴무로 바꿨어요.\n수업 ${hit.length}개 취소${failed ? ` (${failed}개는 저장 실패 — 다시 해 주세요)` : ''}\n휴무 수업 취소 알림톡 — ${sendRes ? sendSummary(sendRes) : '보낼 아이 없음'}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
+    showAlert(`${teacher.name} 선생님 ${dayText} ${allDay ? '종일' : `${[...picked].sort().map(hm).join(', ')}`} 휴무로 바꿨어요.\n수업 ${hit.length}개 취소${failed ? ` (${failed}개는 저장 실패 — 다시 해 주세요)` : ''}\n휴무 수업 취소 알림 — ${sendRes ? sendSummary(sendRes) : '보낼 아이 없음'}\n(알림 → 보호자 알림 내역에서 볼 수 있어요)`);
   };
 
   const chip = (on: boolean) => `px-3 py-1 rounded-full border text-[13px] ${on ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] text-[#555] hover:bg-[#f8f8f8]'}`;
@@ -143,12 +143,12 @@ export default function TeacherLeaveDialog({ teacher, day, center, rows, lessons
             <ul className="space-y-1">
               {kids.map(k => (
                 <li key={k.key} className="flex items-center gap-2 text-[13px]">
-                  <input type="checkbox" checked={!!k.phone && !skip.has(k.key)} disabled={!k.phone}
+                  <input type="checkbox" checked={!!(k.phone || k.userId) && !skip.has(k.key)} disabled={!k.phone && !k.userId}
                     onChange={() => setSkip(s => { const n = new Set(s); if (n.has(k.key)) n.delete(k.key); else n.add(k.key); return n; })} />
                   <span className="text-[#27272a]">{k.name}</span>
                   <span className="text-[#888] tabular-nums">{k.times.map(hm).join(', ')}</span>
-                  <span className={`ml-auto text-[11px] ${k.phone ? 'text-[#888]' : 'text-[#e11d48]'}`}>
-                    {members === null ? '…' : k.phone ?? (k.userId ? '번호 없음' : '가입 안 함')}
+                  <span className={`ml-auto text-[11px] ${k.phone ? 'text-[#888]' : k.userId ? 'text-[#d97706]' : 'text-[#e11d48]'}`}>
+                    {members === null ? '…' : k.phone ?? (k.userId ? '번호 없음 · 앱 푸시만' : '가입 안 함')}
                   </span>
                 </li>
               ))}

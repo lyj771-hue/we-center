@@ -11,6 +11,7 @@ import { AppJoin, AppLogin, AppPending, AppSplash } from './AppGate';
 import { clearAppBadge, registerAppSw } from '@/lib/push';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import NotifyBell from './NotifyBell';
 import { isAppSitePath, toAppHref } from '@/lib/appPath';
 import type { ViewKid } from '@/lib/viewAs';
 import { getViewerChildren, setViewChild } from '@/lib/viewAs';
@@ -196,7 +197,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </div>
             <Link href="/app" aria-label="홈"><img src="/logo-we-heart.png" alt="We 센터" className="w-10 h-10 object-contain" /></Link>
-            <div className="justify-self-end">
+            <div className="justify-self-end flex items-center gap-1.5">
+              <NotifyBell />
               {teacher ? (
                 pathname.startsWith('/app/child') && viewKid
                   ? <span className="h-9 px-3.5 inline-flex items-center rounded-full text-[14px] bg-[#EAF3FE] text-[var(--brand)]">{viewKid.center === 'uijeongbu' ? '의정부' : '수색'}</span>

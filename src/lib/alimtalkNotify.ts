@@ -7,7 +7,7 @@ import type { Member } from './types';
 //   회원가입 승인(member_approved) · 선결제 사용·충전·변경(prepaid_use) · 고정 수업 확정·취소·변동(fixed_change) · 수업 일정(lesson_tomorrow_1~8)
 // 날짜는 늘 2026/10/27 꼴. 번호 없는 보호자는 '번호 없음'으로 남는다.
 
-export type SendResult = { sent: number; failed: number; skipped: number; waiting: number };
+export type SendResult = { sent: number; failed: number; skipped: number; waiting: number; pushed?: number };
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const pad = (n: number) => String(n).padStart(2, '0');
 export const slash = (ymd: string) => ymd.slice(0, 10).replace(/-/g, '/');
@@ -17,9 +17,9 @@ const dowOf = (ymd: string) => { const [y, m, d] = ymd.split('-').map(Number); r
 export const centerName = (c: Center) => (c === 'uijeongbu' ? '의정부점' : '은평점');
 const hm = (t: string) => t.replace(/^0/, '');
 
-/** "보냄 2건 · 실패 1건 …" */
+/** "앱 푸시 3건 · 알림톡 2건 · 실패 1건 …" — 앱 푸시가 먼저, 안 간 사람만 알림톡 */
 export const sendSummary = (r: SendResult) =>
-  `보냄 ${r.sent}건${r.failed ? ` · 실패 ${r.failed}건` : ''}${r.skipped ? ` · 번호 없어 못 보냄 ${r.skipped}건` : ''}${r.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${r.waiting}건` : ''}`;
+  `앱 푸시 ${r.pushed ?? 0}건 · 알림톡 ${r.sent}건${r.failed ? ` · 실패 ${r.failed}건` : ''}${r.skipped ? ` · 번호 없어 못 보냄 ${r.skipped}건` : ''}${r.waiting ? ` · 템플릿 ID가 없어 남겨만 둠 ${r.waiting}건` : ''}`;
 
 /** 아이 → 보호자 계정 */
 async function guardianOf(childIds: string[]) {

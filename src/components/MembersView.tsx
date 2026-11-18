@@ -325,7 +325,7 @@ export default function MembersView({ center }: { center: Center }) {
   const sendApproved = async (m: Member) => {
     try {
       const r = await notifyMemberApproved(m, center, isExtra(m) ? requestedAt.get(`${m.userId}|${center}`) : m.joinedAt);
-      await showAlert(`회원가입 승인 알림톡 — ${sendSummary(r)}`);
+      await showAlert(`회원가입 승인 알림 — ${sendSummary(r)}`);
     } catch (e) { await showAlert(`승인했지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`); }
   };
 

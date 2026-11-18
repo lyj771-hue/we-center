@@ -1,0 +1,21 @@
+
+> we-center@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.11 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.30.1.85:3000
+- Environments: .env.local
+✓ Ready in 204ms
+
+ GET / 200 in 323ms (next.js: 148ms, application-code: 175ms)
+✓ Compiled in 185ms
+ GET /?v=1792764917 200 in 99ms (next.js: 10ms, application-code: 89ms)
+✓ Compiled in 207ms
+✓ Compiled in 221ms
+✓ Compiled in 208ms
+✓ Compiled in 27ms
+✓ Compiled in 29ms
+✓ Compiled in 24ms
+✓ Compiled in 25ms
+[?25h

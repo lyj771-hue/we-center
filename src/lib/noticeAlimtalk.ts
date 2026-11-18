@@ -19,18 +19,18 @@ export async function getNoticeKinds(): Promise<MessageRow[]> {
   return toRows(saved).filter(r => r.grp === 'notice_kind');
 }
 
-/** 받을 보호자 — 센터를 고르면 그 센터에 승인된 보호자, 아니면 어느 센터든 승인된 보호자. 번호 없는 사람은 따로 센다 */
+/** 받을 보호자 — 센터를 고르면 그 센터에 승인된 보호자, 아니면 어느 센터든 승인된 보호자.
+ *  번호 없는 사람도 넣는다(앱 푸시만 간다) — noPhone 은 알림톡으로 대신 보낼 수 없는 사람 수 */
 export async function noticeRecipients(center: NoticeCenter | null) {
   const [members, extra, kids] = await Promise.all([getMembers(), getMemberCenters(), getChildren()]);
   const inCenter = (m: (typeof members)[number], c: NoticeCenter) =>
     ((m.center ?? 'eunpyeong') === c && !!m.approvedAt) || !!extra.get(`${m.userId}|${c}`);
   const approved = members.filter(m => m.nickname && (center ? inCenter(m, center) : inCenter(m, 'eunpyeong') || inCenter(m, 'uijeongbu')));
-  const withPhone = approved.filter(m => m.phone);
-  const list = withPhone.map(m => {
+  const list = approved.map(m => {
     const kid = kids.find(k => k.guardianUserId === m.userId && (!center || (k.center ?? 'eunpyeong') === center)) ?? kids.find(k => k.guardianUserId === m.userId);
-    return { userId: m.userId, phone: m.phone!, childId: kid?.id, name: kid?.name ?? m.nickname, label: kid ? `${kid.name}${kid.number ?? ''}` : m.nickname };
+    return { userId: m.userId, phone: m.phone, childId: kid?.id, name: kid?.name ?? m.nickname, label: kid ? `${kid.name}${kid.number ?? ''}` : m.nickname };
   });
-  return { list, noPhone: approved.length - withPhone.length };
+  return { list, noPhone: approved.filter(m => !m.phone).length };
 }
 
 /** 단체로 보내기 — 한 묶음(batch_id)으로 남겨 알림 내역에 한 줄로 보인다 */
