@@ -105,8 +105,8 @@ export default function PushAdminPage() {
         {failed && <p className="mt-2 text-[13px] text-red-500">불러오지 못했어요 — supabase/push.sql 을 실행했는지 확인해 주세요. ({failed})</p>}
       </div>
 
-      {/* 보내기 칸은 너무 넓으면 입력이 불편해서 1100px까지만, 아래 기록 표는 화면 가득 */}
-      <div className="grid md:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start max-w-[1100px]">
+      {/* 보내기 칸은 너무 넓으면 입력이 불편해서 1100px까지만(가운데), 아래 기록 표는 화면 가득 */}
+      <div className="grid md:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start max-w-[1100px] mx-auto">
         {/* 보내기 */}
         <section className={`${card} space-y-4`}>
           <h2 className="text-[16px]">보내기</h2>
