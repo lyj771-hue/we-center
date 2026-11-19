@@ -214,8 +214,6 @@ body {
 .scrap-lg .scrap-card { width: 680px; margin-left: calc(var(--cx) - 340px); }
 /* We슐랭 사진 테두리 — 큰 사진·작은 사진 모두 밝은 회색 (화면이 1/2·1/3로 줄어드니 2px) */
 .scrap-lg .scrap-card, .scrap-lg .scrap-photo { border: 2px solid #d4d4d8; }
-/* We슐랭 큰 사진 — 둥근 모서리 없이, 작은 사진처럼 흰 여백 테두리(큰 사진이라 조금 더 굵게) */
-.scrap-lg .scrap-card { border-radius: 0; padding: 12px; background: #fff; }
 @media (max-width: 480px) {
   /* We슐랭 휴대폰 — 사진·메모 묶음 전체가 화면 가운데에 오게 가운데선을 왼쪽으로(--sh, WeslangBoard 가 정한다) */
   .scrap-lg .scrap-stage { --cx: calc(50% - var(--sh, 0px)); }
