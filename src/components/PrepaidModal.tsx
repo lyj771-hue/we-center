@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { showAlert } from '@/lib/dialog';
+import { askConfirm, showAlert } from '@/lib/dialog';
 import type { Child, PrepaidKey } from '@/lib/timetable';
 import { PREPAID_KINDS } from '@/lib/timetable';
 import type { LedgerRow } from '@/lib/prepaid';
-import { addCharge, getChildLedger } from '@/lib/prepaid';
+import { addCharge, deleteCharge, getChildLedger } from '@/lib/prepaid';
 import PrepaidCard from '@/components/PrepaidCard';
 import { notifyPrepaid, sendSummary } from '@/lib/alimtalkNotify';
 
@@ -64,6 +64,16 @@ export default function PrepaidModal({ child, method: first = 'prepaid', onClose
     if (!n || n < 0) { showAlert('차감 횟수를 적어 주세요.'); return; }
     run(async () => { await addCharge(child.id, useDay, -n, useMemo, false, method); setUseCount('1'); setUseMemo(''); await tell('사용', useDay, -n); }, '차감하지 못했어요.');
   };
+  // 잘못 넣은 기록 지우기 — 직접 넣은 충전·차감·수정만. 시간표 [결제 완료]로 쓴 사용은 시간표에서 결제방식을 바꿔야 한다
+  const KIND_LABEL = { charge: '충전', use: '차감', adjust: '수정' } as const;
+  const remove = async (r: LedgerRow) => {
+    if (!r.chargeId) return;
+    const sign = r.kind === 'use' ? '-' : r.kind === 'adjust' && r.count < 0 ? '' : '+';
+    if (!(await askConfirm(`${r.day.replace(/-/g, '/')} ${KIND_LABEL[r.kind]} ${sign}${r.count}회${r.memo ? ` (${r.memo})` : ''} 기록을 지울까요?\n남은 횟수가 다시 계산돼요. 보호자에게 알림은 가지 않아요.`, '지우기'))) return;
+    run(async () => { await deleteCharge(r.chargeId!); }, '지우지 못했어요.');
+  };
+  const own = (rows ?? []).filter(r => r.chargeId).slice().reverse();
+
   const fix = () => {
     if (fixLeft === '') { showAlert('남은 횟수를 적어 주세요.'); return; }
     const diff = Number(fixLeft) - left;
@@ -89,6 +99,24 @@ export default function PrepaidModal({ child, method: first = 'prepaid', onClose
           ))}
         </div>
         {rows === null ? <p className="text-[13px] text-[#aaa]">불러오는 중…</p> : <PrepaidCard rows={rows} name={child.name} />}
+
+        {/* 직접 넣은 기록 — 잘못 넣었으면 지우기 */}
+        {own.length > 0 && (
+          <details className="bg-white rounded-xl px-4 py-3">
+            <summary className="text-[13px] text-[#555] cursor-pointer">잘못 넣은 기록 지우기 ({own.length})</summary>
+            <ul className="mt-2 divide-y divide-[#f0f0f0] text-[13px]">
+              {own.map(r => (
+                <li key={r.chargeId} className="py-2 flex items-center gap-2">
+                  <span className="tabular-nums text-[#888]">{r.day.replace(/-/g, '/')}</span>
+                  <span>{KIND_LABEL[r.kind]} <span className="tabular-nums">{r.kind === 'use' ? '-' : r.kind === 'adjust' && r.count < 0 ? '' : '+'}{r.count}회</span></span>
+                  {r.memo && <span className="text-[#aaa] truncate min-w-0">{r.memo}</span>}
+                  <button type="button" onClick={() => remove(r)} disabled={busy} className="ml-auto shrink-0 text-[12px] text-[#e11d48] border border-[#fecdd3] rounded-full px-2.5 py-0.5 disabled:opacity-50">지우기</button>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-[11px] text-[#aaa] leading-[1.6]">시간표 [결제 완료]로 쓴 사용은 여기서 못 지워요 — 시간표에서 그날 결제방식을 바꿔 주세요.</p>
+          </details>
+        )}
 
         {/* 충전 · 차감 · 수정 — 하나를 골라 그 칸만 */}
         <div className="bg-white rounded-xl p-4 space-y-3">
