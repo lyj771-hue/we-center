@@ -48,10 +48,10 @@ export default function UsageCard({ label, rows, name, used, limit, balance }: {
                 <span className="text-[#444]">{md(r.day)}</span>
                 <span className="text-right text-[var(--brand)] leading-tight">
                   {r.nth}회
-                  {r.retro && <span className="block font-sans text-[10px] text-[#d97706]">소급</span>}
-                  {r.due && <span className="block font-sans text-[10px] text-[#e11d48]">결제필요</span>}
+                  {r.retro && <span className="block font-sans text-[9px] text-[#d97706]">소급</span>}
+                  {r.due && <span className="block font-sans text-[9px] text-[#d97706]">결제필요</span>}
                 </span>
-                <span className="pl-4 font-sans text-[11px] leading-[1.3] text-[#999] break-keep">{r.memo}</span>
+                <span className="pl-4 font-sans text-[10px] leading-[1.3] text-[#999] break-keep">{r.memo}</span>
               </li>
             ))}
           </ul>
