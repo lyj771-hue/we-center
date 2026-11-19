@@ -132,8 +132,8 @@ export default function PushFallbackList({ members }: { members: Member[] }) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px] min-w-[760px]">
-              <thead><tr className="text-left text-[#999] border-b border-[#eee]"><th className="py-2 font-normal">때</th><th className="font-normal">받는 사람</th><th className="font-normal">알림 · 내용</th><th className="font-normal">어떻게</th><th className="font-normal text-right">결과</th></tr></thead>
+            <table className="w-full text-[13px] min-w-[860px]">
+              <thead><tr className="text-left text-[#999] border-b border-[#eee]"><th className="py-2 font-normal">때</th><th className="font-normal">받는 사람</th><th className="font-normal">알림</th><th className="font-normal">내용</th><th className="font-normal">어떻게</th><th className="font-normal text-right">결과</th></tr></thead>
               <tbody>
                 {shown.map(r => {
                   const spec = findSpec(r.template_id, specs);
@@ -143,10 +143,10 @@ export default function PushFallbackList({ members }: { members: Member[] }) {
                   return (
                     <tr key={r.id} className="border-b border-[#f4f4f4] align-top">
                       <td className="py-2 pr-3 whitespace-nowrap tabular-nums">{fmt(r.created_at)}</td>
-                      <td className="pr-3">{who(r)}{r.phone && <span className="block text-[#aaa] tabular-nums">{r.phone}</span>}</td>
+                      <td className="pr-3">{who(r)}</td>
+                      <td className="pr-3 text-[#666]">{spec?.label ?? r.template_id}</td>
                       <td className="pr-3">
                         <button type="button" onClick={() => setOpen(on ? null : r.id)} className="text-left">
-                          <span className="text-[#999]">{spec?.label ?? r.template_id}</span>
                           <span className="block underline-offset-2 hover:underline">{msg.title} {on ? '▴' : '▾'}</span>
                         </button>
                         {on && (
