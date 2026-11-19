@@ -46,7 +46,7 @@ export default function UsageCard({ label, rows, name, used, limit, balance }: {
             {shown.map((r, i) => (
               <li key={i} className="grid grid-cols-[3fr_1.6fr_5fr] items-center py-1">
                 <span className="text-[#444]">{md(r.day)}</span>
-                <span className="text-center text-[var(--brand)] leading-tight">
+                <span className={`text-center leading-tight ${r.retro || r.due ? 'text-[#d97706]' : 'text-[var(--brand)]'}`}>
                   {r.nth}회
                   {r.retro && <span className="block font-sans text-[9px] text-[#d97706]">소급</span>}
                   {r.due && <span className="block font-sans text-[9px] text-[#d97706]">결제필요</span>}
