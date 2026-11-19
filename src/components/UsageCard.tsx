@@ -37,7 +37,7 @@ export default function UsageCard({ label, rows, name, used, limit, balance }: {
           {name && <span className="text-[#555]">{name} 님<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span></span>}
         </p>
         <div className="mt-3 grid grid-cols-[3fr_1.6fr_5fr] border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888]">
-          <span>일자</span><span className="text-right">회차</span><span className="pl-4">메모</span>
+          <span>일자</span><span className="text-center">회차</span><span className="pl-4">메모</span>
         </div>
         {rows.length === 0 ? (
           <p className="py-6 text-center text-[13px] text-[#bbb]">사용 내역이 없어요.</p>
@@ -46,7 +46,7 @@ export default function UsageCard({ label, rows, name, used, limit, balance }: {
             {shown.map((r, i) => (
               <li key={i} className="grid grid-cols-[3fr_1.6fr_5fr] items-center py-1">
                 <span className="text-[#444]">{md(r.day)}</span>
-                <span className="text-right text-[var(--brand)] leading-tight">
+                <span className="text-center text-[var(--brand)] leading-tight">
                   {r.nth}회
                   {r.retro && <span className="block font-sans text-[9px] text-[#d97706]">소급</span>}
                   {r.due && <span className="block font-sans text-[9px] text-[#d97706]">결제필요</span>}
