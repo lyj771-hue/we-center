@@ -84,13 +84,13 @@ export async function getMyPayments(center?: BranchKey): Promise<MyPayment[]> {
 
 /** 결제별 사용 기록 전부 (바우처·굳센·꿈이든·지원금·우진학교) — [결제 완료]로 확정된 수업. 지난 달도 쌓인다 */
 /** payNeeded = 굳센3회차인데 추가금액을 아직 안 받음 → 화면에 '결제필요' (supabase/guardian-retro.sql). 소급은 원래 결제(굳센 등)로 온다 */
-export interface MyPaymentUse { day: string; method: MyPayment['method']; time: string; teacher: string; note?: string; center: BranchKey; payNeeded?: boolean }
+export interface MyPaymentUse { day: string; method: MyPayment['method']; time: string; teacher: string; note?: string; center: BranchKey; payNeeded?: boolean; retro?: boolean }
 
 export async function getMyPaymentHistory(): Promise<MyPaymentUse[]> {
   const { data, error } = await myRpc('my_payment_history');
   if (error) throw error;
-  return (data ?? []).map((r: { day: string; method: MyPayment['method']; lesson_time: string; teacher_name: string | null; note: string | null; center?: string | null; pay_needed?: boolean | null }) => ({
-    day: r.day, method: r.method, time: r.lesson_time, teacher: r.teacher_name ?? '', note: r.note ?? undefined, payNeeded: !!r.pay_needed,
+  return (data ?? []).map((r: { day: string; method: MyPayment['method']; lesson_time: string; teacher_name: string | null; note: string | null; center?: string | null; pay_needed?: boolean | null; retro?: boolean | null }) => ({
+    day: r.day, method: r.method, time: r.lesson_time, teacher: r.teacher_name ?? '', note: r.note ?? undefined, payNeeded: !!r.pay_needed, retro: !!r.retro,
     center: r.center === 'uijeongbu' ? 'uijeongbu' as const : 'eunpyeong' as const,
   }));
 }

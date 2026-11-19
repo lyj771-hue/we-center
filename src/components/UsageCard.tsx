@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 
 /** nth = 그 달 몇 번째 사용인지 (매월 1회부터) */
 /** due = 결제가 더 필요한 수업(굳센3회차미납) — 빨간 '결제필요' */
-export interface UsageRow { day: string; nth: number; memo?: string; due?: boolean }
+export interface UsageRow { day: string; nth: number; memo?: string; due?: boolean; retro?: boolean }
 
 const PER_PAGE = 3;
 
@@ -46,10 +46,12 @@ export default function UsageCard({ label, rows, name, used, limit, balance }: {
             {shown.map((r, i) => (
               <li key={i} className="grid grid-cols-[3fr_1.6fr_5fr] items-center py-1">
                 <span className="text-[#444]">{md(r.day)}</span>
-                <span className="text-right text-[var(--brand)]">{r.nth}회</span>
-                <span className="pl-4 font-sans text-[11px] leading-[1.3] text-[#999] break-keep">
-                  {r.due && <span className="inline-block mr-1 px-1.5 rounded bg-[#fde2e2] text-[#b91c1c]">결제필요</span>}{r.memo}
+                <span className="text-right text-[var(--brand)] leading-tight">
+                  {r.nth}회
+                  {r.retro && <span className="block font-sans text-[10px] text-[#d97706]">소급</span>}
+                  {r.due && <span className="block font-sans text-[10px] text-[#e11d48]">결제필요</span>}
                 </span>
+                <span className="pl-4 font-sans text-[11px] leading-[1.3] text-[#999] break-keep">{r.memo}</span>
               </li>
             ))}
           </ul>

@@ -3,8 +3,8 @@
 -- (count-exclude-wonjae.sql · siblings.sql · gusen-extra.sql 다음에)
 --
 -- 바우처소급·굳센소급·꿈이든소급·장맞춤소급은 아직 [결제 완료]로 확정되지 않아 보호자 화면에서 빠져 있었다.
--- 이제 보호자에게는 그냥 바우처·굳센·꿈이든·장맞춤으로 보이고 그 달 횟수에도 센다(시간표 회차와 같게 — 소급은 원래 결제로 센다).
--- 나중에 실제 결제로 처리되면(소급 → 굳센) 같은 수업이 같은 자리·같은 회차 그대로 보인다.
+-- 이제 보호자에게는 바우처·굳센·꿈이든·장맞춤 카드에 '소급' 표시(retro)와 함께 보이고 그 달 횟수에도 센다(시간표 회차와 같게 — 소급은 원래 결제로 센다).
+-- 나중에 실제 결제로 처리되면(소급 → 굳센) 같은 수업이 같은 자리·같은 회차 그대로, '소급' 표시만 없어진다.
 -- 굳센 3회차인데 추가금액을 아직 안 받은 수업(굳센3회차미납)은 굳센으로 세고, 사용 내역에 pay_needed = true → 화면에 '결제필요'.
 
 -- 소급 → 원래 결제
@@ -65,7 +65,7 @@ grant execute on function public.my_payments(text) to authenticated;
 -- 굳센 3회차 = 그 아이·그 달 [결제 완료]된 굳센을 날짜·시간 순으로 세어 3번째 (관리자 시간표와 같게, 2026/11/01 부터)
 drop function if exists public.my_payment_history();
 create function public.my_payment_history()
-returns table (day date, method text, lesson_time text, teacher_name text, note text, at timestamptz, center text, pay_needed boolean)
+returns table (day date, method text, lesson_time text, teacher_name text, note text, at timestamptz, center text, pay_needed boolean, retro boolean)
 language sql stable security definer set search_path = public
 as $$
   with b as (
@@ -79,7 +79,8 @@ as $$
     from b
   )
   select r.day, public.retro_base(r.method), r.time, t.name, r.note, r.created_at, coalesce(r.center, 'eunpyeong'),
-         (r.gusen_round and r.rn = 3 and not coalesce(r.extra_paid, false))
+         (r.gusen_round and r.rn = 3 and not coalesce(r.extra_paid, false)),
+         r.method like '%\_retro'
   from r
   left join teachers t on t.id = r.teacher_id
   where public.retro_base(r.method) in ('voucher', 'gusen', 'jangmatchum', 'kkumideun', 'subsidy', 'woojin', 'woojin_ext', 'woojin_self')
