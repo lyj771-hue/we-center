@@ -267,7 +267,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         const rows = history.filter(h => h.method === u.method).map(h => {
           const n = (perMonth.get(h.day.slice(0, 7)) ?? 0) + 1;
           perMonth.set(h.day.slice(0, 7), n);
-          return { day: h.day, nth: n, memo: [`${h.time.replace(/^0/, '')} ${h.teacher ? `${h.teacher} 선생님` : ''}`.trim(), h.note].filter(Boolean).join(' · ') };
+          return { day: h.day, nth: n, due: h.payNeeded, memo: [`${h.time.replace(/^0/, '')} ${h.teacher ? `${h.teacher} 선생님` : ''}`.trim(), h.note].filter(Boolean).join(' · ') };
         });
         return (
           <section key={card0.method} className={card}>

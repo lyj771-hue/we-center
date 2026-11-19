@@ -6,7 +6,8 @@ import { useEffect, useState } from 'react';
 // 1쪽이 가장 최근 3줄 — 최근 날짜가 위.
 
 /** nth = 그 달 몇 번째 사용인지 (매월 1회부터) */
-export interface UsageRow { day: string; nth: number; memo?: string }
+/** due = 결제가 더 필요한 수업(굳센3회차미납) — 빨간 '결제필요' */
+export interface UsageRow { day: string; nth: number; memo?: string; due?: boolean }
 
 const PER_PAGE = 3;
 
@@ -46,7 +47,9 @@ export default function UsageCard({ label, rows, name, used, limit, balance }: {
               <li key={i} className="grid grid-cols-[3fr_1.6fr_5fr] items-center py-1">
                 <span className="text-[#444]">{md(r.day)}</span>
                 <span className="text-right text-[var(--brand)]">{r.nth}회</span>
-                <span className="pl-4 font-sans text-[11px] leading-[1.3] text-[#999] break-keep">{r.memo}</span>
+                <span className="pl-4 font-sans text-[11px] leading-[1.3] text-[#999] break-keep">
+                  {r.due && <span className="inline-block mr-1 px-1.5 rounded bg-[#fde2e2] text-[#b91c1c]">결제필요</span>}{r.memo}
+                </span>
               </li>
             ))}
           </ul>

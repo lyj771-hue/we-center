@@ -98,14 +98,15 @@ export default function PushAdminPage() {
   const field = 'w-full border border-[#ddd] rounded-lg px-3 py-2 text-[14px] outline-none focus:border-[var(--brand)]';
 
   return (
-    <div className="px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up max-w-[1100px] mx-auto space-y-6">
+    <div className="px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up w-full space-y-6">
       <div>
         <h1 className="display-heading mb-2">앱 푸시</h1>
         <p className="text-[13px] text-[#888]">보호자 앱에서 알림을 켠 분에게만 가요. 알림을 켠 보호자 <b className="text-[var(--brand)] font-normal">{people.length}명</b> · 기기 {subs.length}대</p>
         {failed && <p className="mt-2 text-[13px] text-red-500">불러오지 못했어요 — supabase/push.sql 을 실행했는지 확인해 주세요. ({failed})</p>}
       </div>
 
-      <div className="grid md:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+      {/* 보내기 칸은 너무 넓으면 입력이 불편해서 1100px까지만, 아래 기록 표는 화면 가득 */}
+      <div className="grid md:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start max-w-[1100px]">
         {/* 보내기 */}
         <section className={`${card} space-y-4`}>
           <h2 className="text-[16px]">보내기</h2>
@@ -177,7 +178,7 @@ export default function PushAdminPage() {
         </section>
       </div>
 
-      {/* 앱 푸시가 안 가서 알림톡으로 간 알림 — 누구·무슨 내용·왜 */}
+      {/* 자동으로 보낸 알림 — 앱 푸시로 갔는지, 알림톡으로 갔는지(왜) */}
       <PushFallbackList members={members} />
 
       {/* 보낸 기록 */}
