@@ -1293,6 +1293,10 @@ function payErrorText(e: unknown): string {
 
 /** 선결제·신용카드 A·B·C 한 번 수업 금액 — 고르는 목록에서 이름 뒤에 붙인다 (선결제A(60000)) */
 const ABC_PRICE: Partial<Record<PayMethod, number>> = { prepaid: 60000, prepaid_b: 55000, prepaid_c: 50000, card: 60000, card_b: 55000, card_c: 50000 };
+/** 결제 칸 드롭박스에서 맨 아래([직접 작성…] 바로 위)로 보내는 신용카드 */
+const CARD_KEYS = new Set<PayMethod>(['card', 'card_b', 'card_c']);
+/** 드롭박스 안 [방문 금액 고치기…] 자리 표시 */
+const VISIT_EDIT: (typeof PAY_METHODS)[number] = { key: 'visit', label: '방문 금액 고치기…', short: '' };
 
 /** 결제방식 칸 — 체크 전엔 기본 결제를 흐리게, 체크하면 초록 ✓와 남은 횟수(바우처 2/3, 선결제 33). 누르면 드롭박스로 고르고, 직접 적을 수도 있다 */
 function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, blocked, onPay }: {
@@ -1375,7 +1379,9 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
         }}
         className="absolute inset-0 w-full opacity-0 cursor-pointer" aria-label={`${cell.name} 결제 체크`}>
         <option value="">체크 안 함{base ? ` (기본 ${label(base)})` : ''}</option>
-        {options.map(m => {
+        {/* 신용카드A·B·C는 맨 아래 [직접 작성…] 바로 위 */}
+        {[...options.filter(m => !CARD_KEYS.has(m.key)), ...(paid?.method === 'visit' ? [VISIT_EDIT] : []), ...options.filter(m => CARD_KEYS.has(m.key))].map(m => {
+          if (m === VISIT_EDIT) return <option key="visit-edit" value="visit-edit">방문 금액 고치기…</option>;
           const why = paid?.method === m.key ? undefined : blocked?.(m.key);
           return <Fragment key={m.key}>
             <option value={m.key}>{m.label}{ABC_PRICE[m.key] ? `(${ABC_PRICE[m.key]})` : ''}{m.key === base ? ' (기본)' : ''}{why ? ` (${why})` : ''}</option>
@@ -1383,7 +1389,6 @@ function PayCell({ cell, methods, noBase, paid, pending, missing, round, left, b
             {m.key === 'gusen' && <option value="gusen_extra" disabled={!gusenDue && !paid?.extra}>굳센{GUSEN_EXTRA_ROUND}회차완납{gusenDue || paid?.extra ? '' : ` (굳센 ${GUSEN_EXTRA_ROUND}회차에만)`}</option>}
           </Fragment>;
         })}
-        {paid?.method === 'visit' && <option value="visit-edit">방문 금액 고치기…</option>}
         <option value="custom">{paid?.note ? `${paid.note} (고치기)` : '직접 작성…'}</option>
       </select>
     </label>
