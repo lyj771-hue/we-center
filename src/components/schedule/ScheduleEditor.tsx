@@ -17,7 +17,7 @@ import {
 // 스케줄 선택(이번 주 / 다음 주 / 공휴일) → (형식 불러오기) → 선생님별·날짜별 시간 넣기 → 올리기.
 // 이번 주·다음 주는 월~토이고 휴무일을 표시할 수 있다. 공휴일은 날짜를 직접 적는다("2026/10/9, 2026/12/25").
 // 지금 상태를 형식으로 저장할 수 있다(요일 기준). 고칠 땐 이미 신청된 시간은 잠겨서 뺄 수 없다(먼저 신청 취소).
-// 다음 주·공휴일은 예약 게시(기본 오후 3:30) — 게시 전엔 보호자에게 안 보이고 고칠 수 있다. 게시 5분 전 '게시 예정' 알림톡은 서버가 보낸다.
+// 다음 주·공휴일은 바로 올리기(기본) 또는 예약 게시(기본 오후 3:30) — 게시 전엔 보호자에게 안 보이고 고칠 수 있다. 게시 5분 전 '게시 예정' 알림톡은 서버가 보낸다.
 // [게시 후 10분 취소 가능](기본 체크) — 게시 후 10분 동안 보호자가 승인 없이 바로 취소. 그 뒤로는 보호자 취소·취소 신청 없음.
 
 const DEFAULT_NOTICE = '원하시는 시간을 누르면 바로 신청돼요. 선착순이에요!\n신청한 뒤 취소나 변경은 센터로 연락해 주세요.';
@@ -101,7 +101,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
   const [showTeachers, setShowTeachers] = useState(false);
   // 예약 게시 — 아직 게시 전(새 글 포함)인 다음 주·공휴일만. 기본 날짜는 오늘(3:25가 지났으면 내일) 오후 3:30
   const live = existing ? isPublished(existing) : false;
-  const [reserve, setReserve] = useState(existing ? !!existing.publishAt && !live : true);
+  const [reserve, setReserve] = useState(existing ? !!existing.publishAt && !live : false);
   const [pubDate, setPubDate] = useState(() => {
     if (existing?.publishAt) return toYmd(new Date(existing.publishAt));
     const n = new Date();
@@ -522,7 +522,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
         <div className="space-y-3">
           <p className={label}>게시</p>
           <div className="flex flex-wrap items-center gap-1.5">
-            {([[true, '예약 게시'], [false, '바로 올리기']] as const).map(([v, name]) => (
+            {([[false, '바로 올리기'], [true, '예약 게시']] as const).map(([v, name]) => (
               <button key={name} type="button" onClick={() => setReserve(v)}
                 className={`text-[13px] px-4 py-2 border transition-colors ${reserve === v ? 'border-[var(--brand)] bg-[var(--brand)] text-white' : 'border-[#e5e5e5] hover:bg-[#f8f8f8]'}`}>
                 {name}
