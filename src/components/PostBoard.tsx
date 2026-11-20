@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useAdmin } from './AdminContext';
 import { Post, Category } from '@/lib/types';
 import { getAllPosts, addPost, deletePost, updatePost } from '@/lib/store';
-import WeslangPhotos, { AddressInputs, mainPhotoOf, WESLANG_MEMO_MAX } from './WeslangPhotos';
+import WeslangPhotos, { AddressInputs, DeliveryCheck, isDelivery, mainPhotoOf, withDelivery, WESLANG_MEMO_MAX } from './WeslangPhotos';
 import NoteBoard, { PinnedNote } from './NoteBoard';
 import ThoughtsScrapbook from './ThoughtsScrapbook';
 import { extractImages } from '@/lib/postText';
@@ -41,7 +41,7 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
   // We슐랭 — 목록에서 [수정]을 누르면 같은 글쓰기 창을 그 글 내용으로 띄운다 (게시글 화면으로 가지 않는다)
   const [editId, setEditId] = useState<string | null>(null);
   const [editBefore, setEditBefore] = useState('');
-  const [form, setForm] = useState({ title: '', content: '', location: '', memo: '', mainPhoto: '' });   // mainPhoto = We슐랭 대표 사진
+  const [form, setForm] = useState({ title: '', content: '', location: '', memo: '', mainPhoto: '', delivery: false, tags: [] as string[] });   // mainPhoto = We슐랭 대표 사진, delivery = We슐랭 배달 가게(주소 대신), tags = 수정 전 표시
   const isWeslang = category === 'weslang';
   // 공지사항 — 글을 올리며 공지 메시지(알림톡)를 보낼지. 종류에 #{센터}가 있으면 센터 필수, #{명절}이 있으면 명절 필수
   const isNotice = category === 'notices';
@@ -69,8 +69,8 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
       if (!(await askConfirm(`글을 올리고 "${kind.label}" 알림을 보낼까요?\n\n받는 사람: ${where}승인된 보호자 ${who.list.length}명\n앱 푸시 먼저, 안 가면 알림톡${who.noPhone ? `\n(전화번호 없는 ${who.noPhone}명은 앱 푸시만 가요)` : ''}`, '올리고 보내기'))) return;
     }
     // 고른 것 — 지점만 게시글 제목 앞에 보이고, 종류·명절은 수정 화면에서 다시 보이게 숨겨 둔다
-    const tags = selectionToTags(notice, kind);
-    const post = await addPost(category, { title: form.title, content: form.content, tags, ...(isWeslang ? { location: form.location, memo: form.memo, imageUrl: mainPhotoOf(form.content, form.mainPhoto) } : {}) });
+    const tags = isWeslang ? (form.delivery ? withDelivery(undefined, true) : undefined) : selectionToTags(notice, kind);
+    const post = await addPost(category, { title: form.title, content: form.content, tags, ...(isWeslang ? { location: form.delivery ? '' : form.location, memo: form.memo, imageUrl: mainPhotoOf(form.content, form.mainPhoto) } : {}) });
     if (kind && who) {
       try {
         const r = await sendNotice(kind, post.id, wantCenter ? notice.center : null, wantHoliday ? notice.holiday : '', who.list);
@@ -79,24 +79,26 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
         await showAlert(`글은 올렸지만 알림톡을 보내지 못했어요.\n${(e as Error).message}`);
       }
     }
-    setForm({ title: '', content: '', location: '', memo: '', mainPhoto: '' });
+    setForm({ title: '', content: '', location: '', memo: '', mainPhoto: '', delivery: false, tags: [] });
     setNotice(EMPTY_SELECTION);
     setEditing(false);
     refresh();
   };
 
   const startEdit = (p: Post) => {
-    setForm({ title: p.title, content: p.content, location: p.location ?? '', memo: p.memo ?? '', mainPhoto: p.imageUrl ?? '' });
+    // 배달 가게면 주소 칸은 비워 둔다(예전에 주소 칸에 '배달'이라고 적은 글도)
+    const delivery = isDelivery(p);
+    setForm({ title: p.title, content: p.content, location: delivery ? '' : p.location ?? '', memo: p.memo ?? '', mainPhoto: p.imageUrl ?? '', delivery, tags: p.tags ?? [] });
     setEditBefore(p.content);
     setEditId(p.id);
     setEditing(true);
   };
-  const closeModal = () => { setEditing(false); setEditId(null); setForm({ title: '', content: '', location: '', memo: '', mainPhoto: '' }); };
+  const closeModal = () => { setEditing(false); setEditId(null); setForm({ title: '', content: '', location: '', memo: '', mainPhoto: '', delivery: false, tags: [] }); };
   const handleEditSave = async () => {
     if (!editId) return;
     if (!form.title.trim()) { await showAlert('가게 이름을 적어 주세요.'); return; }
     try {
-      await updatePost(category, editId, { title: form.title, content: form.content, location: form.location, memo: form.memo, imageUrl: mainPhotoOf(form.content, form.mainPhoto) ?? '' });
+      await updatePost(category, editId, { title: form.title, content: form.content, location: form.delivery ? '' : form.location, memo: form.memo, imageUrl: mainPhotoOf(form.content, form.mainPhoto) ?? '', tags: withDelivery(form.tags, form.delivery) });
       // 고치면서 뺀 사진 파일은 저장소에서 지운다(다른 글이 쓰면 남긴다)
       const kept = new Set(extractImages(form.content));
       removeUnusedImages(extractImages(editBefore).filter(src => !kept.has(src)));
@@ -157,8 +159,9 @@ export default function PostBoard({ category, basePath, variant = 'list', pinned
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 className="w-full border-b border-[#ddd] py-2 text-[15px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]"
               />
-              {/* We슐랭 — 가게 주소(도로명 · 지번, 하나만 적어도 돼요) */}
-              {isWeslang && (
+              {/* We슐랭 — [배달] 체크하면 주소 칸 없이 '🛵 배달 맛집', 아니면 가게 주소(도로명 · 지번, 하나만 적어도 돼요) */}
+              {isWeslang && <DeliveryCheck checked={form.delivery} onChange={v => setForm(f => ({ ...f, delivery: v }))} />}
+              {isWeslang && !form.delivery && (
                 <AddressInputs value={form.location} onChange={v => setForm(f => ({ ...f, location: v }))}
                   className="mt-3 w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a] transition-colors placeholder:text-[#ccc]" />
               )}

@@ -19,6 +19,26 @@ export const WESLANG_MEMO_MAX = 40;
 /** 가게 주소 — 위치 칸(location)에 줄마다 하나(도로명 · 지번). 빈 줄은 뺀다 */
 export const addressLines = (location?: string) => (location ?? '').split('\n').map(x => x.trim()).filter(Boolean);
 
+/** 배달 가게 — 주소 대신 메모지에 '🛵 배달 맛집' 한 줄. 글의 tags 에 'delivery' 로 저장한다.
+ *  예전에 주소 칸에 '배달'이라고 적어 둔 글(튀김소리)도 배달로 본다 — 수정해서 저장하면 tags 로 바뀐다 */
+export const DELIVERY_TAG = 'delivery';
+export const DELIVERY_LABEL = '배달 맛집';
+export const isDelivery = (p: { tags?: string[]; location?: string }) =>
+  !!p.tags?.includes(DELIVERY_TAG) || addressLines(p.location)[0] === '배달';
+/** 저장할 tags — 다른 표시는 그대로 두고 배달만 넣거나 뺀다 */
+export const withDelivery = (tags: string[] | undefined, on: boolean) =>
+  [...(tags ?? []).filter(t => t !== DELIVERY_TAG), ...(on ? [DELIVERY_TAG] : [])];
+
+/** 작성·수정 화면 — [배달] 체크 */
+export function DeliveryCheck({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="mt-3 flex items-center gap-2 text-[14px] text-[#333] cursor-pointer select-none">
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="w-4 h-4 accent-[var(--brand)]" />
+      🛵 배달 <span className="text-[12px] text-[#999]">— 주소 대신 &lsquo;{DELIVERY_LABEL}&rsquo;으로 보여요</span>
+    </label>
+  );
+}
+
 /** 주소 두 칸 — 도로명 · 지번(하나만 적어도 된다). 위치 칸에 두 줄로 저장 */
 export function AddressInputs({ value, onChange, className }: { value: string; onChange: (v: string) => void; className: string }) {
   const [road = '', lot = ''] = value.split('\n');

@@ -9,7 +9,7 @@ import { Post, Category } from '@/lib/types';
 import { getPost, updatePost, deletePost } from '@/lib/store';
 import { extractImages } from '@/lib/postText';
 import { removeUnusedImages } from '@/lib/imageUpload';
-import WeslangPhotos, { AddressInputs, addressLines, mainPhotoOf } from './WeslangPhotos';
+import WeslangPhotos, { AddressInputs, addressLines, DELIVERY_LABEL, DeliveryCheck, isDelivery, mainPhotoOf, withDelivery } from './WeslangPhotos';
 import RichContent from './RichContent';
 import PostTags from './PostTags';
 import NoticePicker from './NoticePicker';
@@ -34,7 +34,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
   const { isAdmin } = useAdmin();
   const [post, setPost] = useState<Post | null>(null);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ title: '', content: '', location: '', mainPhoto: '' });   // mainPhoto = We슐랭 대표 사진
+  const [form, setForm] = useState({ title: '', content: '', location: '', mainPhoto: '', delivery: false });   // mainPhoto = We슐랭 대표 사진, delivery = 배달 가게
   const isWeslang = category === 'weslang';
   // 공지사항 — 글을 올릴 때 고른 공지 메시지(종류·지점·명절). 수정 화면에서 보이고 고칠 수 있다(알림톡은 다시 보내지 않음)
   const isNotice = category === 'notices';
@@ -48,7 +48,8 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
     getPost(category, id).then(found => {
       if (found) {
         setPost(found);
-        setForm({ title: found.title, content: found.content, location: found.location ?? '', mainPhoto: found.imageUrl ?? '' });
+        const delivery = isDelivery(found);
+        setForm({ title: found.title, content: found.content, location: delivery ? '' : found.location ?? '', mainPhoto: found.imageUrl ?? '', delivery });
         setNotice(tagsToSelection(found.tags));
       }
     });
@@ -60,10 +61,11 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
     const kind = kinds.find(k => k.id === notice.kind);
     const problem = isNotice ? selectionProblem(notice, kind) : null;
     if (problem) { await showAlert(problem); return; }
-    const tags = isNotice && kinds.length ? (selectionToTags(notice, kind) ?? []) : undefined;
+    const tags = isNotice && kinds.length ? (selectionToTags(notice, kind) ?? []) : isWeslang ? withDelivery(post.tags, form.delivery) : undefined;
+    const location = isWeslang && form.delivery ? '' : form.location;
     const imageUrl = isWeslang ? mainPhotoOf(form.content, form.mainPhoto) : undefined;
-    await updatePost(category, id, { title: form.title, content: form.content, ...(isWeslang ? { location: form.location, imageUrl: imageUrl ?? '' } : {}), ...(tags ? { tags } : {}) });
-    setPost(p => p ? { ...p, title: form.title, content: form.content, location: form.location, ...(isWeslang ? { imageUrl } : {}), ...(tags ? { tags } : {}) } : p);
+    await updatePost(category, id, { title: form.title, content: form.content, ...(isWeslang ? { location, imageUrl: imageUrl ?? '' } : {}), ...(tags ? { tags } : {}) });
+    setPost(p => p ? { ...p, title: form.title, content: form.content, location, ...(isWeslang ? { imageUrl } : {}), ...(tags ? { tags } : {}) } : p);
     // 고치면서 뺀 사진 파일은 저장소에서 지운다(다른 글이 쓰면 남긴다)
     const kept = new Set(extractImages(form.content));
     removeUnusedImages(extractImages(post.content).filter(src => !kept.has(src)));
@@ -104,7 +106,8 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
             className="w-full border-b border-[#ddd] py-2 text-xl font-medium outline-none focus:border-[#0a0a0a]"
           />
-          {isWeslang && (
+          {isWeslang && <DeliveryCheck checked={form.delivery} onChange={v => setForm(f => ({ ...f, delivery: v }))} />}
+          {isWeslang && !form.delivery && (
             <AddressInputs value={form.location} onChange={v => setForm(f => ({ ...f, location: v }))}
               className="w-full border-b border-[#ddd] py-2 text-[14px] outline-none focus:border-[#0a0a0a]" />
           )}
@@ -130,7 +133,9 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
             )}
           </div>
 
-          {addressLines(post.location).map((a, i) => <p key={i} className="text-[14px] text-[#52525b] mb-1">📍 {a}</p>)}
+          {isWeslang && isDelivery(post)
+            ? <p className="text-[14px] text-[#52525b] mb-1">🛵 {DELIVERY_LABEL}</p>
+            : addressLines(post.location).map((a, i) => <p key={i} className="text-[14px] text-[#52525b] mb-1">📍 {a}</p>)}
           <p className="text-[11px] text-[#bbb] tracking-widest mb-9">{fmt(post.createdAt)}</p>
 
           {/* We슐랭 대표 사진은 본문 사진 중 하나라 위에 따로 보이지 않는다 */}

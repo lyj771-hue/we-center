@@ -8,7 +8,7 @@ import Portal from './Portal';
 import { Post } from '@/lib/types';
 import { extractImages } from '@/lib/postText';
 import { layoutPhotos, place } from './ThoughtsScrapbook';
-import { addressLines } from './WeslangPhotos';
+import { addressLines, DELIVERY_LABEL, isDelivery } from './WeslangPhotos';
 
 // 가운데 사진이 재활생각 카드보다 커서(680) 칸 높이·오른쪽 사진·메모 자리를 그만큼 옮긴다
 // 가운데 사진 680 × 425 (가로 8 : 세로 5 — 예전 4:5의 세로 절반)
@@ -38,7 +38,7 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
     if (m) ro.observe(m);
     if (n) ro.observe(n);
     return () => ro.disconnect();
-  }, [post.memo, post.title, post.location]);
+  }, [post.memo, post.title, post.location, post.tags]);
   const images = extractImages(post.content);
   // 대표 사진(글쓰기에서 고른 것, 없으면 본문 첫 사진) = 가운데 큰 사진, 나머지 = 오른쪽 작은 사진
   const main = post.imageUrl || images[0];
@@ -75,10 +75,13 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
           onClick={() => setNoteOpen(true)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setNoteOpen(true); } }}>
           {/* 핀 — 회색 메모지 위 가운데에 꽂힌 모양(메모지 안쪽). 글씨와 안 겹치게 메모지 위 여백을 늘렸다(globals.css .weslang-note) */}
           <span aria-hidden="true" className="absolute top-[4px] left-1/2 -translate-x-1/2 text-[38px] leading-none select-none">📌</span>
-          {/* 가게 이름 · 주소 — 메모지 세로 가운데 */}
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-1 min-h-[96px]">
+          {/* 가게 이름 — 그 아래 주소(또는 🛵 배달 맛집). 짧아도 늘 제목 아래 줄. 메모지 세로 가운데 */}
+          <div className="flex flex-col items-start justify-center gap-y-1 min-h-[96px]">
             <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[1.8]">{post.title}</h2>
-            {addressLines(post.location).length > 0 && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">{addressLines(post.location).map((a, i) => <span key={i} className="block">📍 {a}</span>)}</span>}
+            {/* 배달 가게 — 주소 대신 한 줄 '🛵 배달 맛집' */}
+            {isDelivery(post)
+              ? <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">🛵 {DELIVERY_LABEL}</span>
+              : addressLines(post.location).length > 0 && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">{addressLines(post.location).map((a, i) => <span key={i} className="block">📍 {a}</span>)}</span>}
           </div>
         </div>
 
@@ -101,15 +104,16 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
         {viewing && <PhotoViewer src={viewing} photos={[main, ...rest].filter(Boolean)} onClose={() => setViewing(null)} />}
 
       </div>
-      {noteOpen && <Portal><NoteViewer title={post.title} location={post.location} onClose={() => setNoteOpen(false)} /></Portal>}
+      {noteOpen && <Portal><NoteViewer title={post.title} location={post.location} delivery={isDelivery(post)} onClose={() => setNoteOpen(false)} /></Portal>}
     </article>
   );
 }
 
 /** 메모 크게 보기 — 가게 이름 · 주소(도로명 · 지번, 적은 것만). 주소마다 복사 버튼(크게 볼 때만) */
-function NoteViewer({ title, location, onClose }: { title: string; location?: string; onClose: () => void }) {
+function NoteViewer({ title, location, delivery, onClose }: { title: string; location?: string; delivery?: boolean; onClose: () => void }) {
   const [copied, setCopied] = useState<number | null>(null);
-  const lines = addressLines(location);
+  // 배달 가게는 주소·복사 없이 '🛵 배달 맛집' 한 줄
+  const lines = delivery ? [] : addressLines(location);
   const copy = async (i: number) => {
     const text = lines[i];
     if (!text) return;
@@ -127,6 +131,7 @@ function NoteViewer({ title, location, onClose }: { title: string; location?: st
         <span aria-hidden="true" className="absolute -top-[16px] left-[28px] text-[26px] select-none">📌</span>
         <button type="button" onClick={onClose} aria-label="닫기" className="absolute top-2 right-3 text-[22px] leading-none text-[#999] hover:text-[#333]">×</button>
         <h2 className="break-keep text-[var(--brand)] text-[22px] leading-[1.7]">{title}</h2>
+        {delivery && <p className="mt-3 text-[16px] text-[#52525b] leading-[1.7]">🛵 {DELIVERY_LABEL}</p>}
         {lines.map((line, i) => (
           <div key={i} className="mt-3 flex items-start gap-2 text-[16px] text-[#52525b]">
             <span className="break-keep leading-[1.7]">📍 {line}</span>
