@@ -8,6 +8,7 @@ import { uploadImage } from '@/lib/imageUpload';
 import { WE_CENTER } from '@/lib/content';
 import ViewToggle from '@/components/ViewToggle';
 import PageShell, { PageTitle } from '@/components/PageShell';
+import PhotoViewer from '@/components/PhotoViewer';
 
 const CENTERS = WE_CENTER.centers;
 
@@ -18,6 +19,8 @@ export default function WeCenterPage() {
   const [viewCols, setViewCols] = useState<1 | 2>(2);
   const [editTarget, setEditTarget] = useState<CenterRoom | null>(null);
   const [adding, setAdding] = useState(false);
+  // 사진을 누르면 크게 — 옆으로 넘겨 이 센터의 다른 공간 사진도
+  const [viewing, setViewing] = useState<string | null>(null);
   const [form, setForm] = useState({ name: '', description: '', imageUrl: '' });
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -150,8 +153,10 @@ export default function WeCenterPage() {
             <div key={room.id} className="group">
               <div className="aspect-[4/3] overflow-hidden bg-[#f0f0f0] mb-4 relative">
                 {room.imageUrl ? (
-                  <img src={room.imageUrl} alt={room.name}
-                    className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500 ease-out" />
+                  <button type="button" onClick={() => setViewing(room.imageUrl!)} aria-label={`${room.name} 사진 크게 보기`} className="block w-full h-full cursor-zoom-in">
+                    <img src={room.imageUrl} alt={room.name}
+                      className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500 ease-out" />
+                  </button>
                 ) : (
                   <div className="w-full h-full img-placeholder flex items-center justify-center">
                     <span className="text-[#ccc] text-[11px] tracking-widest">이미지 없음</span>
@@ -232,6 +237,7 @@ export default function WeCenterPage() {
         </div>
       )}
     </div>
+      {viewing && <PhotoViewer src={viewing} photos={rooms.map(r => r.imageUrl).filter((u): u is string => !!u)} onClose={() => setViewing(null)} />}
     </PageShell>
   );
 }
