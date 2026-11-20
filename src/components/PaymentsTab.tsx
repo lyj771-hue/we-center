@@ -13,7 +13,7 @@ import MonthUseModal from '@/components/MonthUseModal';
 
 // 회원 관리 — "결제정보" 탭 (예전 결제방식 관리 + 결제내역).
 // 아이마다 결제 칸 하나에 ☑ 쓰는 결제(바로 저장, 아이 명단의 체크와 같은 값)와 숫자.
-// 숫자를 누르면: 바우처·굳센·장맞춤·꿈이든 = 그 달 사용 내역 / 선결제A·B·C = 카드(내역 + 충전·차감·수정) / 우진학교외부·자율·지원금 = 내역 + 남은 금액 수정.
+// 숫자를 누르면: 바우처·굳센·장맞춤·꿈이든 = 그 달 사용 내역 / 선결제A·B·C = 카드(내역 + 충전·차감·수정) / 우진학교외부·자율·지원금 = 내역 + 충전·차감.
 // 사용은 시간표 [결제 완료]로 저절로 들어온다. 선결제는 센터(아이)마다 따로.
 
 type Kind = 'month' | 'prepaid' | 'balance';
@@ -43,7 +43,7 @@ export function PayInfoCell({ col, on, main, used, monthNo, low, childName, onTo
         <input type="checkbox" checked={on} onChange={e => onToggle(e.target.checked)} aria-label={`${childName} ${col.label} 쓰는 결제`}
           title={`${col.label}를 쓰는 아이면 체크`} className="w-4 h-4 accent-[var(--brand)] cursor-pointer" />
         {/* 누르면 내역 (0이어도 빈 표로) */}
-        <button type="button" onClick={onOpen} title={col.kind === 'month' ? `${monthNo}월 ${col.label} 사용 내역` : `${col.label} 내역 · ${col.kind === 'prepaid' ? '충전 · 차감 · 수정' : '남은 금액 수정'}`}
+        <button type="button" onClick={onOpen} title={col.kind === 'month' ? `${monthNo}월 ${col.label} 사용 내역` : `${col.label} 내역 · ${col.kind === 'prepaid' ? '충전 · 차감 · 수정' : '충전 · 차감'}`}
           className={`tabular-nums text-[13px] underline-offset-2 hover:underline ${low ? 'text-[#e11d48]' : on || used ? 'text-[var(--brand)]' : 'text-[#ccc]'}`}>
           {main}
         </button>
@@ -151,7 +151,7 @@ export default function PaymentsTab({ members, center, q }: { members: Member[];
           className={`${btn} ml-auto border-[#16a34a] text-[#16a34a] hover:bg-[#f0fdf4]`}>엑셀 다운로드</button>
         <button onClick={() => downloadCsv([sheet()], `결제정보_${month.replace('-', '')}`)} className={`${btn} border-[#ddd] text-[#555] hover:bg-[#f8f8f8]`}>CSV 다운로드</button>
       </div>
-      <p className="text-[11px] text-[#aaa] mb-3">☑ = 쓰는 결제(누르면 바로 저장). 숫자를 누르면 내역이 뜨고, 선결제는 충전·차감·수정, 우진학교·지원금은 남은 금액 수정을 그 창에서 해요. 사용은 시간표 [결제 완료]로 저절로 들어와요. 메모는 달마다 따로 저장돼요.</p>
+      <p className="text-[11px] text-[#aaa] mb-3">☑ = 쓰는 결제(누르면 바로 저장). 숫자를 누르면 내역이 뜨고, 선결제는 충전·차감·수정, 우진학교·지원금은 충전·차감을 그 창에서 해요. 사용은 시간표 [결제 완료]로 저절로 들어와요. 메모는 달마다 따로 저장돼요.</p>
       {failed && <p className="text-[13px] text-red-400 mb-3">불러오지 못했어요. ({failed})</p>}
 
       <div className="max-h-[calc(100dvh-140px)] overflow-auto border-t border-[#e5e5e5]">

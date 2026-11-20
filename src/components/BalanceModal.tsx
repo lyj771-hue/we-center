@@ -5,7 +5,7 @@ import type { BalanceCharge, BalanceKey, BalanceUse, Child } from '@/lib/timetab
 import { addBalanceCharge, getBalanceCharges, getBalanceUses, WOOJIN_FEE } from '@/lib/timetable';
 import { getTeachers } from '@/lib/schedule';
 
-// 회원 관리 "결제정보" 탭에서 우진학교외부·자율·지원금 남은 금액을 누르면 여는 상세보기. 아래 [충전]으로 금액을 더한다(오늘 날짜 [충전] 기록).
+// 회원 관리 "결제정보" 탭에서 우진학교외부·자율·지원금 남은 금액을 누르면 여는 상세보기. 아래 [충전]·[차감]으로 금액을 더하거나 뺀다(고른 날짜 = 적용날짜).
 // 충전·수정 기록(balance_charges)과 확정된 수업(차감 6만원)을 최신 적용날짜가 위로 늘어놓고, 줄마다 그 뒤 잔여금액을 붙인다.
 // 적용날짜 = 수업일·충전일, 처리날짜 = 실제로 누른 날([결제 완료]·충전/수정 저장). 월사용횟수 = 그 달 몇 번째 수업.
 
@@ -30,9 +30,18 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
   const [noTable, setNoTable] = useState(false);
   const [teachers, setTeachers] = useState<Map<string, string>>(new Map());
   const [failed, setFailed] = useState('');
-  // 충전 — 넣은 금액만큼 오늘 날짜 [충전] 기록 (balance-charges.sql 이 있어야 한다)
+  // 아래 칸 — [충전] / [차감] 중 하나 (balance-charges.sql 이 있어야 한다)
+  //   충전: 고른 날짜(적용날짜)에 넣은 금액만큼 더한다
+  //   차감: 시간표 [결제 완료]로 쓰지 않은 수업을 직접 뺀다 — 고른 날짜(차감할 날 = 적용날짜)에 횟수 × 6만원.
+  //   처리날짜(실제로 저장한 날)는 저장한 시각으로 저절로 남는다. 차감은 balance_charges 에 − 금액으로 들어간다
+  const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+  const [act, setAct] = useState<'charge' | 'deduct'>('charge');
+  const [editDay, setEditDay] = useState(todayStr);
   const [editVal, setEditVal] = useState('');
   const [editMemo, setEditMemo] = useState('');
+  const [useDay, setUseDay] = useState(todayStr);
+  const [useCount, setUseCount] = useState('1');
+  const [useMemo, setUseMemo] = useState('');
   const [saving, setSaving] = useState(false);
   // 아래로 내리면 STEP 줄씩 더 — 표 끝에 '더 있어요' 줄
   const [shown, setShown] = useState(STEP);
@@ -66,7 +75,8 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
   const now = charges.length ? end : child[method === 'woojin_ext' ? 'woojinExtBalance' : method === 'woojin_self' ? 'woojinSelfBalance' : 'subsidyBalance'] ?? 0;
   let bal = now - end;
   const rows = list.map(r => { bal += delta(r); return { r, left: bal }; }).reverse();
-  const kindOf = (r: Row) => (r.kind === 'use' ? '차감' : r.c.adjust ? '수정' : '충전');
+  // 직접 넣은 차감 = − 금액의 충전 기록(adjust 아님)
+  const kindOf = (r: Row) => (r.kind === 'use' ? '차감' : r.c.adjust ? '수정' : r.c.amount < 0 ? '차감' : '충전');
   const visible = rows.slice(0, shown);
   const hidden = rows.length - visible.length;
   // 창을 끝까지 내렸을 때만 더 (열자마자 저절로 다 펼쳐지지 않게). 창이 짧아 안 내려가면 휠을 아래로 굴릴 때
@@ -130,31 +140,71 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
         )}
         <p className="text-right text-[13px] text-[#27272a]">지금 남은 금액 <span className="text-[16px] tabular-nums text-[var(--brand)]">{won(now)}</span></p>
 
-        {/* 충전 — 넣은 금액만큼 더한다 */}
-        <form className="bg-white rounded-xl border border-[#e4e4e7] p-3 flex flex-wrap items-center gap-2" onSubmit={async e => {
-          e.preventDefault();
-          const v = Number(editVal.replace(/[^\d]/g, ''));
-          if (!v) return;
-          setSaving(true);
-          try {
-            const d = new Date();
-            const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            await addBalanceCharge(child.id, method, today, v, editMemo.trim() || undefined);
-            setEditVal(''); setEditMemo(''); load();
-          } catch (err) { setFailed((err as Error).message); }
-          finally { setSaving(false); }
-        }}>
-          <label htmlFor="balance-edit" className="text-[13px] text-[#27272a] whitespace-nowrap">충전</label>
-          <input id="balance-edit" inputMode="numeric" value={editVal} onChange={e => setEditVal(e.target.value)} placeholder="충전 금액"
-            className="w-40 border-b border-[#ddd] py-1 text-[13px] text-right tabular-nums outline-none focus:border-[var(--brand)]" />
-          <span className="text-[13px] text-[#888]">원</span>
-          <input id="balance-edit-memo" value={editMemo} onChange={e => setEditMemo(e.target.value)} placeholder="메모 (선택)"
-            className="flex-1 min-w-[100px] border-b border-[#ddd] py-1 text-[13px] outline-none focus:border-[var(--brand)]" />
-          <button type="submit" disabled={saving || editVal.trim() === ''}
-            className="text-[13px] bg-[var(--brand)] text-white px-4 py-1.5 rounded-full hover:opacity-90 disabled:opacity-40">{saving ? '충전 중…' : '충전'}</button>
-        </form>
+        {/* 충전 · 차감 — 하나를 골라 그 칸만 (선결제 카드 창과 같은 모양) */}
+        <div className="bg-white rounded-xl border border-[#e4e4e7] p-3 space-y-3">
+          <div role="tablist" className="flex gap-1.5">
+            {([['charge', '충전'], ['deduct', '차감']] as const).map(([k, t]) => (
+              <button key={k} type="button" role="tab" aria-selected={act === k} onClick={() => setAct(k)}
+                className={`text-[13px] px-4 py-1.5 rounded-full border ${act === k ? 'border-[#27272a] bg-[#27272a] text-white' : 'border-[#ddd] bg-white text-[#555] hover:bg-[#f8f8f8]'}`}>{t}</button>
+            ))}
+          </div>
 
-        <p className="text-[11px] text-[#aaa] leading-[1.7]">시간표 [결제 완료]로 확정한 수업이 한 번에 {won(WOOJIN_FEE)}씩 빠져요. [충전]에 금액을 넣으면 오늘 날짜로 더해져요. 아이 명단에서 남은 금액을 고치면 그 차이는 [수정] 기록으로 남아요.</p>
+          {act === 'charge' && (
+            <form className="flex flex-wrap items-end gap-3" onSubmit={async e => {
+              e.preventDefault();
+              const v = Number(editVal.replace(/[^\d]/g, ''));
+              if (!v) return;
+              setSaving(true);
+              try {
+                await addBalanceCharge(child.id, method, editDay, v, editMemo.trim() || undefined);
+                setEditVal(''); setEditMemo(''); load();
+              } catch (err) { setFailed((err as Error).message); }
+              finally { setSaving(false); }
+            }}>
+              <label className="text-[12px] text-[#888]">적용날짜
+                <input type="date" value={editDay} onChange={e => e.target.value && setEditDay(e.target.value)} className="block border-b border-[#ddd] py-1 text-[13px] text-[#27272a] outline-none focus:border-[var(--brand)]" /></label>
+              <label className="text-[12px] text-[#888]">충전 금액
+                <span className="flex items-center gap-1"><input inputMode="numeric" value={editVal} onChange={e => setEditVal(e.target.value)} placeholder="300000"
+                  className="w-32 border-b border-[#ddd] py-1 text-[13px] text-[#27272a] text-right tabular-nums outline-none focus:border-[var(--brand)]" /><span className="text-[13px] text-[#888]">원</span></span></label>
+              <label className="text-[12px] text-[#888] flex-1 min-w-[120px]">메모
+                <input value={editMemo} onChange={e => setEditMemo(e.target.value)} placeholder="선택"
+                  className="block w-full border-b border-[#ddd] py-1 text-[13px] text-[#27272a] outline-none focus:border-[var(--brand)]" /></label>
+              <p className="w-full text-[13px] text-[#555]">지금 {won(now)}{Number(editVal.replace(/[^\d]/g, '')) > 0 && <> → 저장하면 <b className="font-medium text-[var(--brand)]">{won(now + Number(editVal.replace(/[^\d]/g, '')))}</b></>}</p>
+              <button type="submit" disabled={saving || noTable || editVal.trim() === ''}
+                className="text-[13px] bg-[var(--brand)] text-white px-4 py-1.5 rounded-full hover:opacity-90 disabled:opacity-40">{saving ? '저장 중…' : '충전 저장'}</button>
+            </form>
+          )}
+
+          {act === 'deduct' && (
+            <form className="flex flex-wrap items-end gap-3" onSubmit={async e => {
+              e.preventDefault();
+              const n = Number(useCount);
+              if (!n) return;
+              setSaving(true);
+              try {
+                await addBalanceCharge(child.id, method, useDay, -n * WOOJIN_FEE, useMemo.trim() || undefined);
+                setUseCount('1'); setUseMemo(''); load();
+              } catch (err) { setFailed((err as Error).message); }
+              finally { setSaving(false); }
+            }}>
+              <label className="text-[12px] text-[#888]">차감할 날짜 (적용날짜)
+                <input type="date" value={useDay} onChange={e => e.target.value && setUseDay(e.target.value)} className="block border-b border-[#ddd] py-1 text-[13px] text-[#27272a] outline-none focus:border-[#e11d48]" /></label>
+              <label className="text-[12px] text-[#888]">차감 횟수
+                <input inputMode="numeric" value={useCount} onChange={e => setUseCount(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                  className="block w-14 border-b border-[#ddd] py-1 text-[13px] text-[#27272a] text-center tabular-nums outline-none focus:border-[#e11d48]" /></label>
+              <span className="text-[13px] text-[#e11d48] pb-1 tabular-nums">−{won(Number(useCount || 0) * WOOJIN_FEE)}</span>
+              <label className="text-[12px] text-[#888] flex-1 min-w-[120px]">메모
+                <input value={useMemo} onChange={e => setUseMemo(e.target.value)} placeholder="예: 11/7 수업"
+                  className="block w-full border-b border-[#ddd] py-1 text-[13px] text-[#27272a] outline-none focus:border-[#e11d48]" /></label>
+              <p className="w-full text-[13px] text-[#555]">지금 {won(now)}{Number(useCount) > 0 && <> → 저장하면 <b className="font-medium text-[#e11d48]">{won(now - Number(useCount) * WOOJIN_FEE)}</b></>}</p>
+              <p className="w-full text-[11px] text-[#aaa] -mt-2">시간표에 없는 수업만 직접 빼요. 시간표 [결제 완료]로 확정한 수업은 저절로 빠져요. 처리날짜는 오늘({ymd(todayStr)})로 남아요.</p>
+              <button type="submit" disabled={saving || noTable || !Number(useCount)}
+                className="text-[13px] bg-[#e11d48] text-white px-4 py-1.5 rounded-full hover:opacity-90 disabled:opacity-40">{saving ? '저장 중…' : '차감 저장'}</button>
+            </form>
+          )}
+        </div>
+
+        <p className="text-[11px] text-[#aaa] leading-[1.7]">시간표 [결제 완료]로 확정한 수업이 한 번에 {won(WOOJIN_FEE)}씩 빠져요. 적용날짜 = 충전·차감이 들어가는 날, 처리날짜 = 실제로 저장한 날(다르면 주황색). 아이 명단에서 남은 금액을 고치면 그 차이는 [수정] 기록으로 남아요.</p>
       </div>
     </div>
   );
