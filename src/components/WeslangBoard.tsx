@@ -18,9 +18,9 @@ const PHOTO_SHIFT = 70;
 const MEMO_GAP = 18;
 const NOTE_GAP = 26;
 /** 세트(위 메모 · 대표 사진 · 오른쪽 작은 사진 · 아래 회색 메모지) 너비를 모든 가게가 같게 — 작은 사진이 가장 오른쪽까지 가는 자리(3장일 때 두 번째 사진: x 470, 폭 200)까지.
- *  원본 단위 너비 = 대표 사진 왼쪽 반(340) + 그 자리 끝(470 × xk + 200). 화면 양옆에 FIT_MARGIN 만 남기고 이 너비가 꽉 차게 줄인다 */
+ *  원본 단위 너비 = 대표 사진 왼쪽 반(340) + 그 자리 끝(470 × xk + 200). 크기(축소 비율)는 원래대로, 세트를 보이는 칸 가운데에 둔다 */
 const EDGE_X = 400 + PHOTO_SHIFT, EDGE_W = 200;
-const FIT_MARGIN = 12;
+const FIT_MARGIN = 12;   // 칸이 이보다 좁으면 재지 않는다
 const groupWidth = (xk: number) => 340 + EDGE_X * xk + EDGE_W;
 const STAGE_PAD = 30;   // .scrap-stage padding-top
 
@@ -53,14 +53,14 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
   const slots = layoutPhotos(rest.length).map(s => ({ ...s, x: s.x + PHOTO_SHIFT, y: s.y + top }));
   // 메모·메모지 너비 — 모든 가게가 같게(세트 너비). 휴대폰은 사진이 안쪽으로 모이니(--xk) 그만큼
   const memoMax = `calc(340px + ${EDGE_X}px * var(--xk) + ${EDGE_W}px)`;
-  // 세트가 칸 너비에 꽉 차게(양옆 FIT_MARGIN) — 칸 너비를 재서 줄이는 비율·판 너비·가운데선을 정한다. 재기 전엔 globals.css 의 1/2·1/3 축소
+  // 세트를 보이는 칸 가운데에 — 칸 너비를 재서 판 너비·가운데선을 정한다. 재기 전엔 globals.css 그대로
   const frameRef = useRef<HTMLElement>(null);
   const [fit, setFit] = useState<{ scale: number; stageW: number; cx: number; xk: number } | null>(null);
   useLayoutEffect(() => {
     const f = frameRef.current;
     if (!f) return;
     const mq = window.matchMedia('(max-width: 480px)');
-    // 칸이 화면보다 넓을 수 있어(휴대폰) 화면에 실제로 보이는 부분 기준으로 — 그 안에서 양옆 FIT_MARGIN
+    // 칸이 화면보다 넓을 수 있어(휴대폰) 화면에 실제로 보이는 부분 기준으로
     const measure = () => {
       const r = f.getBoundingClientRect();
       if (!r.width) return;
@@ -69,8 +69,9 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
       const avail = visR - visL;
       if (avail <= FIT_MARGIN * 2) return;
       const xk = mq.matches ? 0.7 : 1;
-      const scale = (avail - FIT_MARGIN * 2) / groupWidth(xk);
-      setFit({ scale, stageW: r.width / scale, cx: (visL - r.left + FIT_MARGIN) / scale + 340, xk });
+      // 크기는 원래대로(PC 1/2 · 그보다 좁으면 1/3 축소 — 예전 닥앤돈스 크기). 세트 너비는 모두 같게, 보이는 칸 가운데에
+      const scale = window.matchMedia('(min-width: 768px)').matches ? 0.5 : 1 / 3;
+      setFit({ scale, stageW: r.width / scale, cx: (visL - r.left + avail / 2) / scale - groupWidth(xk) / 2 + 340, xk });
     };
     measure();
     const ro = new ResizeObserver(measure);
