@@ -12,6 +12,7 @@ import { clearAppBadge, registerAppSw } from '@/lib/push';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import NotifyBell from './NotifyBell';
+import PullToRefresh from './PullToRefresh';
 import { isAppSitePath, toAppHref } from '@/lib/appPath';
 import type { ViewKid } from '@/lib/viewAs';
 import { getViewerChildren, setViewChild } from '@/lib/viewAs';
@@ -135,6 +136,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // 아래 탭
   const tabBar = (
+    <>
+    <PullToRefresh />
     <nav className="fixed bottom-0 inset-x-0 z-30 bg-white border-t border-[#ebebeb] pb-[env(safe-area-inset-bottom)]">
       <div className="max-w-[560px] mx-auto h-[64px] grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
         {tabs.map(t => {
@@ -149,6 +152,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         })}
       </div>
     </nav>
+    </>
   );
 
   // ── 문지기: 로그인 → 가입 → 승인 ──
