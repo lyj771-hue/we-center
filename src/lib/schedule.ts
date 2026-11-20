@@ -361,6 +361,9 @@ export function getHolidayNames(year: string): Promise<Record<string, string>> {
   return p;
 }
 
+/** 지난 시간인지 — 그 날짜·시간(한국 시각, 이 기기 시계)이 지금보다 앞이면 */
+export const isPastSlot = (day: string, time: string, now = Date.now()) => new Date(`${day}T${time.padStart(5, '0')}:00`).getTime() <= now;
+
 /** 게시됐는지 — 예약 게시 시각이 지났거나 예약이 없으면 */
 export const isPublished = (s: Pick<Schedule, 'publishAt'>, now = Date.now()) => !s.publishAt || new Date(s.publishAt).getTime() <= now;
 /** 자유 취소가 끝나는 시각(ms) — 게시(없으면 만든) 시각 + 10분. 자유 취소 글이 아니면 null */
@@ -544,6 +547,7 @@ export async function getPostedOpenSlots(day: string, center: 'eunpyeong' | 'uij
   const { data } = await supabase.from('slots').select('teacher_id, time, schedule_id').eq('day', day).is('booked_by', null).in('schedule_id', ids);
   const out = new Map<string, string>();
   for (const r of data ?? []) {
+    if (isPastSlot(day, r.time)) continue;   // 지난 시간은 게시 중으로 안 본다
     const k = `${r.teacher_id}|${r.time}`;
     if (!reserved.has(r.schedule_id)) out.set(k, '게시 중'); else if (!out.has(k)) out.set(k, '게시 예정');
   }

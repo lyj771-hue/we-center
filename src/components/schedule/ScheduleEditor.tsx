@@ -10,7 +10,7 @@ import { getMemberCenters, getMembers } from '@/lib/store';
 import { addAndSendOutbox, addOutbox, newBatchId } from '@/lib/leave';
 import { sendSummary } from '@/lib/alimtalkNotify';
 import {
-  addDays, addTeacher, cancelSlot, deleteTeacher, deleteTemplate, dowLabel, FREE_CANCEL_MIN, getKoreanHolidays, getTemplates, isPublished,
+  addDays, addTeacher, cancelSlot, isPastSlot, deleteTeacher, deleteTemplate, dowLabel, FREE_CANCEL_MIN, getKoreanHolidays, getTemplates, isPublished,
   parseDateList, parseYmd, publishLabel, saveSchedule, saveTemplate, scheduleRange, setScheduleHidden, shortDay, slashDay, thisMonday, toYmd, updateTeacher, weekDays,
 } from '@/lib/schedule';
 
@@ -213,6 +213,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     const time = raw.slice(0, 5);
     if (!/^\d{2}:\d{2}$/.test(time)) return;
     if ((times[tid]?.[day] ?? []).includes(time)) return;
+    if (isPastSlot(day, time)) { alert('지난 시간은 올릴 수 없어요.'); return; }
     const occ = await occupants(tid, day, [time]).catch(() => []);
     if (occ.length) {
       const o = occ[0];
@@ -223,7 +224,8 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), time]) } }));
   };
   // ALL — 아이가 있는 시간이 있으면 [지우고 모두 넣기] / [빈 시간만 넣기]
-  const addAll = async (tid: string, day: string, preset: string[]) => {
+  const addAll = async (tid: string, day: string, all: string[]) => {
+    const preset = all.filter(t => !isPastSlot(day, t));   // 지난 시간은 빼고
     const occ = await occupants(tid, day, preset).catch(() => []);
     let list = preset;
     if (occ.length) {
@@ -317,7 +319,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
             const keep = (n[t.id]?.[d] ?? []).filter(x => locked.has(`${t.id}|${d}|${x}`));
             const skip = closed[d] || away(t, d) || teacherOff[`${t.id}|${d}`] !== undefined;
             // 빈타임 칸이 차 있으면 빈타임 칸이, 비어 있으면 고정 칸이 기준
-            const free = skip ? [] : rows.filter(time => { const o = cellOf(b.open, t.id, time); if (o.status !== 'empty') return !busy(o);
+            const free = skip ? [] : rows.filter(time => !isPastSlot(d, time)).filter(time => { const o = cellOf(b.open, t.id, time); if (o.status !== 'empty') return !busy(o);
               const f = cellOf(b.fixed, t.id, time);
               return f.status === 'off' || !busy(f);   // 고정 칸이 x여도 빈타임이 비어 있으면 넣는다
             });
@@ -415,6 +417,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
       for (const d of days) {
         for (const time of times[t.id]?.[d] ?? []) {
           if ((closed[d] || teacherOff[`${t.id}|${d}`] !== undefined || away(t, d)) && !locked.has(`${t.id}|${d}|${time}`)) continue;   // 공휴일·선생님 휴무·다른 센터 출근일은 올리지 않는다
+          if (isPastSlot(d, time) && !locked.has(`${t.id}|${d}|${time}`)) continue;   // 지금 기준 지난 시간은 올리지 않는다(이미 올린 글이면 빠진다). 신청된 시간은 남긴다
           slots.push({ teacherId: t.id, day: d, time });
         }
       }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { Schedule, Slot, Teacher } from '@/lib/schedule';
-import { dowLabel, FREE_CANCEL_MIN, isPublished, publishLabel, scheduleDays, scheduleRange, shortDay } from '@/lib/schedule';
+import { dowLabel, FREE_CANCEL_MIN, isPastSlot, isPublished, publishLabel, scheduleDays, scheduleRange, shortDay } from '@/lib/schedule';
 
 // 한 주 스케쥴 카드 — 공지(제목·기간·안내·휴무) + 선생님별 요일별 시간 버튼.
 // (신청·취소 기록은 DB bookings 표에 계속 남지만 화면에는 보이지 않는다)
@@ -72,7 +72,7 @@ export default function ScheduleBoard({
       teacher: t,
       tint: TINTS[i % TINTS.length],
       days: days
-        .map(day => ({ day, off: offOf.get(`${t.id}|${day}`), slots: schedule.slots.filter(s => s.teacherId === t.id && s.day === day) }))
+        .map(day => ({ day, off: offOf.get(`${t.id}|${day}`), slots: schedule.slots.filter(s => s.teacherId === t.id && s.day === day && (s.bookedBy || !isPastSlot(s.day, s.time))) }))   // 지난 빈 시간은 안 보인다(신청된 시간은 그대로)
         // 선생님 내 줄 — 공휴일이 아니면 게시글의 모든 날(시간을 더할 수 있게)
         .filter(d => d.slots.length > 0 || d.off !== undefined || (tt?.teacherId === t.id && !holidayOf.has(d.day))),
     }))
