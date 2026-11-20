@@ -130,7 +130,7 @@ export default function PaymentBoard() {
       ) : (
         <div className="border-b border-[#f0f0f0]">
           {items.map((m, index) => (
-            <div key={m.id} className="flex items-start gap-4 md:gap-10 py-6 md:py-10 border-t border-[#f0f0f0]">
+            <div key={m.id} className="flex items-center gap-4 md:gap-10 py-6 md:py-10 border-t border-[#f0f0f0]">
               <div className="w-32 md:w-[300px] shrink-0 aspect-[856/540] rounded-lg md:rounded-[14px] overflow-hidden shadow-[0_2px_6px_rgba(0,0,0,0.08),0_10px_24px_rgba(0,0,0,0.06)]">
                 {m.imageUrl ? (
                   <img src={m.imageUrl} alt={`${m.name} 사진`} className="w-full h-full object-cover" />
@@ -138,7 +138,7 @@ export default function PaymentBoard() {
                   <CardPlaceholder />
                 )}
               </div>
-              <div className="flex-1 min-w-0 md:pt-2">
+              <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-3 mb-2 md:mb-3">
                   <span className="text-[10px] tracking-[0.3em] text-[#ccc]">{String(index + 1).padStart(2, '0')}</span>
                   {isAdmin && (
