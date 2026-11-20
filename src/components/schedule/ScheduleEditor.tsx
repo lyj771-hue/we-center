@@ -253,7 +253,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     });
   };
 
-  // 비어 있는 시간 — 그날 시간표(관리자 시간표 관리)에서 9시부터 모든 줄 중 수업이 없는 시간.
+  // 비어 있는 시간 — 그날 시간표(관리자 시간표 관리)에서 9:50부터 모든 줄 중 수업이 없는 시간(9:00 줄은 넣지 않는다).
   // 빈타임 칸에 무언가 있으면 빈타임 칸이 기준, 빈타임 칸이 비어 있으면 고정 칸이 기준(고정 칸의 x는 빈 것으로). 결석·옮긴 수업 자리는 빈 것으로 보고, x(수업 안 함)·?(미정)·다른 스케쥴 신청은 찬 것으로. 평일 점심(12:20)·쉬는 시간(16:30)·20:10 줄은 빼고,
   // 공휴일엔 고정 수업이 없다. 휴무일·그날 뺀 선생님·출근 안 하는 날은 넣지 않는다. 신청된 시간은 그대로 둔다
   const [filling, setFilling] = useState(false);
@@ -272,7 +272,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
           const wd = parseYmd(d).getDay();
           const busy = (c: CellView) => c.status === 'off' || c.status === 'undecided'
             || (c.status === 'child' && !c.absent && !c.moved && !(holiday && c.source === 'fixed'));
-          const rows = rowsForDay(d, [], center).filter(t => t >= '09:00' && t < '20:00' && !(wd >= 1 && wd <= 5 && ROW_LABEL[t]));
+          const rows = rowsForDay(d, [], center).filter(t => t > '09:00' && t < '20:00' && !(wd >= 1 && wd <= 5 && ROW_LABEL[t]));
           for (const t of active) {
             const keep = (n[t.id]?.[d] ?? []).filter(x => locked.has(`${t.id}|${d}|${x}`));
             const skip = closed[d] || away(t, d) || teacherOff[`${t.id}|${d}`] !== undefined;
