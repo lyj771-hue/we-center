@@ -46,7 +46,7 @@ export async function getChildLedger(childId: string, method: PrepaidKey = 'prep
   if (uses.error) throw uses.error;
   // 사용은 날짜마다 한 줄 — 시각은 그날 마지막 확정 시각
   // 처리일 — [결제 완료]를 누른 날(supabase/payment-confirmed-at.sql 전에는 처음 저장한 시각). 수업일과 다르면 메모에 남긴다(관리자 카드만)
-  // 메모에 어떤 수업인지 — 그날 수업 시간만 한 줄에 하나씩(선생님 이름 없이, 3건이면 3줄, 시간 순)
+  // 메모에 어떤 수업인지 — 그날 수업 시간만 옆으로, 두 칸씩 띄워서(선생님 이름 없이, 시간 순). 처리일은 아래 줄
   const perDay = new Map<string, { count: number; at: string; done: Set<string>; lessons: string[] }>();
   for (const u of [...(uses.data ?? [])].sort((a, b) => String(a.time).padStart(5, '0').localeCompare(String(b.time).padStart(5, '0')))) {
     if (skip(u.teacher_id as string | null, u.day as string)) continue;   // 휴직 중인 이원재 선생님 수업은 세지 않는다
@@ -65,7 +65,7 @@ export async function getChildLedger(childId: string, method: PrepaidKey = 'prep
       return { ...base, kind: n < 0 ? 'use' as const : 'charge' as const, count: Math.abs(n) };
     }),
     ...[...perDay].map(([day, v]) => ({ day, kind: 'use' as const, count: v.count, at: v.at,
-      memo: [...v.lessons, [...v.done].some(d => d !== day) ? `처리 ${[...v.done].sort().map(d => d.replace(/-/g, '/')).join(', ')}` : ''].filter(Boolean).join('\n') || undefined })),
+      memo: [v.lessons.join('  '), [...v.done].some(d => d !== day) ? `처리 ${[...v.done].sort().map(d => d.replace(/-/g, '/')).join(', ')}` : ''].filter(Boolean).join('\n') || undefined })),
   ]);
 }
 
