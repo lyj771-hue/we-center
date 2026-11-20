@@ -73,8 +73,8 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
         <div ref={noteRef} className="scrap-note weslang-note cursor-zoom-in" style={{ marginTop: NOTE_GAP, width: memoMax ?? '680px' }}
           role="button" tabIndex={0} aria-label={`${post.title} 메모 크게 보기`}
           onClick={() => setNoteOpen(true)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setNoteOpen(true); } }}>
-          {/* 핀 — 메모지 왼쪽 위 모서리에 꽂힌 모양. 대부분 메모지 안쪽에, 제목(위 여백 28px)과는 겹치지 않게 살짝 위로 */}
-          <span aria-hidden="true" className="absolute top-[-14px] left-[2px] text-[38px] leading-none select-none">📌</span>
+          {/* 핀 — 회색 메모지 위 가운데에 꽂힌 모양(메모지 안쪽). 글씨와 안 겹치게 메모지 위 여백을 늘렸다(globals.css .weslang-note) */}
+          <span aria-hidden="true" className="absolute top-[4px] left-1/2 -translate-x-1/2 text-[38px] leading-none select-none">📌</span>
           {/* 가게 이름 · 주소 — 메모지 세로 가운데 */}
           <div className="flex flex-wrap items-center gap-x-8 gap-y-1 min-h-[96px]">
             <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[1.8]">{post.title}</h2>
