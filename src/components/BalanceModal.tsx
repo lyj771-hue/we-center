@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { BalanceCharge, BalanceKey, BalanceUse, Child } from '@/lib/timetable';
 import { addBalanceCharge, getBalanceCharges, getBalanceUses, WOOJIN_FEE } from '@/lib/timetable';
-import { getTeachers } from '@/lib/schedule';
 
 // 회원 관리 "결제정보" 탭에서 우진학교외부·자율·지원금 남은 금액을 누르면 여는 상세보기. 아래 [충전]·[차감]으로 금액을 더하거나 뺀다(고른 날짜 = 적용날짜).
 // 충전·수정 기록(balance_charges)과 확정된 수업(차감 6만원)을 최신 적용날짜가 위로 늘어놓고, 줄마다 그 뒤 잔여금액을 붙인다.
@@ -28,7 +27,6 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
   const [uses, setUses] = useState<BalanceUse[] | null>(null);
   const [charges, setCharges] = useState<BalanceCharge[]>([]);
   const [noTable, setNoTable] = useState(false);
-  const [teachers, setTeachers] = useState<Map<string, string>>(new Map());
   const [failed, setFailed] = useState('');
   // 아래 칸 — [충전] / [차감] 중 하나 (balance-charges.sql 이 있어야 한다)
   //   충전: 고른 날짜(적용날짜)에 넣은 금액만큼 더한다
@@ -51,9 +49,8 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
       getBalanceUses(child.id, method),
       // balance-charges.sql 전에는 충전 기록 없이 차감만
       getBalanceCharges(child.id, method).then(c => { setNoTable(false); return c; }).catch(() => { setNoTable(true); return [] as BalanceCharge[]; }),
-      getTeachers({ includeHidden: true }),
     ])
-      .then(([u, c, t]) => { setUses(u); setCharges(c); setTeachers(new Map(t.map(x => [x.id, x.name]))); })
+      .then(([u, c]) => { setUses(u); setCharges(c); })
       .catch(e => { setUses([]); setFailed((e as Error).message); });
   }, [child.id, method]);
   useEffect(() => { load(); }, [load]);
@@ -104,7 +101,7 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
                 <tr className="border-b border-dashed border-[#bbb] text-left">
                   <th className={th}>적용날짜</th><th className={th}>처리날짜</th><th className={th}>구분</th>
                   <th className={`${th} text-right`}>금액</th><th className={`${th} text-right`}>잔여금액</th>
-                  <th className={`${th} text-right`}>월사용횟수</th><th className={th}>수업</th><th className={th}>메모</th>
+                  <th className={`${th} text-right`}>월사용횟수</th><th className={th}>수업 시간</th><th className={th}>메모</th>
                 </tr>
               </thead>
               <tbody>
@@ -120,7 +117,7 @@ export default function BalanceModal({ child, method, onClose }: { child: Child;
                     <td className={`${td} text-right text-[var(--brand)]`}>{won(left)}</td>
                     <td className={`${td} text-right`}>{r.kind === 'use' ? `${Number(r.day.slice(5, 7))}월 ${r.nth}회` : ''}</td>
                     <td className={`${td} text-[12px]`}>
-                      {r.kind === 'use' && <>{(r.u.teacherId && teachers.get(r.u.teacherId)) || '-'}{r.u.time ? ` ${r.u.time.replace(/^0/, '')}` : ''}
+                      {r.kind === 'use' && <>{r.u.time ? r.u.time.replace(/^0/, '') : '-'}
                         {r.u.center === 'uijeongbu' && <span className="ml-1 text-[10px] text-[#aaa]">의정부</span>}</>}
                     </td>
                     <td className="py-2 px-2 text-[11px] text-[#999] break-keep">{r.kind === 'charge' ? (r.c.seed ? '이전 잔액' : r.c.memo ?? '') : ''}</td>

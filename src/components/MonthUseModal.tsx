@@ -3,7 +3,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import type { Child, MonthUse, MonthUseRow } from '@/lib/timetable';
 import { getMonthUseRows } from '@/lib/timetable';
-import { getTeachers } from '@/lib/schedule';
 
 // 회원 관리(결제정보·아이명단·미승인)에서 결제 칸의 사용 횟수(바우처·굳센·…·선결제C)를 누르면 여는 사용 내역.
 // 처음부터 지금까지 시간표 [결제 완료]로 확정된 수업 전부 — 최근 달이 위, 달 안에서는 날짜 순. 회차는 달마다 1회부터,
@@ -18,12 +17,12 @@ export default function MonthUseModal({ child, method, label, month, onClose }: 
   child: Child; method: keyof MonthUse; label: string; /** 연 곳의 달(YYYY-MM) — 그 달을 표시 */ month: string; onClose: () => void;
 }) {
   const [rows, setRows] = useState<MonthUseRow[] | null>(null);
-  const [teachers, setTeachers] = useState<Map<string, string>>(new Map());
   const [failed, setFailed] = useState('');
 
   useEffect(() => {
-    Promise.all([getMonthUseRows(child.id, null, method), getTeachers({ includeHidden: true })])
-      .then(([r, t]) => { setRows(r); setTeachers(new Map(t.map(x => [x.id, x.name]))); })
+    // 결제 내역은 시간만 — 선생님 이름은 안 보인다
+    getMonthUseRows(child.id, null, method)
+      .then(setRows)
       .catch(e => { setRows([]); setFailed((e as Error).message); });
   }, [child.id, method]);
 
@@ -56,7 +55,7 @@ export default function MonthUseModal({ child, method, label, month, onClose }: 
             <table className="w-full text-[13px] text-[#333] border-collapse">
               <thead>
                 <tr className="border-b border-dashed border-[#bbb] text-left">
-                  <th className={th}>수업일</th><th className={th} title="[결제 완료]를 누른 날">처리일</th><th className={th}>시간</th><th className={th}>선생님</th>
+                  <th className={th}>수업일</th><th className={th} title="[결제 완료]를 누른 날">처리일</th><th className={th}>시간</th>
                   <th className={`${th} text-right`}>회차</th><th className={th}>메모</th>
                 </tr>
               </thead>
@@ -68,19 +67,18 @@ export default function MonthUseModal({ child, method, label, month, onClose }: 
                         <td className={td}>{ymd(r.day)}{r.center === 'uijeongbu' && <span className="ml-1 text-[10px] text-[#aaa]">의정부</span>}</td>
                         {/* 처리일 — 수업일과 같으면 흐리게 */}
                         <td className={`${td} ${r.confirmedAt && kstDay(r.confirmedAt) !== r.day ? 'text-[#b45309]' : 'text-[#bbb]'}`}>{r.confirmedAt ? ymd(kstDay(r.confirmedAt)) : '-'}</td>
-                        <td className={td}>{r.time ? r.time.replace(/^0/, '') : <span className="text-[#ccc]">-</span>}</td>
-                        <td className={td}>{r.manual ? <span className="text-[#b45309]">카드에서 직접 차감{r.count > 1 ? ` ${r.count}회` : ''}</span> : (r.teacherId && teachers.get(r.teacherId)) || <span className="text-[#ccc]">-</span>}</td>
+                        <td className={td}>{r.manual ? <span className="text-[#b45309]">카드에서 직접 차감{r.count > 1 ? ` ${r.count}회` : ''}</span> : r.time ? r.time.replace(/^0/, '') : <span className="text-[#ccc]">-</span>}</td>
                         <td className={`${td} text-right`}>{r.nth}회</td>
                         <td className="py-2 px-2 text-[12px] text-[#888] break-keep">{r.note && r.note !== '차감' ? r.note : ''}</td>
                       </tr>
                     ))}
                     {/* 그 달 합계 — 작게 */}
                     <tr className="border-b border-[#e4e4e7] bg-[#fafafa]">
-                      <td colSpan={6} className="py-1.5 px-2 text-right text-[11px] text-[#888]">{monthLabel(g.ym)} 합계 <span className="tabular-nums text-[#27272a]">{g.total}회</span></td>
+                      <td colSpan={5} className="py-1.5 px-2 text-right text-[11px] text-[#888]">{monthLabel(g.ym)} 합계 <span className="tabular-nums text-[#27272a]">{g.total}회</span></td>
                     </tr>
                   </Fragment>
                 ))}
-                {!groups.length && <tr><td colSpan={6} className="py-8 text-center text-[13px] text-[#bbb]">확정된 {label} 수업이 없어요.</td></tr>}
+                {!groups.length && <tr><td colSpan={5} className="py-8 text-center text-[13px] text-[#bbb]">확정된 {label} 수업이 없어요.</td></tr>}
               </tbody>
             </table>
           </div>
