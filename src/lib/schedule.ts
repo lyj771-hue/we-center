@@ -237,7 +237,7 @@ export async function listSchedules(): Promise<ScheduleSummary[]> {
     id: r.id,
     weekStart: r.week_start,
     days: Array.isArray(r.days) && r.days.length ? (r.days as string[]) : undefined,
-    title: r.title,
+    title: liveTitle(r.title, r.week_start, r.days),
     createdAt: r.created_at,
     center: r.center === 'uijeongbu' ? 'uijeongbu' : 'eunpyeong',
     hiddenAt: r.hidden_at ?? undefined,
@@ -277,7 +277,7 @@ export async function getSchedule(id: string): Promise<Schedule | null> {
     id: row.id,
     weekStart: row.week_start,
     days: Array.isArray(row.days) && row.days.length ? (row.days as string[]) : undefined,
-    title: row.title,
+    title: liveTitle(row.title, row.week_start, row.days),
     notice: row.notice,
     holidays: (row.holidays ?? []) as Holiday[],
     createdAt: row.created_at,
@@ -359,6 +359,14 @@ export function getHolidayNames(year: string): Promise<Record<string, string>> {
     holidayNameCache.set(year, p);
   }
   return p;
+}
+
+/** 제목 — '다음 주 빈 수업 안내'로 올린 글은 그 주 월요일 0시부터 '이번 주 빈 수업 안내'로 (이 기기 날짜 기준, 공휴일 글은 그대로) */
+export function liveTitle(title: string, weekStart: string, days?: unknown): string {
+  if ((Array.isArray(days) && days.length) || !title.includes('다음 주')) return title;
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return weekStart <= today ? title.replace('다음 주', '이번 주') : title;
 }
 
 /** 지난 시간인지 — 그 날짜·시간(한국 시각, 이 기기 시계)이 지금보다 앞이면 */
