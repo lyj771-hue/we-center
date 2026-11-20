@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { askChoice, askConfirm } from '@/lib/dialog';
 import { addAdminLog } from '@/lib/adminLog';
 import type { Holiday, Schedule, ScheduleDraft, Teacher, Template, TemplateData } from '@/lib/schedule';
 import type { CellView } from '@/lib/timetable';
-import { ROW_LABEL, cellOf, childLabel, getChildren, getDayBoard, rowsForDay, worksAt } from '@/lib/timetable';
+import { ROW_LABEL, cellOf, childLabel, getChildren, getDayBoard, rowsForDay, saveDayCell, worksAt } from '@/lib/timetable';
 import { getMemberCenters, getMembers } from '@/lib/store';
 import { addAndSendOutbox, addOutbox, newBatchId } from '@/lib/leave';
 import { sendSummary } from '@/lib/alimtalkNotify';
@@ -189,11 +190,49 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
     );
   };
 
-  const addTime = (tid: string, day: string, raw: string) => {
+  // 시간표에 아이가 있는 시간을 넣을 때 — "김하정 아이가 그 시간에 고정/빈타임으로 있어요. 지우고 올릴까요?"
+  // 지우기로 한 칸 → 올리기(저장)할 때 시간표 그날 칸을 비운다 ("선생님|날짜|시간" → 고정·빈타임, 이름)
+  const [clearCells, setClearCells] = useState<Map<string, { side: 'fixed' | 'open'; name: string }>>(new Map());
+  const occupants = async (tid: string, day: string, list: string[]) => {
+    const [b, hols] = await Promise.all([getDayBoard(day, [], center), getKoreanHolidays(day.slice(0, 4)).catch(() => [] as string[])]);
+    const holiday = hols.includes(day);
+    const out: { time: string; side: 'fixed' | 'open'; name: string }[] = [];
+    for (const time of list) {
+      if (locked.has(`${tid}|${day}|${time}`)) continue;
+      const o = cellOf(b.open, tid, time);
+      if (o.status === 'child' && !o.absent && !o.moved) { out.push({ time, side: 'open', name: o.name ? childLabel({ name: o.name, number: o.number }) : '이름 없음' }); continue; }
+      const f = cellOf(b.fixed, tid, time);
+      if (f.status === 'child' && !f.absent && !f.moved && !holiday) out.push({ time, side: 'fixed', name: f.name ? childLabel({ name: f.name, number: f.number }) : '이름 없음' });
+    }
+    return out;
+  };
+  const sideLabel = (side: 'fixed' | 'open') => (side === 'fixed' ? '고정' : '빈타임');
+  const markClear = (tid: string, day: string, occ: { time: string; side: 'fixed' | 'open'; name: string }[]) =>
+    setClearCells(m => { const n = new Map(m); for (const o of occ) n.set(`${tid}|${day}|${o.time}`, { side: o.side, name: o.name }); return n; });
+  const addTime = async (tid: string, day: string, raw: string) => {
     const time = raw.slice(0, 5);
     if (!/^\d{2}:\d{2}$/.test(time)) return;
+    if ((times[tid]?.[day] ?? []).includes(time)) return;
+    const occ = await occupants(tid, day, [time]).catch(() => []);
+    if (occ.length) {
+      const o = occ[0];
+      if (!(await askConfirm(`${o.name} 아이가 ${shortDay(day)} ${time.replace(/^0/, '')}에 ${sideLabel(o.side)}으로 지정되어 있어요.\n그 아이를 시간표에서 지우고 올릴까요?\n(올리기를 누를 때 시간표 그날 칸이 비워져요)`))) return;
+      markClear(tid, day, occ);
+    }
     setAutoFree(false);
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: sortTimes([...(p[tid]?.[day] ?? []), time]) } }));
+  };
+  // ALL — 아이가 있는 시간이 있으면 [지우고 모두 넣기] / [빈 시간만 넣기]
+  const addAll = async (tid: string, day: string, preset: string[]) => {
+    const occ = await occupants(tid, day, preset).catch(() => []);
+    let list = preset;
+    if (occ.length) {
+      const pick = await askChoice(`${shortDay(day)} 시간표에 아이가 지정된 시간이 있어요.\n${occ.map(o => `${o.time.replace(/^0/, '')} ${o.name} (${sideLabel(o.side)})`).join('\n')}\n\n이 아이들을 시간표에서 지우고 모두 올릴까요?`, '지우고 모두 넣기', '빈 시간만 넣기');
+      if (!pick) return;
+      if (pick === 'a') markClear(tid, day, occ);
+      else list = preset.filter(t => !occ.some(o => o.time === t));
+    }
+    setDayTimes(tid, day, list);
   };
   // 그날 시간을 통째로 바꾼다(신청된 시간은 남긴다) — ALL · 비우기(휴지통)
   const setDayTimes = (tid: string, day: string, list: string[]) => {
@@ -205,6 +244,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
   };
   const removeTime = (tid: string, day: string, time: string) => {
     setAutoFree(false);
+    setClearCells(m => { if (!m.has(`${tid}|${day}|${time}`)) return m; const n = new Map(m); n.delete(`${tid}|${day}|${time}`); return n; });
     setTimes(p => ({ ...p, [tid]: { ...p[tid], [day]: (p[tid]?.[day] ?? []).filter(x => x !== time) } }));
   };
   // 평일 동일 적용 — 첫 평일 시간을 나머지 평일(월~금)에 똑같이. 토·일은 건드리지 않는다
@@ -462,6 +502,18 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
       if (!existing) logLines.unshift(`시간 ${slots.length}개 올림`);
       if (reserving && publishAt) logLines.unshift(`예약 게시: ${publishLabel(publishAt)}${freeCancel ? ` · 게시 후 ${FREE_CANCEL_MIN}분 취소 가능` : ''}`);
       if (failed) logLines.push(`※ 신청 취소 ${failed}건은 적용하지 못함`);
+      // 지우고 올리기로 한 시간표 칸 비우기 — 아직 이 글에 남아 있는 시간만
+      const cleared: string[] = [];
+      let clearFailed = 0;
+      for (const [k, v] of clearCells) {
+        const [tid, d, time] = k.split('|');
+        if (!(times[tid]?.[d] ?? []).includes(time)) continue;
+        try { await saveDayCell(d, tid, time, v.side, { status: 'none' }, center); cleared.push(`${slashDay(d)} ${time.replace(/^0/, '')} ${teachers.find(x => x.id === tid)?.name ?? ''} ${v.name}(${sideLabel(v.side)})`); }
+        catch { clearFailed++; }
+      }
+      if (cleared.length) logLines.push(`시간표에서 지움: ${cleared.join(', ')}`);
+      if (clearFailed) alert(`시간표 칸 ${clearFailed}개를 비우지 못했어요. 시간표 관리에서 직접 비워 주세요.`);
+      setClearCells(new Map());
       await addAdminLog({ center, kind: existing ? 'schedule_edit' : 'schedule_new', title: logTitle, detail: logLines.join('\n') || '바꾼 내용 없음', refId: id });
       // 다시 올릴 때는 묻지 않고 업데이트 알림을 남긴다 / 내린 채로 저장하면 알림 없음
       if (existing && live && (republish || !existing.hiddenAt)) await notifyUpdated(id, shownTitle.trim() || autoTitle, !republish);
@@ -718,7 +770,7 @@ export default function ScheduleEditor({ teachers, existing, center: centerProp,
                         const btn = 'text-[12px] border border-[var(--brand)] text-[var(--brand)] px-2.5 py-1 hover:bg-[#e8f1fd]';
                         return (
                           <span className="order-first inline-flex flex-wrap items-center gap-1">
-                            <button type="button" onClick={() => setDayTimes(t.id, d, preset)} className={btn}
+                            <button type="button" onClick={() => addAll(t.id, d, preset)} className={btn}
                               title={`${weekday ? '평일' : '휴일'} 기본 시간을 모두 넣어요`}>ALL</button>
                             <select value="" aria-label={`${t.name} 선생님 ${shortDay(d)} 시간 추가`}
                               onChange={e => {
