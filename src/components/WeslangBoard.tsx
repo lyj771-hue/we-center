@@ -105,7 +105,7 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
           role="button" tabIndex={0} aria-label={`${post.title} 메모 크게 보기`}
           onClick={() => setNoteOpen(true)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setNoteOpen(true); } }}>
           {/* 핀 — 회색 메모지 위 가운데에 꽂힌 모양(메모지 안쪽). 글씨와 안 겹치게 메모지 위 여백을 늘렸다(globals.css .weslang-note) */}
-          <span aria-hidden="true" className="absolute top-[4px] left-1/2 -translate-x-1/2 text-[38px] leading-none select-none">📌</span>
+          <span aria-hidden="true" className="absolute top-[-2px] left-1/2 -translate-x-1/2 text-[38px] leading-none select-none">📌</span>
           {/* 가게 이름 — 그 아래 주소(또는 🛵 배달 맛집). 짧아도 늘 제목 아래 줄. 메모지 세로 가운데 */}
           <div className="flex flex-col items-start justify-center gap-y-1 min-h-[96px]">
             <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[1.8]">{post.title}</h2>
