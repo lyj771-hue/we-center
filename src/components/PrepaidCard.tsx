@@ -45,7 +45,7 @@ export default function PrepaidCard({ rows, name, editingId }: {
                 </span>
                 <span className={`text-right ${r.balance <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.balance}</span>
                 {/* 메모는 남은 횟수 오른쪽 — 예전 차감 기록의 기본 메모 "차감"은 줄 이름과 같아서 숨긴다 */}
-                <span className="pl-3 font-sans text-[11px] leading-[1.3] text-[#999] break-keep">{r.memo && r.memo !== '차감' ? r.memo : ''}</span>
+                <span className="pl-3 font-sans text-[11px] leading-[1.3] text-[#999] break-keep whitespace-pre-line">{r.memo && r.memo !== '차감' ? r.memo : ''}</span>
               </li>
             ))}
           </ul>

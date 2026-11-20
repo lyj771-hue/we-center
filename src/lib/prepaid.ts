@@ -37,25 +37,23 @@ const kstDay = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600 * 10
 
 /** 관리자: 아이 한 명의 그 종류 카드 내역 */
 export async function getChildLedger(childId: string, method: PrepaidKey = 'prepaid'): Promise<LedgerRow[]> {
-  const [charges, uses, skip, teachers] = await Promise.all([
+  const [charges, uses, skip] = await Promise.all([
     supabase.from('prepaid_charges').select('*').eq('child_id', childId),
     supabase.from('lesson_payments').select('*').eq('child_id', childId).eq('method', method).eq('confirmed', true),
     countExcluder(),
-    supabase.from('teachers').select('id, name'),
   ]);
-  const tName = new Map((teachers.data ?? []).map(t => [t.id as string, t.name as string]));
   if (charges.error) throw charges.error;
   if (uses.error) throw uses.error;
   // 사용은 날짜마다 한 줄 — 시각은 그날 마지막 확정 시각
   // 처리일 — [결제 완료]를 누른 날(supabase/payment-confirmed-at.sql 전에는 처음 저장한 시각). 수업일과 다르면 메모에 남긴다(관리자 카드만)
-  // 메모에 어떤 수업인지 — 그날 수업마다 "이정길 15:40" (3건이면 3개, 시간 순)
+  // 메모에 어떤 수업인지 — 그날 수업 시간만 한 줄에 하나씩(선생님 이름 없이, 3건이면 3줄, 시간 순)
   const perDay = new Map<string, { count: number; at: string; done: Set<string>; lessons: string[] }>();
   for (const u of [...(uses.data ?? [])].sort((a, b) => String(a.time).padStart(5, '0').localeCompare(String(b.time).padStart(5, '0')))) {
     if (skip(u.teacher_id as string | null, u.day as string)) continue;   // 휴직 중인 이원재 선생님 수업은 세지 않는다
     const p = perDay.get(u.day as string) ?? { count: 0, at: '', done: new Set<string>(), lessons: [] };
     const at = ((u.confirmed_at ?? u.created_at) as string) ?? '';
     if (at) p.done.add(kstDay(at));
-    p.lessons.push(`${tName.get(u.teacher_id as string) ?? ''} ${String(u.time ?? '').replace(/^0/, '')}`.trim());
+    p.lessons.push(String(u.time ?? '').replace(/^0/, ''));
     perDay.set(u.day as string, { count: p.count + 1, at: at > p.at ? at : p.at, done: p.done, lessons: p.lessons });
   }
   return buildLedger([
@@ -67,7 +65,7 @@ export async function getChildLedger(childId: string, method: PrepaidKey = 'prep
       return { ...base, kind: n < 0 ? 'use' as const : 'charge' as const, count: Math.abs(n) };
     }),
     ...[...perDay].map(([day, v]) => ({ day, kind: 'use' as const, count: v.count, at: v.at,
-      memo: [v.lessons.join(', '), [...v.done].some(d => d !== day) ? `처리 ${[...v.done].sort().map(d => d.replace(/-/g, '/')).join(', ')}` : ''].filter(Boolean).join(' · ') || undefined })),
+      memo: [...v.lessons, [...v.done].some(d => d !== day) ? `처리 ${[...v.done].sort().map(d => d.replace(/-/g, '/')).join(', ')}` : ''].filter(Boolean).join('\n') || undefined })),
   ]);
 }
 
