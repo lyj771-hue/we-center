@@ -134,7 +134,7 @@ export default function PostDetail({ category, id, backHref, backLabel }: Props)
           </div>
 
           {isWeslang && isDelivery(post)
-            ? <p className="text-[14px] text-[#52525b] mb-1">🛵 {DELIVERY_LABEL}</p>
+            ? <p className="text-[14px] text-[#52525b] mb-1"><span className="text-[1.5em] align-[-0.12em] mr-1">🛵</span>{DELIVERY_LABEL}</p>
             : addressLines(post.location).map((a, i) => <p key={i} className="text-[14px] text-[#52525b] mb-1">📍 {a}</p>)}
           <p className="text-[11px] text-[#bbb] tracking-widest mb-9">{fmt(post.createdAt)}</p>
 

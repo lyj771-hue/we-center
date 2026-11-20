@@ -17,6 +17,11 @@ const PHOTO_SHIFT = 70;
 /** 크래프트지 메모와 사진 사이 · 사진과 아래 회색 메모지 사이 */
 const MEMO_GAP = 18;
 const NOTE_GAP = 26;
+/** 세트(위 메모 · 대표 사진 · 오른쪽 작은 사진 · 아래 회색 메모지) 너비를 모든 가게가 같게 — 작은 사진이 가장 오른쪽까지 가는 자리(3장일 때 두 번째 사진: x 470, 폭 200)까지.
+ *  원본 단위 너비 = 대표 사진 왼쪽 반(340) + 그 자리 끝(470 × xk + 200). 화면 양옆에 FIT_MARGIN 만 남기고 이 너비가 꽉 차게 줄인다 */
+const EDGE_X = 400 + PHOTO_SHIFT, EDGE_W = 200;
+const FIT_MARGIN = 12;
+const groupWidth = (xk: number) => 340 + EDGE_X * xk + EDGE_W;
 const STAGE_PAD = 30;   // .scrap-stage padding-top
 
 // We슐랭 — 재활생각 스크랩북 모양을 빌려 쓴다. 가게 하나가 한 줄(가운데 하나씩).
@@ -46,21 +51,46 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
   // 크래프트지 메모가 사진 위에 있으면 사진이 그만큼 내려가니 오른쪽 작은 사진도 같이 내린다
   const top = post.memo ? memoH + MEMO_GAP : 0;
   const slots = layoutPhotos(rest.length).map(s => ({ ...s, x: s.x + PHOTO_SHIFT, y: s.y + top }));
-  // 메모·메모지 너비 — 오른쪽 작은 사진 끝까지(작은 사진이 없으면 대표 사진 너비). 휴대폰은 사진이 안쪽으로 모이니(--xk) 그만큼
-  const edge = slots.reduce<typeof slots[number] | undefined>((a, s) => (!a || s.x + s.w > a.x + a.w ? s : a), undefined);
-  const memoMax = edge && edge.x + edge.w > 340 ? `calc(340px + ${edge.x}px * var(--xk) + ${edge.w}px)` : undefined;
-  // 휴대폰 — 사진·메모 묶음(대표 사진 왼쪽 끝 ~ 오른쪽 작은 사진 끝)이 화면 가운데에 오게, 가운데선을 그 절반만큼 왼쪽으로 (globals.css --sh)
-  const shift = edge ? Math.max(0, (edge.x * 0.7 + edge.w - 340) / 2) : 0;
+  // 메모·메모지 너비 — 모든 가게가 같게(세트 너비). 휴대폰은 사진이 안쪽으로 모이니(--xk) 그만큼
+  const memoMax = `calc(340px + ${EDGE_X}px * var(--xk) + ${EDGE_W}px)`;
+  // 세트가 칸 너비에 꽉 차게(양옆 FIT_MARGIN) — 칸 너비를 재서 줄이는 비율·판 너비·가운데선을 정한다. 재기 전엔 globals.css 의 1/2·1/3 축소
+  const frameRef = useRef<HTMLElement>(null);
+  const [fit, setFit] = useState<{ scale: number; stageW: number; cx: number; xk: number } | null>(null);
+  useLayoutEffect(() => {
+    const f = frameRef.current;
+    if (!f) return;
+    const mq = window.matchMedia('(max-width: 480px)');
+    // 칸이 화면보다 넓을 수 있어(휴대폰) 화면에 실제로 보이는 부분 기준으로 — 그 안에서 양옆 FIT_MARGIN
+    const measure = () => {
+      const r = f.getBoundingClientRect();
+      if (!r.width) return;
+      const vw = document.documentElement.clientWidth;
+      const visL = Math.max(r.left, 0), visR = Math.min(r.right, vw);
+      const avail = visR - visL;
+      if (avail <= FIT_MARGIN * 2) return;
+      const xk = mq.matches ? 0.7 : 1;
+      const scale = (avail - FIT_MARGIN * 2) / groupWidth(xk);
+      setFit({ scale, stageW: r.width / scale, cx: (visL - r.left + FIT_MARGIN) / scale + 340, xk });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(f);
+    window.addEventListener('resize', measure);
+    mq.addEventListener('change', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); mq.removeEventListener('change', measure); };
+  }, []);
   const photosBottom = Math.max(0, ...slots.map(s => 30 + s.y + (s.w * s.ratio[1]) / s.ratio[0] + 60));
   // 칸 높이 — 위 메모 + 사진 + 아래 회색 메모지 (오른쪽 작은 사진이 더 내려가면 그만큼)
   const height = Math.max(STAGE_HEIGHT, STAGE_PAD + top + 425 + NOTE_GAP + noteH + 60, photosBottom);
 
   return (
     // 높이 — PC(1/2 축소)·휴대폰(1/3 축소)
-    <article className="scrap-frame scrap-lg h-[var(--h3)] md:h-[var(--h2)]" style={{ '--h2': `${height / 2}px`, '--h3': `${height / 3}px` } as React.CSSProperties}>
-      <div className="scrap-stage" style={{ height: `${height}px`, '--sh': `${shift}px` } as React.CSSProperties}>
+    <article ref={frameRef} className="scrap-frame scrap-lg h-[var(--h3)] md:h-[var(--h2)]"
+      style={{ '--h2': `${height / 2}px`, '--h3': `${height / 3}px`, ...(fit ? { height: `${height * fit.scale}px` } : {}) } as React.CSSProperties}>
+      <div className="scrap-stage" style={{ height: `${height}px`,
+        ...(fit ? { width: `${fit.stageW}px`, transform: `scale(${fit.scale})`, '--cx': `${fit.cx}px`, '--xk': fit.xk } : {}) } as React.CSSProperties}>
         {/* 위 크래프트지 메모 — 사진 왼쪽 끝에서 글씨만큼 (오른쪽 작은 사진 끝까지, 넘으면 아래 줄로) */}
-        {post.memo && <p ref={memoRef} className="weslang-memo" style={{ marginTop: 0, marginBottom: MEMO_GAP, ...(memoMax ? { maxWidth: memoMax } : {}) }}>{post.memo}</p>}
+        {post.memo && <p ref={memoRef} className="weslang-memo" style={{ marginTop: 0, marginBottom: MEMO_GAP, maxWidth: memoMax }}>{post.memo}</p>}
         {/* 가운데 — 대표 사진. 누르면 크게(옆으로 넘겨 다른 사진도) */}
         <button type="button" onClick={() => main && setViewing(main)} className="scrap-card block group w-full text-left cursor-zoom-in" aria-label={`${post.title} 사진 크게 보기`}>
           <div className="aspect-[8/5] bg-[#e4e4e7] overflow-hidden">
@@ -70,7 +100,7 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
           </div>
         </button>
         {/* 사진 아래 회색 메모지 — 가게 이름 · 주소를 가로로 길게 (사진 왼쪽 끝에서 오른쪽 작은 사진 끝까지). 누르면 크게(주소 복사) */}
-        <div ref={noteRef} className="scrap-note weslang-note cursor-zoom-in" style={{ marginTop: NOTE_GAP, width: memoMax ?? '680px' }}
+        <div ref={noteRef} className="scrap-note weslang-note cursor-zoom-in" style={{ marginTop: NOTE_GAP, width: memoMax }}
           role="button" tabIndex={0} aria-label={`${post.title} 메모 크게 보기`}
           onClick={() => setNoteOpen(true)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setNoteOpen(true); } }}>
           {/* 핀 — 회색 메모지 위 가운데에 꽂힌 모양(메모지 안쪽). 글씨와 안 겹치게 메모지 위 여백을 늘렸다(globals.css .weslang-note) */}
@@ -80,7 +110,7 @@ function WeslangEntry({ post, isAdmin, onDelete, onEdit }: { post: Post; isAdmin
             <h2 className="scrap-note-title break-keep text-[var(--brand)] text-[31px] leading-[1.8]">{post.title}</h2>
             {/* 배달 가게 — 주소 대신 한 줄 '🛵 배달 맛집' */}
             {isDelivery(post)
-              ? <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">🛵 {DELIVERY_LABEL}</span>
+              ? <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep"><span className="text-[1.5em] align-[-0.12em] mr-1">🛵</span>{DELIVERY_LABEL}</span>
               : addressLines(post.location).length > 0 && <span className="scrap-note-loc text-[#52525b] text-[24px] break-keep">{addressLines(post.location).map((a, i) => <span key={i} className="block">📍 {a}</span>)}</span>}
           </div>
         </div>
@@ -131,7 +161,7 @@ function NoteViewer({ title, location, delivery, onClose }: { title: string; loc
         <span aria-hidden="true" className="absolute -top-[16px] left-[28px] text-[26px] select-none">📌</span>
         <button type="button" onClick={onClose} aria-label="닫기" className="absolute top-2 right-3 text-[22px] leading-none text-[#999] hover:text-[#333]">×</button>
         <h2 className="break-keep text-[var(--brand)] text-[22px] leading-[1.7]">{title}</h2>
-        {delivery && <p className="mt-3 text-[16px] text-[#52525b] leading-[1.7]">🛵 {DELIVERY_LABEL}</p>}
+        {delivery && <p className="mt-3 text-[16px] text-[#52525b] leading-[1.7]"><span className="text-[1.5em] align-[-0.12em] mr-1">🛵</span>{DELIVERY_LABEL}</p>}
         {lines.map((line, i) => (
           <div key={i} className="mt-3 flex items-start gap-2 text-[16px] text-[#52525b]">
             <span className="break-keep leading-[1.7]">📍 {line}</span>
