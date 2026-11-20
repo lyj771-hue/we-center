@@ -36,7 +36,6 @@ export default function ScheduleList() {
   return (
     <section className="bg-white rounded-[18px] px-[18px] pt-[18px] pb-2">
       <h2 className="text-[17px] text-[#27272a]">수업 신청</h2>
-      <p className="mt-1 text-[12px] text-[#888]">선착순이에요. 신청 취소는 센터로 연락해 주세요.</p>
       <div className="mt-2 divide-y divide-[#f0f0f0]">
         {items === null ? <p className="py-4 text-[13px] text-[#bbb]">불러오는 중…</p>
           : now.length === 0 ? <p className="py-4 text-[13px] text-[#aaa]">지금 신청할 수 있는 수업이 없어요.</p>
