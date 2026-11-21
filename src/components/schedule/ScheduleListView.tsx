@@ -8,9 +8,8 @@ import { useMember } from '@/components/MemberContext';
 import ScheduleGate from '@/components/schedule/ScheduleGate';
 import ScheduleEditor from '@/components/schedule/ScheduleEditor';
 import type { ScheduleSummary, Teacher } from '@/lib/schedule';
-import { deleteSchedule, getScheduleTeachers, isPublished, listSchedules, publishLabel, scheduleDays, scheduleRange, setScheduleHidden, thisMonday } from '@/lib/schedule';
+import { getScheduleTeachers, isPublished, listSchedules, publishLabel, scheduleDays, scheduleRange, setScheduleHidden, thisMonday } from '@/lib/schedule';
 import { askConfirm, showAlert } from '@/lib/dialog';
-import { addAdminLog } from '@/lib/adminLog';
 
 // 수업스케쥴 목록 — 기타 메뉴처럼 제목 목록. 누르면 /schedule/[id] 에서 시간을 보고 신청한다.
 // 관리자는 여기서 새 스케쥴을 올리고 내린다(숨기기 — 신청 기록은 그대로).
@@ -31,8 +30,10 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
-  // 숨긴 글은 관리자에게만 (흐리게 + 숨김)
-  const shownItems = items.filter(s => s.center === center && (isAdmin || !s.hiddenAt));
+  // 숨긴 글은 관리자에게만 — 목록 아래 '숨긴 글' 칸에 접어서 모은다
+  const shownItems = items.filter(s => s.center === center && !s.hiddenAt);
+  const hiddenItems = isAdmin ? items.filter(s => s.center === center && s.hiddenAt) : [];
+  const [hiddenOpen, setHiddenOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -54,17 +55,6 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
     try { await setScheduleHidden(s.id, true); load(); }
     catch (e) { showAlert(`내리지 못했어요 — SQL(supabase/schedule-hide.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); }
   };
-  // 삭제 — 글을 아예 지운다(시간·신청 기록도 함께, 되돌릴 수 없다). 두 번 묻는다
-  const handleDelete = async (s: ScheduleSummary) => {
-    if (!(await askConfirm(`"${s.title}"을(를) 삭제할까요?\n글과 시간이 모두 지워지고, 이 글로 신청한 수업도 시간표·마이페이지에서 함께 사라져요.\n신청 기록만 남기려면 [내리기]를 써 주세요.`))) return;
-    if (!(await askConfirm(`정말 삭제할까요? 되돌릴 수 없어요.\n"${s.title}" (${scheduleRange(s)})`))) return;
-    try {
-      await deleteSchedule(s.id);
-      await addAdminLog({ center: s.center, kind: 'schedule_delete', title: `수업스케쥴 삭제 — ${s.title} (${scheduleRange(s)})`, detail: '' }).catch(() => {});
-      load();
-    }
-    catch (e) { showAlert(`삭제하지 못했어요.\n${(e as Error).message}`); }
-  };
   const unhide = async (s: ScheduleSummary) => {
     try { await setScheduleHidden(s.id, false); load(); }
     catch (e) { showAlert(`처리하지 못했어요.\n${(e as Error).message}`); }
@@ -75,6 +65,23 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
     const days = scheduleDays(s);
     return days[days.length - 1] < thisMonday();
   };
+
+  // 목록 한 줄
+  const row = (s: ScheduleSummary, n: number) => (
+    <div key={s.id} className={`group flex items-center gap-5 py-4 hover:bg-[#fafafa] -mx-5 md:-mx-8 px-5 md:px-8 transition-colors ${isPast(s) || s.hiddenAt ? 'opacity-50' : ''}`}>
+      <span className="text-[11px] text-[#ccc] w-7 shrink-0 tabular-nums">{String(n).padStart(2, '0')}</span>
+      <Link href={`/schedule/${s.id}`} className="flex-1 min-w-0 block">
+        <span className="text-[14px] leading-[1.8] group-hover:underline underline-offset-2 block truncate">{s.hiddenAt && <span className="mr-1.5 text-[11px] text-[#888] border border-[#ddd] rounded px-1 no-underline">숨김</span>}{!isPublished(s) && <span className="mr-1.5 text-[11px] text-[#b45309] bg-[#fef3c7] rounded px-1 no-underline">게시 예정</span>}{s.title}</span>
+        <span className="text-[12px] leading-[2] pb-0.5 text-[#999] block truncate mt-1">{scheduleRange(s)}{s.publishAt && !isPublished(s) && <span className="text-[#b45309]"> · {publishLabel(s.publishAt)} 게시</span>}</span>
+      </Link>
+      <span className="text-[11px] text-[#bbb] shrink-0">{fmt(s.publishAt ?? s.createdAt)}</span>
+      {isAdmin && (
+        s.hiddenAt
+          ? <button onClick={() => unhide(s)} className="text-[11px] text-[#888] hover:text-[var(--brand)] shrink-0 transition-colors">다시 보이기</button>
+          : <button onClick={() => handleHide(s)} className="text-[11px] text-[#ccc] hover:text-red-400 shrink-0 transition-colors">내리기</button>
+      )}
+    </div>
+  );
 
   return (
     <div className="max-w-[1024px] mx-auto px-5 md:px-8 pt-8 pb-14 md:pt-14 fade-up">
@@ -100,26 +107,21 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
               )}
             </div>
 
-            {loaded && shownItems.length === 0 ? (
+            {loaded && shownItems.length === 0 && !hiddenItems.length ? (
               <div className="py-24 text-center text-sm text-[#ccc] tracking-widest">아직 올라온 수업 스케쥴이 없어요</div>
             ) : (
               <div className="divide-y divide-[#f0f0f0]">
-                {shownItems.map((s, i) => (
-                  <div key={s.id} className={`group flex items-center gap-5 py-4 hover:bg-[#fafafa] -mx-5 md:-mx-8 px-5 md:px-8 transition-colors ${isPast(s) || s.hiddenAt ? 'opacity-50' : ''}`}>
-                    <span className="text-[11px] text-[#ccc] w-7 shrink-0 tabular-nums">{String(shownItems.length - i).padStart(2, '0')}</span>
-                    <Link href={`/schedule/${s.id}`} className="flex-1 min-w-0 block">
-                      <span className="text-[14px] leading-[1.8] group-hover:underline underline-offset-2 block truncate">{s.hiddenAt && <span className="mr-1.5 text-[11px] text-[#888] border border-[#ddd] rounded px-1 no-underline">숨김</span>}{!isPublished(s) && <span className="mr-1.5 text-[11px] text-[#b45309] bg-[#fef3c7] rounded px-1 no-underline">게시 예정</span>}{s.title}</span>
-                      <span className="text-[12px] leading-[2] pb-0.5 text-[#999] block truncate mt-1">{scheduleRange(s)}{s.publishAt && !isPublished(s) && <span className="text-[#b45309]"> · {publishLabel(s.publishAt)} 게시</span>}</span>
-                    </Link>
-                    <span className="text-[11px] text-[#bbb] shrink-0">{fmt(s.publishAt ?? s.createdAt)}</span>
-                    {isAdmin && (
-                      s.hiddenAt
-                        ? <button onClick={() => unhide(s)} className="text-[11px] text-[#888] hover:text-[var(--brand)] shrink-0 transition-colors">다시 보이기</button>
-                        : <button onClick={() => handleHide(s)} className="text-[11px] text-[#ccc] hover:text-red-400 shrink-0 transition-colors">내리기</button>
-                    )}
-                    {isAdmin && <button onClick={() => handleDelete(s)} className="text-[11px] text-[#e11d48]/60 hover:text-[#e11d48] shrink-0 transition-colors">삭제</button>}
-                  </div>
-                ))}
+                {shownItems.map((s, i) => row(s, shownItems.length - i))}
+              </div>
+            )}
+            {/* 숨긴 글 — 관리자만, 처음엔 접혀 있다 */}
+            {hiddenItems.length > 0 && (
+              <div className="mt-10 border-t border-[#f0f0f0] pt-4">
+                <button type="button" onClick={() => setHiddenOpen(v => !v)} aria-expanded={hiddenOpen}
+                  className="text-[12px] text-[#888] hover:text-[var(--brand)] transition-colors">
+                  {hiddenOpen ? '▾' : '▸'} 숨긴 글 {hiddenItems.length}건
+                </button>
+                {hiddenOpen && <div className="mt-2 divide-y divide-[#f0f0f0]">{hiddenItems.map((s, i) => row(s, hiddenItems.length - i))}</div>}
               </div>
             )}
           </section>
