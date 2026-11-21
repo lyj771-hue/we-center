@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { MyLedgers } from '@/lib/prepaid';
 import { getMyLedger, NO_LEDGERS } from '@/lib/prepaid';
 import type { MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
-import { getMyLessons, getMyPaymentHistory, getMyPayments } from '@/lib/mypage';
+import { getMyBalanceLedger, getMyLessons, getMyPaymentHistory, getMyPayments, type MyBalanceRow } from '@/lib/mypage';
 import { addDays } from '@/lib/schedule';
 import { useApp } from './AppShell';
 
@@ -28,14 +28,16 @@ export function useMyPay() {
   const [payments, setPayments] = useState<MyPayment[]>([]);
   const [ledger, setLedger] = useState<MyLedgers>(NO_LEDGERS);
   const [history, setHistory] = useState<MyPaymentUse[]>([]);
+  const [balanceLedger, setBalanceLedger] = useState<MyBalanceRow[] | null>(null);
   const [failed, setFailed] = useState('');
   const load = useCallback(async () => {
     try {
       setPayments(await getMyPayments(branch)); setFailed('');
+      setBalanceLedger(await getMyBalanceLedger(branch));
       setLedger(await getMyLedger(branch).catch(() => NO_LEDGERS));
       setHistory((await getMyPaymentHistory().catch(() => [])).filter(h => h.center === branch));
     } catch (e) { setFailed((e as Error).message); }
   }, [branch]);
   useEffect(() => { load(); }, [load, version]);
-  return { payments, ledger, history, failed, reload: load };
+  return { payments, ledger, history, balanceLedger, failed, reload: load };
 }

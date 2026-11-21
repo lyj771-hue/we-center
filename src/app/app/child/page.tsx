@@ -13,10 +13,10 @@ export default function AppChildView() {
   const { branch, child } = useApp();
   const [week, setWeek] = useState(thisMonday());
   const { lessons, failed: f1 } = useMyWeek(week);
-  const { payments, ledger, history, failed: f2 } = useMyPay();
+  const { payments, ledger, history, balanceLedger, failed: f2 } = useMyPay();
   if (!child) return <p className="py-16 text-center text-[13px] text-[#bbb]">불러오는 중…</p>;
   return (
     <MyPageView child={child} approved week={week} setWeek={setWeek} weekLessons={lessons} payments={payments}
-      ledger={ledger} history={history} today={toYmd(new Date())} center={branch} failed={f1 || f2} />
+      ledger={ledger} history={history} balanceLedger={balanceLedger} today={toYmd(new Date())} center={branch} failed={f1 || f2} />
   );
 }

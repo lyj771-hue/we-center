@@ -95,6 +95,15 @@ export async function getMyPaymentHistory(): Promise<MyPaymentUse[]> {
   }));
 }
 
+/** 우진학교외부·자율·지원금 — 충전·수정·차감 줄 (supabase/guardian-balance-ledger.sql). SQL 전이면 null */
+export interface MyBalanceRow { day: string; kind: 'charge' | 'use' | 'adjust'; amount: number; memo?: string; at?: string; method: 'woojin_ext' | 'woojin_self' | 'subsidy'; time?: string }
+export async function getMyBalanceLedger(center?: string): Promise<MyBalanceRow[] | null> {
+  const { data, error } = await myRpc('my_balance_ledger', center ? { p_center: center } : {});
+  if (error) return null;
+  return ((data ?? []) as { day: string; kind: MyBalanceRow['kind']; amount: number; memo: string | null; at: string | null; method: MyBalanceRow['method']; lesson_time: string | null }[])
+    .map(r => ({ day: r.day, kind: r.kind, amount: r.amount, memo: r.memo ?? undefined, at: r.at ?? undefined, method: r.method, time: r.lesson_time ?? undefined }));
+}
+
 /** 계정에 이어진 아이들이 다니는 지점 — 두 지점 아이가 이어져 있으면 마이페이지에서 둘 다 본다 */
 export async function getMyChildCenters(): Promise<BranchKey[]> {
   const { data, error } = await supabase.rpc('my_child_centers');

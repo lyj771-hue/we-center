@@ -7,7 +7,7 @@ import MyPageView, { MYPAGE_CARD } from '@/components/MyPageView';
 import type { MyLedgers } from '@/lib/prepaid';
 import { getMyLedger, NO_LEDGERS } from '@/lib/prepaid';
 import type { MyChild, MyKid, MyLesson, MyPayment } from '@/lib/mypage';
-import { getMyChild, getMyChildCenters, getMyChildren, getMyLessons, getMyPaymentHistory, getMyPayments, setActiveChild } from '@/lib/mypage';
+import { getMyBalanceLedger, getMyChild, getMyChildCenters, getMyChildren, getMyLessons, getMyPaymentHistory, getMyPayments, setActiveChild, type MyBalanceRow } from '@/lib/mypage';
 import type { BranchKey, MyPaymentUse } from '@/lib/mypage';
 import { BRANCHES, leaveBranch, requestBranch, withdrawMember } from '@/lib/mypage';
 import { askConfirm, showAlert } from '@/lib/dialog';
@@ -41,6 +41,7 @@ export default function MyPage() {
   const [payments, setPayments] = useState<MyPayment[]>([]);
   const [ledger, setLedger] = useState<MyLedgers>(NO_LEDGERS);
   const [history, setHistory] = useState<MyPaymentUse[]>([]);
+  const [balanceLedger, setBalanceLedger] = useState<MyBalanceRow[] | null>(null);
   const [failed, setFailed] = useState('');
 
   const today = toYmd(new Date());
@@ -52,6 +53,7 @@ export default function MyPage() {
       setChild(c); setWeekLessons(w); setPayments(p); setFailed('');
       setLedger(await getMyLedger(branch).catch(() => NO_LEDGERS));
       setHistory(await getMyPaymentHistory().catch(() => []));
+      setBalanceLedger(await getMyBalanceLedger(branch));
     } catch (e) {
       setFailed((e as Error).message);
     }
@@ -197,7 +199,7 @@ export default function MyPage() {
     <div className="space-y-6">
       {kidTabs}
       <MyPageView onChanged={load} child={child} nickname={profile?.nickname} approved={viewable(branch)} week={week} setWeek={setWeek}
-        weekLessons={lessonsHere} payments={paymentsHere} ledger={ledger} history={historyHere} today={today} center={branch} failed={failed}
+        weekLessons={lessonsHere} payments={paymentsHere} ledger={ledger} history={historyHere} balanceLedger={balanceLedger} today={today} center={branch} failed={failed}
         top={top} bottom={bottom} />
       {withdrawLink}
     </div>,

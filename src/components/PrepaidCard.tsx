@@ -34,7 +34,7 @@ export default function PrepaidCard({ rows, name, editingId }: {
           {name && <span className="text-[#555]">{name} 님<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span></span>}
         </p>
         <div className={`mt-3 grid ${COLS} border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888] whitespace-nowrap`}>
-          <span>일자</span><span className="pl-1">시간</span><span className="text-right">변동</span><span className="text-right">잔여</span><span className="pl-2">메모</span>
+          <span>일자</span><span className="text-center">시간</span><span className="text-right">변동</span><span className="text-right">잔여</span><span className="pl-2">메모</span>
         </div>
         {rows.length === 0 ? (
           <p className="py-6 text-center text-[13px] text-[#bbb]">아직 충전·사용 내역이 없어요.</p>
@@ -44,7 +44,7 @@ export default function PrepaidCard({ rows, name, editingId }: {
               <li key={i} className={`grid ${COLS} items-center py-1 ${editingId && r.chargeId === editingId ? 'bg-[#fff6d5] -mx-2 px-2 rounded' : ''}`}>
                 <span className="text-[#444]">{md(r.day)}</span>
                 {/* 시간 — 그날 수업 시간(두 칸 띄어, 좁은 칸이라 넘치면 아래 줄로). 일자 바로 오른쪽, 메모와 같은 글씨 */}
-                <span className="pl-1 font-sans text-[10px] leading-[1.6] text-[#999] whitespace-pre-wrap">{r.times ?? ''}</span>
+                <span className="text-center font-sans text-[10px] leading-[1.6] text-[#999] whitespace-pre-wrap">{r.times ?? ''}</span>
                 <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : r.kind === 'adjust' ? 'text-[#b45309]' : 'text-[#555]'}`}>
                   {r.kind === 'charge' ? `+${r.count}` : r.kind === 'use' ? `-${r.count}` : <span className="font-sans text-[12px]">수정</span>}
                 </span>

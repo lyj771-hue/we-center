@@ -10,10 +10,10 @@ import { thisMonday, toYmd } from '@/lib/schedule';
 
 export default function AppPay() {
   const { branch, child } = useApp();
-  const { payments, ledger, history, failed } = useMyPay();
+  const { payments, ledger, history, balanceLedger, failed } = useMyPay();
   const [week, setWeek] = useState(thisMonday());
   return (
     <MyPageView only="pay" child={child} approved week={week} setWeek={setWeek} weekLessons={[]} payments={payments}
-      ledger={ledger} history={history} today={toYmd(new Date())} center={branch} failed={failed} />
+      ledger={ledger} history={history} balanceLedger={balanceLedger} today={toYmd(new Date())} center={branch} failed={failed} />
   );
 }

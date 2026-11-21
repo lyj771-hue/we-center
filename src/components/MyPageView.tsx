@@ -1,6 +1,6 @@
 'use client';
 
-import type { MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
+import type { MyBalanceRow, MyChild, MyLesson, MyPayment, MyPaymentUse } from '@/lib/mypage';
 import UsageCard from '@/components/UsageCard';
 import type { MyLedgers } from '@/lib/prepaid';
 import { NO_LEDGERS } from '@/lib/prepaid';
@@ -35,6 +35,8 @@ export interface MyPageViewProps {
   ledger?: MyLedgers;
   /** 결제별 사용 기록 (바우처·굳센·꿈이든·지원금) — 지난 달도 쌓인다 */
   history?: MyPaymentUse[];
+  /** 우진학교·지원금 충전·사용 줄(supabase/guardian-balance-ledger.sql) — SQL 전이면 null(잔여 없이 변동만) */
+  balanceLedger?: MyBalanceRow[] | null;
   today: string;
   /** 보는 지점 */
   center?: string;
@@ -61,7 +63,7 @@ const inBranch = (method: string, center?: string) => methodInCenter(method, cen
 // 년/월/일 (주별 시간표 날짜 넘기기)
 const ymd = (d: Date) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 
-export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = NO_LEDGERS, history: allHistory = [], today, center, failed, top, bottom, only }: MyPageViewProps) {
+export default function MyPageView({ child, nickname, approved, week, setWeek, weekLessons, payments, ledger = NO_LEDGERS, history: allHistory = [], balanceLedger = null, today, center, failed, top, bottom, only }: MyPageViewProps) {
   // 휴직 중인 이원재 선생님 수업은 어떤 횟수·카드에도 세지 않는다
   const history = allHistory.filter(h => !isCountExcludedName(h.teacher, h.day));
   // 결제 현황 — 체크 여부와 상관없이 모든 결제 항목을 보여 준다 (안 썼으면 0회)
@@ -267,8 +269,18 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         const rows = history.filter(h => h.method === u.method).map(h => {
           const n = (perMonth.get(h.day.slice(0, 7)) ?? 0) + 1;
           perMonth.set(h.day.slice(0, 7), n);
-          return { day: h.day, nth: n, due: h.payNeeded, retro: h.retro, time: h.time.replace(/^0/, ''), memo: h.note };   // 시간은 메모 왼쪽 '시간' 칸(선생님 이름은 안 보인다)
+          return { day: h.day, nth: n, due: h.payNeeded, retro: h.retro, time: h.time.replace(/^0/, ''), memo: h.note };   // 시간은 일자 오른쪽 '시간' 칸(선생님 이름은 안 보인다)
         });
+        // 우진학교·지원금 — 일자 · 시간 · 변동 · 잔여 · 메모 (충전·수정 줄도). 잔여는 날짜 순으로 더하고 빼서. SQL 전이면 수업 줄만 −6만, 잔여 없이
+        const money = BALANCE_CARD(u.method);
+        const moneyRows = !money ? rows : balanceLedger
+          ? (() => {
+              let bal = 0;
+              return balanceLedger.filter(r => r.method === u.method)
+                .sort((a, b) => a.day.localeCompare(b.day) || (a.at ?? '').localeCompare(b.at ?? ''))
+                .map(r => { bal += r.amount; return { day: r.day, nth: 0, time: r.time?.replace(/^0/, ''), delta: r.amount, left: bal, memo: r.kind === 'adjust' ? ['수정', r.memo].filter(Boolean).join(' · ') : r.memo }; });
+            })()
+          : rows.map(r => ({ ...r, delta: -60000 }));
         return (
           <section key={card0.method} className={card}>
             {isWoojin ? (
@@ -282,7 +294,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
                 </div>
               </div>
             ) : <h2 className="text-[17px] text-[#27272a] mb-4">{u.label}</h2>}
-            <UsageCard key={u.method} label={u.label} rows={rows} name={child?.childName} used={p?.used ?? rows.length}
+            <UsageCard key={u.method} label={u.label} rows={moneyRows} money={money} name={child?.childName} used={p?.used ?? rows.length}
               {...(BALANCE_CARD(u.method) ? { balance: p?.total ?? 0 } : { limit: p?.total })} />
           </section>
         );
