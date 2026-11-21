@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import MemoCell from './MemoCell';
 
 // 결제별 사용 카드(바우처·굳센·꿈이든·장맞춤·우진학교·지원금) — 선결제 카드와 같은 모양. 사용 기록: 일자 · 그 달 회차 · 시간 · 메모. 지난 달 기록도 쌓인다.
 // 시간 = 그 수업 시간(선생님 이름 없이) — 선결제 카드처럼 메모 왼쪽, 메모와 같은 글씨.
@@ -56,8 +57,8 @@ export default function UsageCard({ label, rows, name, used, limit, balance }: {
                   {r.due && <span className="block font-sans text-[9px] text-[#d97706]">결제필요</span>}
                 </span>
                 {/* 시간 · 메모 — 선결제 카드와 같은 글씨 */}
-                <span className="pl-3 font-sans text-[11px] leading-[1.3] text-[#999] whitespace-pre-wrap">{r.time ?? ''}</span>
-                <span className="pl-2 font-sans text-[11px] leading-[1.3] text-[#999] break-keep whitespace-pre-wrap">{r.memo}</span>
+                <span className="pl-3 font-sans text-[10px] leading-[1.6] text-[#999] whitespace-pre-wrap">{r.time ?? ''}</span>
+                <MemoCell memo={r.memo} day={r.day} className="pl-2 font-sans text-[10px] leading-[1.6] text-[#999] break-keep" />
               </li>
             ))}
           </ul>

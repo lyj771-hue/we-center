@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import type { LedgerRow } from '@/lib/prepaid';
+import MemoCell from './MemoCell';
 
 /** 한 쪽에 보이는 줄 수 — 1쪽이 가장 최근 3줄 */
 const PER_PAGE = 3;
-/** 열 — 일자 · 변동 · 잔여 · 시간 · 메모 (시간은 메모 왼쪽, 좁게 — 넘치면 아래 줄로) */
-const COLS = 'grid-cols-[2.7fr_1.5fr_1.4fr_2.1fr_2.5fr]';
+/** 열 — 일자 · 변동 · 시간 · 잔여 · 메모 (잔여는 메모 바로 왼쪽, 시간은 좁게 — 넘치면 아래 줄로) */
+const COLS = 'grid-cols-[2.7fr_1.5fr_2.1fr_1.4fr_2.5fr]';
 
-// 선결제 카드 — 센터에서 쓰던 종이 카드 모양 그대로(일자 · 변동 · 남은 횟수 · 시간 · 메모). 시간 = 그날 수업 시간(사용 줄), 메모와 같은 글씨. 마이페이지와 회원 관리에서 같이 쓴다.
+// 선결제 카드 — 센터에서 쓰던 종이 카드 모양 그대로(일자 · 변동 · 시간 · 남은 횟수 · 메모). 시간 = 그날 수업 시간(사용 줄), 메모와 같은 글씨. 마이페이지와 회원 관리에서 같이 쓴다.
 // 메모가 있는 줄은 아래에 작게 메모를 보여 준다. 고치기·지우기는 회원 관리의 선결제 창 [수정]에서 한다.
 
 export default function PrepaidCard({ rows, name, editingId }: {
@@ -33,7 +34,7 @@ export default function PrepaidCard({ rows, name, editingId }: {
           {name && <span className="text-[#555]">{name} 님<span aria-hidden="true" className="ml-1 text-[#e11d48] text-[1.6em] leading-none align-[-0.12em]" style={{ WebkitTextStroke: 0 }}>♥</span></span>}
         </p>
         <div className={`mt-3 grid ${COLS} border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888] whitespace-nowrap`}>
-          <span>일자</span><span className="text-right">변동</span><span className="text-right">잔여</span><span className="pl-3">시간</span><span className="pl-2">메모</span>
+          <span>일자</span><span className="text-right">변동</span><span className="pl-3">시간</span><span className="text-right">잔여</span><span className="pl-2">메모</span>
         </div>
         {rows.length === 0 ? (
           <p className="py-6 text-center text-[13px] text-[#bbb]">아직 충전·사용 내역이 없어요.</p>
@@ -45,11 +46,11 @@ export default function PrepaidCard({ rows, name, editingId }: {
                 <span className={`text-right ${r.kind === 'charge' ? 'text-[var(--brand)]' : r.kind === 'adjust' ? 'text-[#b45309]' : 'text-[#555]'}`}>
                   {r.kind === 'charge' ? `+${r.count}` : r.kind === 'use' ? `-${r.count}` : <span className="font-sans text-[12px]">수정</span>}
                 </span>
-                <span className={`text-right ${r.balance <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.balance}</span>
                 {/* 시간 — 그날 수업 시간(두 칸 띄어, 좁은 칸이라 넘치면 아래 줄로). 메모와 같은 글씨 */}
-                <span className="pl-3 font-sans text-[11px] leading-[1.3] text-[#999] whitespace-pre-wrap">{r.times ?? ''}</span>
+                <span className="pl-3 font-sans text-[10px] leading-[1.6] text-[#999] whitespace-pre-wrap">{r.times ?? ''}</span>
+                <span className={`text-right ${r.balance <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.balance}</span>
                 {/* 메모는 남은 횟수 오른쪽 — 예전 차감 기록의 기본 메모 "차감"은 줄 이름과 같아서 숨긴다 */}
-                <span className="pl-2 font-sans text-[11px] leading-[1.3] text-[#999] break-keep whitespace-pre-wrap">{r.memo && r.memo !== '차감' ? r.memo : ''}</span>
+                <MemoCell memo={r.memo && r.memo !== '차감' ? r.memo : undefined} day={r.day} className="pl-2 font-sans text-[10px] leading-[1.6] text-[#999] break-keep" />
               </li>
             ))}
           </ul>
