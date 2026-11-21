@@ -859,8 +859,8 @@ export default function TimetableView({ testChildName, fixedCenter }: { testChil
   };
   const remaining = (childId: string, method: PayMethod): string | undefined => {
     const c = children.find(x => x.id === childId);
-    // 우진학교외부·자율·지원금은 남은 금액(만원)
-    if (c && isBalancePay(method)) return `${Math.floor(balanceOf(c, method as BalanceKey) / 10000)}만`;
+    // 우진학교외부·자율·지원금은 남은 금액을 붙이지 않는다 (결제내역 상세보기에서 본다)
+    if (isBalancePay(method)) return undefined;
     // 횟수가 있는 결제만 (신용카드·현금·직접 작성은 횟수 없음)
     if (!c || (method !== 'voucher' && method !== 'gusen' && method !== 'kkumideun' && !isPrepaid(method))) return undefined;
     const limit = isPrepaid(method) ? prepaidTotalOf(c, method) : { voucher: c.voucherLimit, gusen: c.gusenLimit, kkumideun: c.kkumideunLimit }[method] ?? 0;
