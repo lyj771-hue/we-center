@@ -50,7 +50,7 @@ export default function UsageCard({ label, rows, name, used, limit, balance, mon
         </p>
         <div className={`mt-3 grid ${cols} border-y border-dashed border-[#bbb] py-1.5 text-[12px] text-[#888] whitespace-nowrap`}>
           {money
-            ? <><span>일자</span><span className="text-center">시간</span><span className="text-right">변동</span><span className="text-right">잔여</span><span className="pl-2">메모</span></>
+            ? <><span>일자</span><span className="text-center">시간</span><span className="text-center">변동</span><span className="text-center">잔여</span><span className="pl-2">메모</span></>
             : <><span>일자</span><span className="text-center">시간</span><span className="text-center">회차</span><span className="pl-2">메모</span></>}
         </div>
         {rows.length === 0 ? (
@@ -64,8 +64,8 @@ export default function UsageCard({ label, rows, name, used, limit, balance, mon
                 <span className="text-center font-sans text-[10px] leading-[1.6] text-[#999] whitespace-pre-wrap">{r.time ?? ''}</span>
                 {money ? <>
                   {/* 변동 · 잔여 — 만원 단위 (충전 파랑 · 사용 회색) */}
-                  <span className={`text-right text-[13px] ${r.delta === undefined ? '' : r.delta > 0 ? 'text-[var(--brand)]' : 'text-[#555]'}`}>{r.delta === undefined ? '' : `${r.delta > 0 ? '+' : r.delta < 0 ? '−' : ''}${man(r.delta)}`}</span>
-                  <span className={`text-right text-[13px] ${r.left !== undefined && r.left <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.left === undefined ? '' : man(r.left)}</span>
+                  <span className={`text-center text-[13px] ${r.delta === undefined ? '' : r.delta > 0 ? 'text-[var(--brand)]' : 'text-[#555]'}`}>{r.delta === undefined ? '' : `${r.delta > 0 ? '+' : r.delta < 0 ? '−' : ''}${man(r.delta)}`}</span>
+                  <span className={`text-center text-[13px] ${r.left !== undefined && r.left <= 0 ? 'text-[#e11d48]' : 'text-[#27272a]'}`}>{r.left === undefined ? '' : man(r.left)}</span>
                 </> : (
                 <span className={`text-center leading-tight ${r.retro || r.due ? 'text-[#d97706]' : 'text-[var(--brand)]'}`}>
                   {r.nth}회
