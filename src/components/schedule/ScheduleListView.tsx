@@ -8,8 +8,9 @@ import { useMember } from '@/components/MemberContext';
 import ScheduleGate from '@/components/schedule/ScheduleGate';
 import ScheduleEditor from '@/components/schedule/ScheduleEditor';
 import type { ScheduleSummary, Teacher } from '@/lib/schedule';
-import { getScheduleTeachers, isPublished, listSchedules, publishLabel, scheduleDays, scheduleRange, setScheduleHidden, thisMonday } from '@/lib/schedule';
+import { deleteSchedule, getScheduleTeachers, isPublished, listSchedules, publishLabel, scheduleDays, scheduleRange, setScheduleHidden, thisMonday } from '@/lib/schedule';
 import { askConfirm, showAlert } from '@/lib/dialog';
+import { addAdminLog } from '@/lib/adminLog';
 
 // 수업스케쥴 목록 — 기타 메뉴처럼 제목 목록. 누르면 /schedule/[id] 에서 시간을 보고 신청한다.
 // 관리자는 여기서 새 스케쥴을 올리고 내린다(숨기기 — 신청 기록은 그대로).
@@ -52,6 +53,17 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
     if (!(await askConfirm(`"${s.title}"을(를) 내릴까요?\n보호자 목록에서만 안 보이고, 신청한 수업은 시간표·마이페이지에 그대로 남아요.`))) return;
     try { await setScheduleHidden(s.id, true); load(); }
     catch (e) { showAlert(`내리지 못했어요 — SQL(supabase/schedule-hide.sql)을 실행했는지 확인해 주세요.\n${(e as Error).message}`); }
+  };
+  // 삭제 — 글을 아예 지운다(시간·신청 기록도 함께, 되돌릴 수 없다). 두 번 묻는다
+  const handleDelete = async (s: ScheduleSummary) => {
+    if (!(await askConfirm(`"${s.title}"을(를) 삭제할까요?\n글과 시간이 모두 지워지고, 이 글로 신청한 수업도 시간표·마이페이지에서 함께 사라져요.\n신청 기록만 남기려면 [내리기]를 써 주세요.`))) return;
+    if (!(await askConfirm(`정말 삭제할까요? 되돌릴 수 없어요.\n"${s.title}" (${scheduleRange(s)})`))) return;
+    try {
+      await deleteSchedule(s.id);
+      await addAdminLog({ center: s.center, kind: 'schedule_delete', title: `수업스케쥴 삭제 — ${s.title} (${scheduleRange(s)})`, detail: '' }).catch(() => {});
+      load();
+    }
+    catch (e) { showAlert(`삭제하지 못했어요.\n${(e as Error).message}`); }
   };
   const unhide = async (s: ScheduleSummary) => {
     try { await setScheduleHidden(s.id, false); load(); }
@@ -105,6 +117,7 @@ export default function ScheduleListView({ center }: { center: 'eunpyeong' | 'ui
                         ? <button onClick={() => unhide(s)} className="text-[11px] text-[#888] hover:text-[var(--brand)] shrink-0 transition-colors">다시 보이기</button>
                         : <button onClick={() => handleHide(s)} className="text-[11px] text-[#ccc] hover:text-red-400 shrink-0 transition-colors">내리기</button>
                     )}
+                    {isAdmin && <button onClick={() => handleDelete(s)} className="text-[11px] text-[#e11d48]/60 hover:text-[#e11d48] shrink-0 transition-colors">삭제</button>}
                   </div>
                 ))}
               </div>
