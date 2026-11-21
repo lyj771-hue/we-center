@@ -267,7 +267,7 @@ export default function MyPageView({ child, nickname, approved, week, setWeek, w
         const rows = history.filter(h => h.method === u.method).map(h => {
           const n = (perMonth.get(h.day.slice(0, 7)) ?? 0) + 1;
           perMonth.set(h.day.slice(0, 7), n);
-          return { day: h.day, nth: n, due: h.payNeeded, retro: h.retro, memo: [h.time.replace(/^0/, ''), h.note].filter(Boolean).join(' · ') };   // 결제 내역은 시간만(선생님 이름은 안 보인다)
+          return { day: h.day, nth: n, due: h.payNeeded, retro: h.retro, time: h.time.replace(/^0/, ''), memo: h.note };   // 시간은 메모 왼쪽 '시간' 칸(선생님 이름은 안 보인다)
         });
         return (
           <section key={card0.method} className={card}>
